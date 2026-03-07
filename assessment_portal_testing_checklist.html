@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assessment Portal Testing Checklist</title>
+  <link href="assets/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f8fafc; color: #222; }
+    .checklist-section { margin-bottom: 2.5rem; }
+    .checklist-section h3 { background: #092c19; color: #fff; padding: 0.75rem 1rem; border-radius: 0.5rem 0.5rem 0 0; margin-bottom: 0; }
+    .checklist-section .card { border-radius: 0 0 0.5rem 0.5rem; border-top: none; }
+    .checklist-list { padding: 1.5rem; }
+    .checklist-list label { font-weight: 500; }
+    .checklist-list input[type=checkbox] { margin-right: 0.75rem; }
+    .checklist-list .form-check { margin-bottom: 0.75rem; }
+    .checklist-list .form-check:last-child { margin-bottom: 0; }
+    .checklist-meta { font-size: 0.95rem; color: #666; margin-bottom: 1.5rem; }
+    .checklist-title { text-align: center; margin: 2rem 0 1rem 0; }
+    .checklist-title h1 { font-size: 2.2rem; font-weight: 700; color: #092c19; }
+    .checklist-title p { color: #555; }
+    .checklist-footer { text-align: center; color: #888; margin: 2rem 0 1rem 0; font-size: 0.95rem; }
+    @media (max-width: 600px) {
+      .checklist-list { padding: 0.75rem; }
+      .checklist-title h1 { font-size: 1.3rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container-xl">
+    <div class="checklist-title">
+      <h1>Assessment Portal Testing Checklist</h1>
+      <p>Comprehensive QA checklist for verifying all features and workflows before deployment.</p>
+    </div>
+    <div class="checklist-meta">
+      <strong>Date:</strong> <span id="today"></span> &nbsp; | &nbsp; <strong>Tested by:</strong> ______________________
+    </div>
+
+    <!-- 1. Environment Setup -->
+    <div class="checklist-section">
+      <h3>1. Environment Setup</h3>
+      <div class="card">
+        <div class="checklist-list">
+          <div class="form-check"><input type="checkbox"> PHP, MySQL, and web server are installed</div>
+          <div class="form-check"><input type="checkbox"> Database imported from provided SQL files</div>
+          <div class="form-check"><input type="checkbox"> db.php configured with correct credentials</div>
+          <div class="form-check"><input type="checkbox"> App loads in browser without errors</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. User Roles & Access Control -->
+    <div class="checklist-section">
+      <h3>2. User Roles & Access Control</h3>
+      <div class="card">
+        <div class="checklist-list">
+          <div class="form-check"><input type="checkbox"> Admin can log in and access all admin pages</div>
+          <div class="form-check"><input type="checkbox"> Examiner can log in and access examiner dashboard</div>
+          <div class="form-check"><input type="checkbox"> Unauthorized users cannot access protected pages</div>
+          <div class="form-check"><input type="checkbox"> Session expires on logout</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Student Management -->
+    <div class="checklist-section">
+      <h3>3. Student Management</h3>
+      <div class="card">
+        <div class="checklist-list">
+          <div class="form-check"><input type="checkbox"> Add a new student (unique matric/username enforced)</div>
+          <div class="form-check"><input type="checkbox"> Edit student details and verify update</div>
+          <div class="form-check"><input type="checkbox"> Delete a student and verify removal</div>
+          <div class="form-check"><input type="checkbox"> Bulk upload students via CSV</div>
+          <div class="form-check"><input type="checkbox"> Error shown for invalid/malformed CSV</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Question Management -->
+    <div class="checklist-section">
+      <h3>4. Question Management</h3>
+      <div class="card">
+        <div class="checklist-list">
+          <div class="form-check"><input type="checkbox"> Add, edit, and delete questions</div>
+          <div class="form-check"><input type="checkbox"> Bulk upload questions (CSV with partial marks)</div>
+          <div class="form-check"><input type="checkbox"> Error shown for invalid/malformed question CSV</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Exam Management -->
+    <div class="checklist-section">
+      <h3>5. Exam Management</h3>
+      <div class="card">
+        <div class="checklist-list">
+          <div class="form-check"><input type="checkbox"> Create a new exam and assign questions/students</div>
+          <div class="form-check"><input type="checkbox"> Edit exam details, add/remove questions/students</div>
+          <div class="form-check"><input type="checkbox"> Activate/deactivate exam and verify access</div>
+          <div class="form-check"><input type="checkbox"> Assign/remove examiners from exams</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. Assessment Workflow -->
+    <div class="checklist-section">
+      <h3>6. Assessment Workflow</h3>
+      <div class="card">
+        <div class="checklist-list">
+          <div class="form-check"><input type="checkbox"> Examiner searches for a student assigned to an exam</div>
+          <div class="form-check"><input type="checkbox"> Student name, matric number, and exam name are displayed</div>
+          <div class="form-check"><input type="checkbox"> Complete and submit assessment; verify scores saved</div>
+          <div class="form-check"><input type="checkbox"> Re-assess updates scores, not duplicates</div>
+          <div class="form-check"><input type="checkbox"> Admin resets a student's scores; reassessment possible</div>
+          <div class="form-check"><input type="checkbox"> Searching for a non-assigned student shows error message</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. Results & Reporting -->
+    <div class="checklist-section">
+      <h3>7. Results & Reporting</h3>
+      <div class="card">
+        <div class="checklist-list">
+          <div class="form-check"><input type="checkbox"> Admin/examiner can view student scores and totals</div>
+          <div class="form-check"><input type="checkbox"> Download report as CSV; verify structure and data</div>
+          <div class="form-check"><input type="checkbox"> Students with no scores are clearly indicated</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 8. Chat System -->
+    <div class="checklist-section">
+      <h3>8. Chat System</h3>
+      <div class="card">
+        <div class="checklist-list">
+          <div class="form-check"><input type="checkbox"> Send and receive messages between admin and examiner</div>
+          <div class="form-check"><input type="checkbox"> Attach media files in chat</div>
+          <div class="form-check"><input type="checkbox"> Group chat (if available) works as expected</div>
+          <div class="form-check"><input type="checkbox"> Chat notifications and unread indicators work</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9. Audit Trail -->
+    <div class="checklist-section">
+      <h3>9. Audit Trail</h3>
+      <div class="card">
+        <div class="checklist-list">
+          <div class="form-check"><input type="checkbox"> Actions (login, add, assess, etc.) are logged</div>
+          <div class="form-check"><input type="checkbox"> Admin can view and filter audit logs</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 10. UI/UX & Responsiveness -->
+    <div class="checklist-section">
+      <h3>10. UI/UX & Responsiveness</h3>
+      <div class="card">
+        <div class="checklist-list">
+          <div class="form-check"><input type="checkbox"> Footer is sticky on all pages</div>
+          <div class="form-check"><input type="checkbox"> Dark/Light mode toggle works everywhere</div>
+          <div class="form-check"><input type="checkbox"> Layout is responsive on mobile, tablet, desktop</div>
+          <div class="form-check"><input type="checkbox"> Accessibility: alt text, keyboard nav, color contrast</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 11. Security -->
+    <div class="checklist-section">
+      <h3>11. Security</h3>
+      <div class="card">
+        <div class="checklist-list">
+          <div class="form-check"><input type="checkbox"> Sessions expire on logout</div>
+          <div class="form-check"><input type="checkbox"> SQL injection attempts are blocked</div>
+          <div class="form-check"><input type="checkbox"> XSS attempts are blocked (inputs escaped)</div>
+          <div class="form-check"><input type="checkbox"> File uploads restricted to allowed types</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 12. Error Handling -->
+    <div class="checklist-section">
+      <h3>12. Error Handling</h3>
+      <div class="card">
+        <div class="checklist-list">
+          <div class="form-check"><input type="checkbox"> Invalid/missing form data shows clear error</div>
+          <div class="form-check"><input type="checkbox"> Database errors show user-friendly messages</div>
+          <div class="form-check"><input type="checkbox"> 404/500 error pages are handled gracefully</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 13. Performance -->
+    <div class="checklist-section">
+      <h3>13. Performance</h3>
+      <div class="card">
+        <div class="checklist-list">
+          <div class="form-check"><input type="checkbox"> Bulk uploads (students/questions) are fast</div>
+          <div class="form-check"><input type="checkbox"> Multiple users can assess at the same time</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="checklist-footer">
+      &copy; <span id="year"></span> Assessment Portal QA Checklist &mdash; Powered by BMXcode Initiator
+    </div>
+  </div>
+  <script>
+    document.getElementById('today').textContent = new Date().toLocaleDateString();
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html> 

@@ -1,0 +1,28 @@
+<?php
+require 'db.php';
+
+$questions = [
+  ["Appearance", "1"],
+  ["Comportment", "1"],
+  ["Greets patient and introduces self", "0.25"],
+  ["Explains procedure to patient & obtain consent", "0.25"],
+  ["Use blood form/transfusion prescription collect right blood from the laboratory", "0.5"],
+  ["Set a tray for the procedure including blood given set", "0.25"],
+  ["Check pre transfusion vital signs and record", "0.25"],
+  ["Position patient, provide privacy and administer any pre – transfusion medications", "0.25"],
+  ["Re-check blood bag profiles with blood form", "0.5"],
+  ["Fix blood given set to blood bag, hang it and expel air", "0.25"],
+  ["Open IV line with big size cannula, secure with adhesive plaster and connect blood set with cannula (doctor procedure)", "2"],
+  ["Regulate blood flow to 40 – 60dpm", "0.25"],
+  ["Make patient comfortable/ provide support and discard used items", "0.25"],
+  ["Monitor V/S 1 hourly until 4hours after transfusion", "0.25"],
+  ["Watch out for signs of reaction during and 4hours after transfusion, e.g. restlessness, cool, shivery, raised temperature and breathing. If any, clip and stop transfusion, call for help and give prescribed hydrocortisone", "1.5"],
+  ["Observe hand hygiene", "0.25"],
+  ["Record and document", "0.25"],
+];
+
+foreach($questions as $q){
+  $stmt = $db->prepare("INSERT IGNORE INTO questions(text,score_values) VALUES (?,?)");
+  $stmt->execute($q);
+}
+echo "Inserted assessment criteria questions.";

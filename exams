@@ -1,0 +1,1 @@
+ALTER TABLE exams ADD COLUMN student_can_view_score TINYINT(1) DEFAULT 0; 
