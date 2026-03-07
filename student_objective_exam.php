@@ -15,6 +15,27 @@ $exam = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$exam)
   die('You are not assigned to this exam or it is not active.');
 
+// --- NEW scheduling check ---
+$now_ts = time();
+$start_ts = !empty($exam['start_time']) ? strtotime($exam['start_time']) : null;
+$end_ts = !empty($exam['end_time']) ? strtotime($exam['end_time']) : null;
+
+// Allow finishing or viewing results even if scheduled time passed, but NOT starting or resuming the main exam interface
+$is_view_mode = isset($_GET['view_result']) || isset($_GET['review_attempt']);
+if (!$is_view_mode) {
+  if ($start_ts && $now_ts < $start_ts) {
+    header("Location: student_dashboard.php?error=Exam has not started yet. Scheduled for " . date('M j, Y H:i', $start_ts));
+    exit;
+  }
+  if ($end_ts && $now_ts > $end_ts) {
+    // If an attempt is currently IN PROGRESS, we might want to allow it to finish via auto-submit, 
+    // but generally prevent new entry/resume if 'EXAM CLOSED'.
+    header("Location: student_dashboard.php?error=Exam access has closed.");
+    exit;
+  }
+}
+// -----------------------------
+
 // Handle Final Submission POST - Moved score calculation here to store it for analytics
 if (isset($_POST['confirm_final_submit'])) {
   $attempt_no = intval($_POST['current_attempt_no'] ?? 1);
@@ -53,6 +74,7 @@ $stmt->execute([$exam_id, $student_id]);
 $last_attempt = $stmt->fetch();
 
 $current_attempt_no = 1;
+$current_attempt_id = 0;
 $is_new_attempt = false;
 
 // 1. Check for Review Mode
@@ -68,6 +90,7 @@ if ($is_review_mode) {
     header("Location: student_objective_exam.php?exam_id=$exam_id&view_result=1");
     exit;
   }
+  $current_attempt_id = $attempt_to_review['id'];
   $view_result = false; // We want to show the exam UI in review mode
 } else {
   // 2. If user is explicitly asking for results
@@ -80,6 +103,7 @@ if (!$view_result && !$is_review_mode) {
     if (isset($_GET['start']) || isset($_POST['confirm_final_submit'])) {
       $login_id = $_SESSION['login_id'] ?? null;
       $db->prepare("INSERT INTO objective_attempts (exam_id, student_id, login_id, attempt_no, started_at) VALUES (?, ?, ?, 1, NOW())")->execute([$exam_id, $student_id, $login_id]);
+      $current_attempt_id = $db->lastInsertId();
       $current_attempt_no = 1;
       $started_at = date('Y-m-d H:i:s');
       $is_new_attempt = true; // Fix: Set this to true for first attempt
@@ -93,6 +117,7 @@ if (!$view_result && !$is_review_mode) {
         $current_attempt_no = $last_attempt['attempt_no'] + 1;
         $login_id = $_SESSION['login_id'] ?? null;
         $db->prepare("INSERT INTO objective_attempts (exam_id, student_id, login_id, attempt_no, started_at) VALUES (?, ?, ?, ?, NOW())")->execute([$exam_id, $student_id, $login_id, $current_attempt_no]);
+        $current_attempt_id = $db->lastInsertId();
         $started_at = date('Y-m-d H:i:s');
         $is_new_attempt = true;
       } else {
@@ -103,6 +128,7 @@ if (!$view_result && !$is_review_mode) {
     } else {
       // Unfinished attempt exists
       if (isset($_GET['resume']) || isset($_GET['start']) || isset($_POST['confirm_final_submit'])) {
+        $current_attempt_id = $last_attempt['id'];
         $current_attempt_no = $last_attempt['attempt_no'];
         $started_at = $last_attempt['started_at'];
       } else {
@@ -459,6 +485,26 @@ $current_index = 0;
 </head>
 
 <body class="bg-light">
+  <!-- Proctoring Blocker Overlay -->
+  <?php if ($exam['proctor_webcam'] || $exam['proctor_live_video']): ?>
+    <div id="proctorBlocker"
+      class="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-white"
+      style="z-index: 9999;">
+      <div class="text-center p-5 rounded-5 shadow-lg border" style="max-width: 500px;">
+        <div class="mb-4">
+          <div class="spinner-grow text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+        </div>
+        <h4 class="fw-bold mb-3">Initializing Security...</h4>
+        <p class="text-muted mb-4" id="proctorBlockerMsg">Detecting your camera and establishing a secure connection.
+          Please stay on this page.</p>
+        <div id="proctorErrorBtn" class="d-none">
+          <button onclick="location.reload()" class="btn btn-primary rounded-pill px-5 py-3 fw-bold">RETRY
+            CONNECTION</button>
+          <a href="student_dashboard.php" class="btn btn-link text-muted mt-3 d-block">Exit to Dashboard</a>
+        </div>
+      </div>
+    </div>
+  <?php endif; ?>
   <!-- Exam Navbar -->
   <nav class="navbar navbar-light bg-white shadow-sm sticky-top exam-navbar">
     <div class="container-fluid px-lg-5 py-2">
@@ -625,18 +671,53 @@ $current_index = 0;
   </div>
 
   <!-- Violation Overlay -->
-  <div id="violationOverlay">
-    <div class="violation-content">
-      <div class="violation-icon">
-        <i class="bi bi-exclamation-octagon-fill"></i>
+  <div id="violationOverlay"
+    style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; align-items:center; justify-content:center; color:white; text-align:center;">
+    <div class="violation-content p-5 rounded-5 shadow-lg border border-danger border-2"
+      style="max-width: 600px; background: #1a1b1e;">
+      <div class="violation-icon mb-4">
+        <i class="bi bi-shield-lock-fill text-danger" style="font-size: 5rem;"></i>
       </div>
-      <h2 class="fw-bold mb-3">SECURITY VIOLATION!</h2>
-      <p class="fs-5 mb-4 opacity-75">You have attempted to leave the examination screen or switch tabs. This action is
-        strictly prohibited.</p>
-      <div class="p-3 bg-danger-light rounded-3 mb-4">
-        <p class="mb-0 fw-bold text-danger">Your exam will be auto-submitted in <span id="violationTimer">60</span>s</p>
+      <h2 class="fw-bold mb-3 text-uppercase tracking-wider">Security Violation Detected</h2>
+      <p class="fs-5 mb-4 text-white-50">You have attempted to leave the examination screen or switch tasks. This action
+        is recorded.</p>
+
+      <div class="p-4 bg-danger bg-opacity-10 rounded-4 border border-danger border-opacity-25 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <span class="text-danger-emphasis fw-bold">VIOLATION COUNT:</span>
+          <span class="badge bg-danger fs-6 rounded-pill" id="violationCountBadge">1 / 3</span>
+        </div>
+        <div class="progress bg-dark" style="height: 10px; border-radius: 5px;">
+          <div id="violationProgressBar" class="progress-bar bg-danger" style="width: 33%"></div>
+        </div>
       </div>
-      <p class="small opacity-50">Please do not close this window.</p>
+
+      <div class="alert alert-warning border-0 rounded-4 p-3 mb-4">
+        <i class="bi bi-clock-history me-2"></i>
+        Your exam will be auto-submitted in <span id="violationTimer" class="fw-bold fs-4">60</span> seconds.
+      </div>
+
+      <button id="resumeExamBtn" class="btn btn-primary btn-lg rounded-pill px-5 py-3 fw-bold shadow-lg">
+        <i class="bi bi-play-circle me-2"></i> RETURN TO EXAM
+      </button>
+
+      <p class="small text-white-50 mt-4">Note: Exiting fullscreen mode or switching tabs counts as a violation. 3
+        violations result in immediate failure.</p>
+    </div>
+  </div>
+
+  <!-- Admin Warning Toast -->
+  <div class="toast-container position-fixed top-0 start-50 translate-middle-x p-3" style="z-index: 9999;">
+    <div id="adminWarningToast" class="toast align-items-center text-white bg-danger border-0 h-100" role="alert"
+      aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
+      <div class="d-flex p-3">
+        <div class="toast-body">
+          <h5 class="fw-bold mb-1"><i class="bi bi-exclamation-octagon-fill me-2"></i>ADMIN WARNING</h5>
+          <p id="adminWarningMsg" class="mb-0 fs-5"></p>
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
+          aria-label="Close"></button>
+      </div>
     </div>
   </div>
 
@@ -674,9 +755,17 @@ $current_index = 0;
   <script>
     const examId = <?= $exam_id ?>;
     const currentAttemptNo = <?= $current_attempt_no ?>;
+    const currentAttemptId = <?= $current_attempt_id ?>;
     const questions = <?= json_encode($questions) ?>;
     const total = <?= $total ?>;
     const isStrict = <?= $exam['is_strict'] ? 'true' : 'false' ?>;
+    const pFS = <?= ($exam['proctor_fullscreen'] || $exam['is_strict']) ? 'true' : 'false' ?>;
+    const pTab = <?= ($exam['proctor_tab_lock'] || $exam['is_strict']) ? 'true' : 'false' ?>;
+    const pKB = <?= ($exam['proctor_kb_lock'] || $exam['is_strict']) ? 'true' : 'false' ?>;
+    const pAuto = <?= ($exam['proctor_auto_submit'] || $exam['is_strict']) ? 'true' : 'false' ?>;
+    const pBrowser = <?= ($exam['proctor_browser_check'] || $exam['is_strict']) ? 'true' : 'false' ?>;
+    const pWebcam = <?= ($exam['proctor_webcam'] || $exam['is_strict']) ? 'true' : 'false' ?>;
+    const pLive = <?= ($exam['proctor_live_video'] || $exam['is_strict']) ? 'true' : 'false' ?>;
     const shuffleOptions = <?= ($exam['shuffle_options'] ?? 0) ? 'true' : 'false' ?>;
     const isReviewMode = <?= $is_review_mode ? 'true' : 'false' ?>;
     const canViewScore = <?= $exam['student_can_view_score'] ? 'true' : 'false' ?>;
@@ -1090,81 +1179,265 @@ $current_index = 0;
 
     // Anti-Cheating Lockdown Logic
     let isCheatingSubmitting = false;
+    let violationCount = <?= (int) ($last_attempt['violation_count'] ?? 0) ?>;
+    const maxViolations = 3;
+    let proctorStatus = 'active';
+    let violationTimerInterval = null;
+    let isLocked = false;
 
-    function handleViolation() {
-      if (!isStrict || isCheatingSubmitting) return;
-      isCheatingSubmitting = true;
+    // Proctor Ping & WebRTC Live Logic
+    let webcamStream = null;
+    const webcamVideo = document.createElement('video');
+    const webcamCanvas = document.createElement('canvas'); // Keep for snapshots as fallback
 
-      // Show violation overlay
+    // WebRTC State
+    let peerConnection = null;
+    let signalingInterval = null;
+    let lastSignalId = 0;
+    const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    function initWebcam() {
+      if (!pWebcam || isReviewMode) return;
+
+      const blocker = document.getElementById('proctorBlocker');
+      const blockerMsg = document.getElementById('proctorBlockerMsg');
+      const errorBtn = document.getElementById('proctorErrorBtn');
+
+      // Check for Secure Context (HTTPS)
+      const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+      if (!window.isSecureContext && !isLocal) {
+        if (blocker) {
+          blockerMsg.innerHTML = '<span class="text-danger fw-bold">INSECURE CONNECTION DETECTED</span><br><br>Modern browsers block camera access on non-HTTPS connections. <br><br><b>Please ask your administrator to provide an HTTPS link or use Localhost.</b>';
+          errorBtn.classList.remove('d-none');
+        }
+        showGlobalAlert("Security Protocol Failure", "Your connection (Non-HTTPS) does not support camera access. This is required for proctoring. Please use a secure connection.", "danger");
+        return;
+      }
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (blocker) {
+          blockerMsg.innerHTML = '<span class="text-danger fw-bold">BROWSER NOT COMPATIBLE</span><br><br>Your browser does not support the required proctoring APIs. Please use Google Chrome or Microsoft Edge.';
+          errorBtn.classList.remove('d-none');
+        }
+        showGlobalAlert("Compatible Browser Required", "Your browser does not support camera access. This is required for proctoring.", "danger");
+        return;
+      }
+
+      navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } })
+        .then(stream => {
+          webcamStream = stream;
+          webcamVideo.srcObject = stream;
+          webcamVideo.play();
+
+          // Remove blocker only on success
+          if (blocker) {
+            blocker.style.opacity = '0';
+            setTimeout(() => blocker.remove(), 500);
+          }
+
+          console.log("Webcam initialized" + (pLive ? " (Live Streaming Enabled)" : " (Snapshot Mode)"));
+          if (pLive) startSignaling();
+        })
+        .catch(err => {
+          console.error("Webcam error:", err);
+          if (blocker) {
+            blockerMsg.innerHTML = '<span class="text-danger fw-bold">CAMERA PERMISSION DENIED</span><br><br>You must allow camera access to take this exam. Please check your browser address bar and grant permission.';
+            errorBtn.classList.remove('d-none');
+          }
+          showGlobalAlert("Camera Required", "This exam requires webcam access for live proctoring. Please allow camera permissions.", "danger");
+        });
+    }
+
+    async function startSignaling() {
+      if (signalingInterval) return;
+      signalingInterval = setInterval(async () => {
+        const resp = await fetch(`webrtc_api.php?action=get&attempt_id=${currentAttemptId}&last_id=${lastSignalId}`);
+        const data = await resp.json();
+        if (data.signals) {
+          for (const signal of data.signals) {
+            lastSignalId = signal.id;
+            handleAdminSignal(signal);
+          }
+        }
+      }, 3000);
+    }
+
+    async function handleAdminSignal(signal) {
+      const payload = JSON.parse(signal.payload);
+      if (signal.type === 'offer') {
+        if (peerConnection) peerConnection.close();
+        peerConnection = new RTCPeerConnection(rtcConfig);
+
+        webcamStream.getTracks().forEach(track => peerConnection.addTrack(track, webcamStream));
+
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            sendSignal('ice', JSON.stringify(event.candidate));
+          }
+        };
+
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(payload));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        sendSignal('answer', JSON.stringify(answer));
+      } else if (signal.type === 'ice') {
+        if (peerConnection) {
+          await peerConnection.addIceCandidate(new RTCIceCandidate(payload));
+        }
+      }
+    }
+
+    function sendSignal(type, payload) {
+      const fd = new FormData();
+      fd.append('attempt_id', currentAttemptId);
+      fd.append('type', type);
+      fd.append('payload', payload);
+      fetch('webrtc_api.php?action=send', { method: 'POST', body: fd });
+    }
+
+    function getWebcamSnapshot() {
+      if (!webcamStream) return null;
+      webcamCanvas.width = 160;
+      webcamCanvas.height = 120;
+      const ctx = webcamCanvas.getContext('2d');
+      ctx.drawImage(webcamVideo, 0, 0, 160, 120);
+      return webcamCanvas.toDataURL('image/jpeg', 0.4);
+    }
+
+    function sendPing(status = 'active', violation = null, details = null) {
+      if (isReviewMode || isLocked) return;
+
+      const formData = new FormData();
+      formData.append('exam_id', examId);
+      formData.append('attempt_no', currentAttemptNo);
+      formData.append('status', status);
+      if (violation) {
+        formData.append('violation_type', violation);
+        formData.append('details', details);
+      }
+
+      // We still send a small low-res snapshot every ping as a backup thumbnail for the grid
+      if (pWebcam && webcamStream) {
+        const snap = getWebcamSnapshot();
+        if (snap) formData.append('webcam_snapshot', snap);
+      }
+
+      fetch('proctor_ping.php', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === 'TERMINATE' || data.status === 'FORCED_LOGOUT') {
+            isLocked = true;
+            alert(data.message);
+            window.onbeforeunload = null;
+            location.href = (data.status === 'TERMINATE') ? 'student_dashboard.php' : 'logout.php';
+          }
+
+          if (data.violation_count !== undefined) {
+            violationCount = data.violation_count;
+            const countBadge = document.getElementById('violationCountBadge');
+            const progressBar = document.getElementById('violationProgressBar');
+            if (countBadge) countBadge.textContent = `${violationCount} / ${maxViolations}`;
+            if (progressBar) progressBar.style.width = (violationCount / maxViolations * 100) + '%';
+          }
+
+          if (data.warning) showAdminWarning(data.warning);
+        });
+    }
+
+    function showAdminWarning(msg) {
+      const toastEl = document.getElementById('adminWarningToast');
+      if (toastEl) {
+        document.getElementById('adminWarningMsg').textContent = msg;
+        new bootstrap.Toast(toastEl).show();
+      }
+    }
+
+    function handleViolation(type = "Unknown", details = "") {
+      if (!isStrict || isLocked || isReviewMode) return;
+      proctorStatus = 'blur';
       const overlay = document.getElementById('violationOverlay');
-      overlay.style.display = 'flex';
-
-      // Countdown logic
-      let secondsLeft = 60;
       const timerDisplay = document.getElementById('violationTimer');
-
-      const countdownInterval = setInterval(() => {
+      if (overlay) overlay.style.display = 'flex';
+      sendPing('blur', type, details);
+      if (violationTimerInterval) clearInterval(violationTimerInterval);
+      let secondsLeft = 60;
+      if (timerDisplay) timerDisplay.textContent = secondsLeft;
+      violationTimerInterval = setInterval(() => {
         secondsLeft--;
         if (timerDisplay) timerDisplay.textContent = secondsLeft;
-
-        if (secondsLeft <= 0) {
-          clearInterval(countdownInterval);
-          submitFinal();
-        }
+        if (secondsLeft <= 0) { clearInterval(violationTimerInterval); submitFinal(); }
       }, 1000);
     }
 
-    // Detect tab switching or window minimization
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && isStrict) {
-        handleViolation();
-      }
-    });
-
-    // Detect opening other applications or losing window focus
-    window.addEventListener('blur', () => {
-      if (isStrict) handleViolation();
-    });
-
-    // Prevent actions based on strictness
-    if (isStrict) {
-      document.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        return false;
-      });
-      document.addEventListener('copy', (e) => e.preventDefault());
-      document.addEventListener('cut', (e) => e.preventDefault());
-      document.addEventListener('paste', (e) => e.preventDefault());
-      document.addEventListener('keydown', (e) => {
-        // Disable F12, Ctrl+Shift+I, Ctrl+U, PrintScreen, and navigation shortcuts
-        if (
-          e.key === 'F12' ||
-          (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) ||
-          (e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'S' || e.key === 'p' || e.key === 'P')) ||
-          e.key === 'PrintScreen'
-        ) {
-          e.preventDefault();
-          return false;
-        }
-      });
-
-      // Simple click detector for losing focus via devtools
-      window.onresize = () => {
-        if (window.outerWidth - window.innerWidth > 100 || window.outerHeight - window.innerHeight > 100) {
-          handleViolation();
-        }
-      };
+    function resumeExam() {
+      if (isLocked) return;
+      if (pFS) document.documentElement.requestFullscreen().catch(() => { });
+      const overlay = document.getElementById('violationOverlay');
+      if (overlay) overlay.style.display = 'none';
+      if (violationTimerInterval) clearInterval(violationTimerInterval);
+      proctorStatus = 'active';
+      sendPing('active');
     }
 
-    // Boot Sequence
-    console.log("Exam Booting...");
-    startTimer();
+    // Event Listeners for Proctoring
+    if (!isReviewMode) {
+      window.addEventListener('blur', () => { if (pTab) handleViolation("WINDOW_BLUR", "Lost focus"); });
+      document.addEventListener('visibilitychange', () => { if (document.hidden && pTab) handleViolation("TAB_SWITCH", "Switched tab"); });
+      document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement && pFS && !isLocked) handleViolation("EXIT_FULLSCREEN", "Left fullscreen");
+      });
 
-    try {
-      if (typeof questions !== 'undefined' && questions.length > 0) {
-        renderQuestion(0);
+      if (pKB) {
+        document.oncontextmenu = (e) => { e.preventDefault(); return false; };
+        document.oncopy = (e) => e.preventDefault();
+        document.oncut = (e) => e.preventDefault();
+        document.onpaste = (e) => e.preventDefault();
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'F12' || (e.ctrlKey && e.shiftKey) || (e.ctrlKey && 'uupPcC'.includes(e.key)) || e.key === 'PrintScreen') {
+            e.preventDefault();
+            handleViolation("KEYBOARD_LOCK", `Key: ${e.key}`);
+          }
+        });
       }
-    } catch (e) { console.error("Question Render Error:", e); }
+    }
+
+    // Initialization
+    window.onload = function () {
+      if (!isReviewMode) {
+        if (pBrowser) {
+          const ua = navigator.userAgent;
+          if (!/Chrome/.test(ua) && !/Edg/.test(ua)) {
+            showGlobalAlert("Browser Warning", "Please use Chrome or Edge for the best experience.", "warning");
+          }
+        }
+
+        if (pWebcam) {
+          initWebcam();
+          // We do NOT call renderQuestion or startTimer here yet, 
+          // the blocker removal logic handles that mentally, but wait, 
+          // actually we can render question but it will be hidden behind blocker.
+        } else {
+          // No webcam required, show immediately
+          if (questions.length > 0) renderQuestion(0);
+        }
+
+        if (pFS) {
+          showGlobalAlert("Strict Mode", "Fullscreen is required. Click OK to start.", "info", resumeExam);
+        }
+        setInterval(() => sendPing(proctorStatus), 15000);
+      } else {
+        // Review mode doesn't need webcam
+        if (questions.length > 0) renderQuestion(0);
+      }
+      startTimer();
+      // If webcam required, renderQuestion will be called after camera success? 
+      // Actually, it's safer to render it now but keep it hidden by blocker.
+      if (pWebcam && !isReviewMode) {
+        if (questions.length > 0) renderQuestion(0);
+      }
+    };
+
+    document.getElementById('resumeExamBtn').onclick = resumeExam;
   </script>
 
   <!-- Global Modals System -->

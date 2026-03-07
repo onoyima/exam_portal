@@ -24,14 +24,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $student = $stmt->fetch(PDO::FETCH_ASSOC);
 
   if ($student && $student['password'] === $password) {
-    // Refresh session to prevent session fixation
+    // Refresh session to prevent session fixation and for new session ID
     session_regenerate_id(true);
+    $newSessionId = session_id();
+
+    // Store current session ID to force logout other devices
+    $update_stmt = $db->prepare("UPDATE students SET current_session_id = ? WHERE id = ?");
+    $update_stmt->execute([$newSessionId, $student['id']]);
 
     $_SESSION['role'] = 'student';
     $_SESSION['student_id'] = $student['id'];
     $_SESSION['student_name'] = $student['name'];
     $_SESSION['matric_no'] = $student['matric_no'];
     $_SESSION['user'] = $student['name']; // Set common user variable for navbar
+    $_SESSION['php_session_id'] = $newSessionId; // Copy for easy comparison
 
     // Log successful login
     $login_stmt = $db->prepare("INSERT INTO login_history (user_id, username, user_type, ip_address, user_agent, status) VALUES (?, ?, ?, ?, ?, ?)");
@@ -114,9 +120,34 @@ $instruction = $instruction_stmt->fetchColumn() ?: "Welcome to the Assessment Po
             <h2 class="fw-bold text-primary mb-1">Student Login</h2>
             <p class="text-muted small mb-4">Welcome back! Please login to your account.</p>
 
-            <?php if ($error): ?>
-              <div class="alert alert-danger rounded-3 border-0 shadow-sm"><?= htmlspecialchars($error) ?></div>
+            <?php if ($error || isset($_GET['error'])): ?>
+              <div class="alert alert-danger rounded-4 border-0 shadow-sm p-4 mb-4">
+                <div class="d-flex align-items-center gap-3">
+                  <div class="bg-danger bg-opacity-10 text-danger p-3 rounded-circle">
+                    <i class="bi bi-exclamation-triangle-fill fs-4"></i>
+                  </div>
+                  <div>
+                    <h6 class="fw-bold mb-1">Security Alert</h6>
+                    <p class="mb-0 small opacity-75">
+                      <?php 
+                        if (isset($_GET['error']) && $_GET['error'] === 'multi_login') {
+                            echo "This account was logged out because it was accessed from another device. For security, only one session is allowed during examinations.";
+                        } else {
+                            echo htmlspecialchars($error);
+                        }
+                      ?>
+                    </p>
+                  </div>
+                </div>
+              </div>
             <?php endif; ?>
+
+            <div id="browserCheckAlert" class="mb-4" style="display:none;">
+                <div class="alert alert-warning border-0 rounded-4 shadow-sm p-3">
+                  <i class="bi bi-browser-chrome me-2"></i>
+                  <span class="small fw-bold">Warning: Use Chrome or Edge for the best proctoring experience.</span>
+                </div>
+            </div>
 
             <form method="post">
               <div class="mb-3">
@@ -133,6 +164,27 @@ $instruction = $instruction_stmt->fetchColumn() ?: "Welcome to the Assessment Po
                 <i class="bi bi-box-arrow-in-right me-2"></i> Access My Dashboard
               </button>
             </form>
+
+            <script>
+                // Basic proctoring pre-check
+                (function() {
+                    const ua = navigator.userAgent;
+                    const isChrome = /Chrome/.test(ua) && /Google Inc/.test(navigator.vendor);
+                    const isEdge = /Edg/.test(ua);
+                    
+                    if (!isChrome && !isEdge) {
+                        document.getElementById('browserCheckAlert').style.display = 'block';
+                    }
+                    
+                    // Simple check for potential recorders using navigator.mediaDevices
+                    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+                        navigator.mediaDevices.enumerateDevices().then(devices => {
+                            const hasVirtualCam = devices.any(d => d.label.toLowerCase().includes('virtual') || d.label.toLowerCase().includes('obs'));
+                            if (hasVirtualCam) console.warn("Virtual device detected");
+                        }).catch(e => {});
+                    }
+                })();
+            </script>
 
             <div class="text-center mt-5 pt-3 border-top">
               <p class="mb-0 small text-muted">Administrative Staff? <a href="login.php"

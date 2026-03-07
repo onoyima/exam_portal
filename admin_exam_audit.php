@@ -205,6 +205,7 @@ function formatInterval($seconds)
                                 <th>Exam Started</th>
                                 <th>Exam Finished</th>
                                 <th>Duration</th>
+                                <th>Violations</th>
                                 <th>Score</th>
                                 <th>IP Log</th>
                             </tr>
@@ -264,6 +265,15 @@ function formatInterval($seconds)
                                         </td>
                                         <td class="fw-bold font-monospace">
                                             <?= formatInterval($log['time_taken']) ?>
+                                        </td>
+                                        <td>
+                                            <?php if ($log['violation_count'] > 0): ?>
+                                                <span class="badge rounded-pill bg-danger">
+                                                    <i class="bi bi-shield-exclamation me-1"></i> <?= $log['violation_count'] ?>
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="text-muted small">None</span>
+                                            <?php endif; ?>
                                         </td>
                                         <td>
                                             <?php if ($log['finished_at']): ?>

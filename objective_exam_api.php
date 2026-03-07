@@ -13,6 +13,28 @@ $student_id = $_SESSION['student_id'];
 $action = $_GET['action'] ?? '';
 
 try {
+    // Shared scheduling check for API actions
+    $exam_id_check = isset($_REQUEST['exam_id']) ? intval($_REQUEST['exam_id']) : 0;
+    if ($exam_id_check > 0) {
+        $stmt = $db->prepare("SELECT start_time, end_time FROM exams WHERE id = ?");
+        $stmt->execute([$exam_id_check]);
+        $exam_data = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($exam_data) {
+            $now = time();
+            $start = !empty($exam_data['start_time']) ? strtotime($exam_data['start_time']) : null;
+            $end = !empty($exam_data['end_time']) ? strtotime($exam_data['end_time']) : null;
+
+            if ($start && $now < $start) {
+                echo json_encode(['success' => false, 'error' => 'Exam access period has not started yet.']);
+                exit;
+            }
+            if ($end && $now > $end) {
+                echo json_encode(['success' => false, 'error' => 'Exam access period has ended.']);
+                exit;
+            }
+        }
+    }
+
     if ($action === 'save_answer') {
         $exam_id = intval($_POST['exam_id']);
         $question_id = intval($_POST['question_id']);

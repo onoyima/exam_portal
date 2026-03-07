@@ -8,13 +8,33 @@ $name = $_SESSION['user'] ?? 'Admin';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if (isset($_POST['create_exam'])) {
     // Step 1: Create exam only
-    $stmt = $db->prepare("INSERT INTO exams(name, is_active, is_strict) VALUES (?, ?, ?)");
-    $stmt->execute([$_POST['exam_name'], $_POST['is_active'] ? 1 : 0, $_POST['is_strict'] ? 1 : 0]);
+    $p_fs = isset($_POST['proctor_fullscreen']) ? 1 : 0;
+    $p_tab = isset($_POST['proctor_tab_lock']) ? 1 : 0;
+    $p_kb = isset($_POST['proctor_kb_lock']) ? 1 : 0;
+    $p_auto = isset($_POST['proctor_auto_submit']) ? 1 : 0;
+    $p_browser = isset($_POST['proctor_browser_check']) ? 1 : 0;
+    $p_webcam = isset($_POST['proctor_webcam']) ? 1 : 0;
+    $p_live = isset($_POST['proctor_live_video']) ? 1 : 0;
+    $start_time = !empty($_POST['start_time']) ? $_POST['start_time'] : null;
+    $end_time = !empty($_POST['end_time']) ? $_POST['end_time'] : null;
+
+    $stmt = $db->prepare("INSERT INTO exams(name, is_active, is_strict, proctor_fullscreen, proctor_tab_lock, proctor_kb_lock, proctor_auto_submit, proctor_browser_check, proctor_webcam, proctor_live_video, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$_POST['exam_name'], $_POST['is_active'] ? 1 : 0, $_POST['is_strict'] ? 1 : 0, $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time]);
     $success = "Exam '" . htmlspecialchars($_POST['exam_name']) . "' created successfully! You can now add students and questions to this exam.";
   } elseif (isset($_POST['edit_exam'])) {
     // Edit existing exam
-    $stmt = $db->prepare("UPDATE exams SET name = ?, is_active = ?, is_strict = ? WHERE id = ?");
-    $stmt->execute([$_POST['exam_name'], $_POST['is_active'] ? 1 : 0, $_POST['is_strict'] ? 1 : 0, $_POST['exam_id']]);
+    $p_fs = isset($_POST['proctor_fullscreen']) ? 1 : 0;
+    $p_tab = isset($_POST['proctor_tab_lock']) ? 1 : 0;
+    $p_kb = isset($_POST['proctor_kb_lock']) ? 1 : 0;
+    $p_auto = isset($_POST['proctor_auto_submit']) ? 1 : 0;
+    $p_browser = isset($_POST['proctor_browser_check']) ? 1 : 0;
+    $p_webcam = isset($_POST['proctor_webcam']) ? 1 : 0;
+    $p_live = isset($_POST['proctor_live_video']) ? 1 : 0;
+    $start_time = !empty($_POST['start_time']) ? $_POST['start_time'] : null;
+    $end_time = !empty($_POST['end_time']) ? $_POST['end_time'] : null;
+
+    $stmt = $db->prepare("UPDATE exams SET name = ?, is_active = ?, is_strict = ?, proctor_fullscreen = ?, proctor_tab_lock = ?, proctor_kb_lock = ?, proctor_auto_submit = ?, proctor_browser_check = ?, proctor_webcam = ?, proctor_live_video = ?, start_time = ?, end_time = ? WHERE id = ?");
+    $stmt->execute([$_POST['exam_name'], $_POST['is_active'] ? 1 : 0, $_POST['is_strict'] ? 1 : 0, $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time, $_POST['exam_id']]);
     $success = "Exam updated successfully!";
   } elseif (isset($_POST['activate'])) {
     $db->prepare("UPDATE exams SET is_active=1 WHERE id=?")->execute([$_POST['exam_id']]);
@@ -230,11 +250,50 @@ foreach ($exams as $exam) {
           </div>
           <div class="col-md-3">
             <label for="is_strict" class="form-label">Tab Security (Strictness)</label>
-            <select name="is_strict" id="is_strict" class="form-select">
+            <select name="is_strict" id="is_strict" class="form-select mb-2">
               <option value="1">Strict (Enabled)</option>
               <option value="0">Flexible (Disabled)</option>
             </select>
-            <small class="text-muted">Strict mode prevents tab switching.</small>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Start Time</label>
+            <input type="datetime-local" name="start_time" class="form-control">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">End Time</label>
+            <input type="datetime-local" name="end_time" class="form-control">
+          </div>
+          <div class="col-12">
+            <div class="d-flex flex-wrap gap-3 p-3 bg-light rounded-3 border">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="proctor_fullscreen" id="pfsNew" checked>
+                <label class="form-check-label small" for="pfsNew">Fullscreen</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="proctor_tab_lock" id="ptabNew" checked>
+                <label class="form-check-label small" for="ptabNew">Tab/Focus</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="proctor_kb_lock" id="pkbNew" checked>
+                <label class="form-check-label small" for="pkbNew">Keyboard/Copy</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="proctor_auto_submit" id="pautoNew" checked>
+                <label class="form-check-label small" for="pautoNew">3-Strike Auto</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="proctor_browser_check" id="pbcNew" checked>
+                <label class="form-check-label small" for="pbcNew">Browser Check</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="proctor_webcam" id="pwcNew" checked>
+                <label class="form-check-label small" for="pwcNew">Webcam Monitor</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="proctor_live_video" id="pliveNew">
+                <label class="form-check-label small text-danger fw-bold" for="pliveNew">Live Video Stream</label>
+              </div>
+            </div>
           </div>
           <div class="col-md-12 text-end">
             <button type="submit" name="create_exam" class="btn btn-primary px-4">Create Exam</button>
@@ -499,7 +558,7 @@ foreach ($exams as $exam) {
                           <?php endif; ?>
                         </form>
                         <button class="btn btn-info btn-sm"
-                          onclick="editExam(<?= $exam['id'] ?>, '<?= htmlspecialchars($exam['name']) ?>', <?= $exam['is_active'] ?>, <?= $exam['is_strict'] ?>)">Edit</button>
+                          onclick="editExam(<?= $exam['id'] ?>, '<?= addslashes($exam['name']) ?>', <?= $exam['is_active'] ?>, <?= $exam['is_strict'] ?>, <?= $exam['proctor_fullscreen'] ?>, <?= $exam['proctor_tab_lock'] ?>, <?= $exam['proctor_kb_lock'] ?>, <?= $exam['proctor_auto_submit'] ?>, <?= $exam['proctor_browser_check'] ?>, <?= $exam['proctor_webcam'] ?>, <?= $exam['proctor_live_video'] ?? 0 ?>, '<?= $exam['start_time'] ? date('Y-m-d\TH:i', strtotime($exam['start_time'])) : '' ?>', '<?= $exam['end_time'] ? date('Y-m-d\TH:i', strtotime($exam['end_time'])) : '' ?>')">Edit</button>
                         <form method="post" class="d-inline"
                           onsubmit="return confirm('Are you sure you want to delete this exam? This will remove all associated data.')">
                           <input type="hidden" name="exam_id" value="<?= $exam['id'] ?>">
@@ -539,13 +598,64 @@ foreach ($exams as $exam) {
                 <option value="1">Active</option>
               </select>
             </div>
+            <div class="row">
+              <div class="col-6 mb-3">
+                <label for="edit_start_time" class="form-label">Start Time</label>
+                <input type="datetime-local" class="form-control" id="edit_start_time" name="start_time">
+              </div>
+              <div class="col-6 mb-3">
+                <label for="edit_end_time" class="form-label">End Time</label>
+                <input type="datetime-local" class="form-control" id="edit_end_time" name="end_time">
+              </div>
+            </div>
             <div class="mb-3">
-              <label for="edit_is_strict" class="form-label">Tab Security (Strictness)</label>
-              <select name="is_strict" id="edit_is_strict" class="form-select">
-                <option value="1">Strict (Lockdown On)</option>
-                <option value="0">Flexible (Lockdown Off)</option>
+              <label for="edit_is_strict" class="form-label font-monospace" style="font-size: 0.8rem;">Master Toggle
+                (Strict Mode)</label>
+              <select name="is_strict" id="edit_is_strict" class="form-select mb-3">
+                <option value="1">Enabled</option>
+                <option value="0">Disabled</option>
               </select>
-              <small class="text-muted">Prevents tab/window switching.</small>
+
+              <div class="p-3 bg-light rounded-4 border">
+                <div class="fw-bold mb-2 small text-muted">Proctoring Layers</div>
+                <div class="row g-2">
+                  <div class="col-6">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" name="proctor_fullscreen" id="edit_pfs">
+                      <label class="form-check-label small" for="edit_pfs">Fullscreen</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" name="proctor_tab_lock" id="edit_ptab">
+                      <label class="form-check-label small" for="edit_ptab">Tab/Focus Lock</label>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" name="proctor_kb_lock" id="edit_pkb">
+                      <label class="form-check-label small" for="edit_pkb">Keyboard Lock</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" name="proctor_auto_submit" id="edit_pauto">
+                      <label class="form-check-label small" for="edit_pauto">Auto Submit</label>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" name="proctor_browser_check" id="edit_pbc">
+                      <label class="form-check-label small" for="edit_pbc">Browser Integrity Check</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" name="proctor_webcam" id="edit_pwc">
+                      <label class="form-check-label small" for="edit_pwc">Webcam Monitor</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" name="proctor_live_video" id="edit_plive">
+                      <label class="form-check-label small text-danger fw-bold" for="edit_plive">Live Video
+                        Stream</label>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           <div class="modal-footer">
@@ -622,12 +732,21 @@ foreach ($exams as $exam) {
     }
 
     // Edit exam function
-    function editExam(examId, examName, isActive, isStrict) {
+    function editExam(examId, examName, isActive, isStrict, pfs, ptab, pkb, pauto, pbc, pwc, plive, startTime, endTime) {
       document.getElementById('edit_exam_id').value = examId;
       document.getElementById('edit_exam_name').value = examName;
       document.getElementById('edit_is_active').value = isActive ? '1' : '0';
       document.getElementById('edit_is_strict').value = isStrict ? '1' : '0';
-      new bootstrap.Modal(document.getElementById('editExamModal')).show();
+
+      document.getElementById('edit_pfs').checked = pfs == 1;
+      document.getElementById('edit_ptab').checked = ptab == 1;
+      document.getElementById('edit_pkb').checked = pkb == 1;
+      document.getElementById('edit_pauto').checked = pauto == 1;
+      document.getElementById('edit_pbc').checked = pbc == 1;
+      document.getElementById('edit_pwc').checked = pwc == 1;
+      document.getElementById('edit_plive').checked = plive == 1;
+      document.getElementById('edit_start_time').value = startTime || '';
+      document.getElementById('edit_end_time').value = endTime || '';
     }
 
     // Show students in modal

@@ -61,13 +61,26 @@ $login_history = $db->query("
     LIMIT 20
 ")->fetchAll(PDO::FETCH_ASSOC);
 
-// Get audit statistics
 $stats = [
   'total_actions' => $total_records,
   'today_actions' => $db->query("SELECT COUNT(*) FROM audit_trail WHERE DATE(created_at) = CURDATE()")->fetchColumn(),
   'total_logins' => $db->query("SELECT COUNT(*) FROM login_history")->fetchColumn(),
   'today_logins' => $db->query("SELECT COUNT(*) FROM login_history WHERE DATE(login_time) = CURDATE()")->fetchColumn()
 ];
+
+// Check for emergency log files (database failover)
+$failover_logs = [];
+$log_dir = __DIR__ . '/logs';
+if (is_dir($log_dir)) {
+  $files = glob($log_dir . '/*.log');
+  foreach ($files as $file) {
+    $failover_logs[] = [
+      'name' => basename($file),
+      'size' => round(filesize($file) / 1024, 2) . ' KB',
+      'date' => date('F j, Y H:i:s', filemtime($file))
+    ];
+  }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -162,6 +175,38 @@ $stats = [
           </div>
         </div>
       </div>
+
+      <!-- Failover Logs Warning -->
+      <?php if (!empty($failover_logs)): ?>
+          <div class="alert alert-warning shadow-sm border-0 rounded-4 mb-4 p-4">
+            <div class="d-flex gap-3">
+              <i class="bi bi-exclamation-triangle-fill fs-1 text-warning"></i>
+              <div>
+                <h5 class="fw-bold mb-1">Emergency Logs Detected</h5>
+                <p class="mb-3 text-muted">The system detected audit data written to files due to temporary database connection issues. These logs represent actions that occurred during the "Database Failover" period.</p>
+                <div class="table-responsive bg-white rounded-3 p-2">
+                  <table class="table table-sm align-middle mb-0">
+                    <thead class="small text-uppercase fw-bold text-muted">
+                      <tr><th>Log File</th><th>Size</th><th>Last Updated</th><th>Action</th></tr>
+                    </thead>
+                    <tbody>
+                      <?php foreach ($failover_logs as $flog): ?>
+                        <tr>
+                          <td class="fw-bold fs-7"><?= htmlspecialchars($flog['name']) ?></td>
+                          <td class="text-muted small"><?= $flog['size'] ?></td>
+                          <td class="text-muted small"><?= $flog['date'] ?></td>
+                          <td>
+                            <a href="logs/<?= htmlspecialchars($flog['name']) ?>" target="_blank" class="btn btn-sm btn-link text-primary fw-bold text-decoration-none">View RAW</a>
+                          </td>
+                        </tr>
+                      <?php endforeach; ?>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+      <?php endif; ?>
 
       <!-- Audit Trail -->
       <div class="card p-4 shadow-sm mb-4">

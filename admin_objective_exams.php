@@ -18,8 +18,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $grading_method = $_POST['grading_method'];
     $is_strict = isset($_POST['is_strict']) ? 1 : 0;
     $shuffle_opts = isset($_POST['shuffle_options']) ? 1 : 0;
-    $stmt = $db->prepare("INSERT INTO exams (name, description, is_active, type, student_can_view_score, total_mark, duration_minutes, shuffle_objective, questions_to_show, max_attempts, grading_method, is_strict, shuffle_options) VALUES (?, ?, ?, 'objective', ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$name, $desc, $is_active, $student_can_view_score, $total_mark, $duration, $shuffle, $q_to_show, $max_attempts, $grading_method, $is_strict, $shuffle_opts]);
+    $p_fs = isset($_POST['proctor_fullscreen']) ? 1 : 0;
+    $p_tab = isset($_POST['proctor_tab_lock']) ? 1 : 0;
+    $p_kb = isset($_POST['proctor_kb_lock']) ? 1 : 0;
+    $p_auto = isset($_POST['proctor_auto_submit']) ? 1 : 0;
+    $p_browser = isset($_POST['proctor_browser_check']) ? 1 : 0;
+    $p_webcam = isset($_POST['proctor_webcam']) ? 1 : 0;
+    $p_live = isset($_POST['proctor_live_video']) ? 1 : 0;
+    $start_time = !empty($_POST['start_time']) ? $_POST['start_time'] : null;
+    $end_time = !empty($_POST['end_time']) ? $_POST['end_time'] : null;
+
+    $stmt = $db->prepare("INSERT INTO exams (name, description, is_active, type, student_can_view_score, total_mark, duration_minutes, shuffle_objective, questions_to_show, max_attempts, grading_method, is_strict, shuffle_options, proctor_fullscreen, proctor_tab_lock, proctor_kb_lock, proctor_auto_submit, proctor_browser_check, proctor_webcam, proctor_live_video, start_time, end_time) VALUES (?, ?, ?, 'objective', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$name, $desc, $is_active, $student_can_view_score, $total_mark, $duration, $shuffle, $q_to_show, $max_attempts, $grading_method, $is_strict, $shuffle_opts, $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time]);
     header('Location: admin_objective_exams.php?success=created');
     exit;
   }
@@ -37,8 +47,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $grading_method = $_POST['grading_method'];
     $is_strict = isset($_POST['is_strict']) ? 1 : 0;
     $shuffle_opts = isset($_POST['shuffle_options']) ? 1 : 0;
-    $stmt = $db->prepare("UPDATE exams SET name=?, description=?, is_active=?, student_can_view_score=?, total_mark=?, duration_minutes=?, shuffle_objective=?, questions_to_show=?, max_attempts=?, grading_method=?, is_strict=?, shuffle_options=? WHERE id=? AND type='objective'");
-    $stmt->execute([$name, $desc, $is_active, $student_can_view_score, $total_mark, $duration, $shuffle, $q_to_show, $max_attempts, $grading_method, $is_strict, $shuffle_opts, $id]);
+    $p_fs = isset($_POST['proctor_fullscreen']) ? 1 : 0;
+    $p_tab = isset($_POST['proctor_tab_lock']) ? 1 : 0;
+    $p_kb = isset($_POST['proctor_kb_lock']) ? 1 : 0;
+    $p_auto = isset($_POST['proctor_auto_submit']) ? 1 : 0;
+    $p_browser = isset($_POST['proctor_browser_check']) ? 1 : 0;
+    $p_webcam = isset($_POST['proctor_webcam']) ? 1 : 0;
+    $p_live = isset($_POST['proctor_live_video']) ? 1 : 0;
+    $start_time = !empty($_POST['start_time']) ? $_POST['start_time'] : null;
+    $end_time = !empty($_POST['end_time']) ? $_POST['end_time'] : null;
+
+    $stmt = $db->prepare("UPDATE exams SET name=?, description=?, is_active=?, student_can_view_score=?, total_mark=?, duration_minutes=?, shuffle_objective=?, questions_to_show=?, max_attempts=?, grading_method=?, is_strict=?, shuffle_options=?, proctor_fullscreen=?, proctor_tab_lock=?, proctor_kb_lock=?, proctor_auto_submit=?, proctor_browser_check=?, proctor_webcam=?, proctor_live_video=?, start_time=?, end_time=? WHERE id=? AND type='objective'");
+    $stmt->execute([$name, $desc, $is_active, $student_can_view_score, $total_mark, $duration, $shuffle, $q_to_show, $max_attempts, $grading_method, $is_strict, $shuffle_opts, $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time, $id]);
     header('Location: admin_objective_exams.php?success=edited');
     exit;
   }
@@ -166,11 +186,22 @@ $exams = $db->query("SELECT * FROM exams WHERE type='objective' ORDER BY created
                         <div class="mb-3">
                           <label class="form-label">Grading Method</label>
                           <select name="grading_method" class="form-select">
-                            <option value="highest" <?= $exam['grading_method'] === 'highest' ? 'selected' : '' ?>>Highest
-                              Mark overrides</option>
-                            <option value="average" <?= $exam['grading_method'] === 'average' ? 'selected' : '' ?>>Calculate
-                              Average of all attempts</option>
+                            <option value="highest" <?= ($exam['grading_method'] ?? 'highest') === 'highest' ? 'selected' : '' ?>>Highest Mark overrides</option>
+                            <option value="average" <?= ($exam['grading_method'] ?? '') === 'average' ? 'selected' : '' ?>>
+                              Calculate Average of all attempts</option>
                           </select>
+                        </div>
+                        <div class="row">
+                          <div class="col-6 mb-3">
+                            <label class="form-label">Start Time</label>
+                            <input type="datetime-local" name="start_time" class="form-control"
+                              value="<?= $exam['start_time'] ? date('Y-m-d\TH:i', strtotime($exam['start_time'])) : '' ?>">
+                          </div>
+                          <div class="col-6 mb-3">
+                            <label class="form-label">End Time</label>
+                            <input type="datetime-local" name="end_time" class="form-control"
+                              value="<?= $exam['end_time'] ? date('Y-m-d\TH:i', strtotime($exam['end_time'])) : '' ?>">
+                          </div>
                         </div>
                         <div class="form-check mb-3">
                           <input class="form-check-input" type="checkbox" name="shuffle_objective"
@@ -195,13 +226,61 @@ $exams = $db->query("SELECT * FROM exams WHERE type='objective' ORDER BY created
                           <label class="form-check-label" for="viewScore<?= $exam['id'] ?>">Allow students to view their
                             score after submission</label>
                         </div>
+                        <div class="row">
+                          <div class="col-6">
+                            <div class="form-check mb-2">
+                              <input class="form-check-input" type="checkbox" name="proctor_fullscreen"
+                                id="pfs<?= $exam['id'] ?>" <?= ($exam['proctor_fullscreen'] ?? 0) ? 'checked' : '' ?>>
+                              <label class="form-check-label small" for="pfs<?= $exam['id'] ?>">Force Fullscreen</label>
+                            </div>
+                            <div class="form-check mb-2">
+                              <input class="form-check-input" type="checkbox" name="proctor_tab_lock"
+                                id="ptab<?= $exam['id'] ?>" <?= ($exam['proctor_tab_lock'] ?? 0) ? 'checked' : '' ?>>
+                              <label class="form-check-label small" for="ptab<?= $exam['id'] ?>">Tab/Window Switch
+                                Lock</label>
+                            </div>
+                          </div>
+                          <div class="col-6">
+                            <div class="form-check mb-2">
+                              <input class="form-check-input" type="checkbox" name="proctor_kb_lock"
+                                id="pkb<?= $exam['id'] ?>" <?= ($exam['proctor_kb_lock'] ?? 0) ? 'checked' : '' ?>>
+                              <label class="form-check-label small" for="pkb<?= $exam['id'] ?>">Keyboard/Copy Lock</label>
+                            </div>
+                            <div class="form-check mb-2">
+                              <input class="form-check-input" type="checkbox" name="proctor_auto_submit"
+                                id="pauto<?= $exam['id'] ?>" <?= ($exam['proctor_auto_submit'] ?? 0) ? 'checked' : '' ?>>
+                              <label class="form-check-label small" for="pauto<?= $exam['id'] ?>">3-Strike
+                                Auto-Submit</label>
+                            </div>
+                          </div>
+                          <div class="col-12">
+                            <div class="form-check mb-2">
+                              <input class="form-check-input" type="checkbox" name="proctor_browser_check"
+                                id="pbc<?= $exam['id'] ?>" <?= ($exam['proctor_browser_check'] ?? 0) ? 'checked' : '' ?>>
+                              <label class="form-check-label small" for="pbc<?= $exam['id'] ?>">Enforce Proctoring Browser
+                                Check</label>
+                            </div>
+                            <div class="form-check mb-2">
+                              <input class="form-check-input" type="checkbox" name="proctor_webcam"
+                                id="pwc<?= $exam['id'] ?>" <?= ($exam['proctor_webcam'] ?? 0) ? 'checked' : '' ?>>
+                              <label class="form-check-label small" for="pwc<?= $exam['id'] ?>">Force Webcam
+                                Access</label>
+                            </div>
+                            <div class="form-check mb-3">
+                              <input class="form-check-input" type="checkbox" name="proctor_live_video"
+                                id="plive<?= $exam['id'] ?>" <?= ($exam['proctor_live_video'] ?? 0) ? 'checked' : '' ?>>
+                              <label class="form-check-label small text-danger fw-bold"
+                                for="plive<?= $exam['id'] ?>">Enable Live Video Stream</label>
+                            </div>
+                          </div>
+                        </div>
                         <div class="form-check mb-3">
                           <input class="form-check-input" type="checkbox" name="is_strict" id="strict<?= $exam['id'] ?>"
                             <?= $exam['is_strict'] ? 'checked' : '' ?>>
                           <label class="form-check-label text-danger fw-bold" for="strict<?= $exam['id'] ?>">
-                            <i class="bi bi-shield-lock"></i> Strict Mode (Enable Tab-Switch Detection)
+                            <i class="bi bi-shield-lock"></i> Strict Mode (Enable All Above)
                           </label>
-                          <br><small class="text-muted">If On, student cannot switch tabs.</small>
+                          <br><small class="text-muted">Master toggle for advanced proctoring.</small>
                         </div>
                       </div>
                       <div class="modal-footer">
@@ -261,6 +340,16 @@ $exams = $db->query("SELECT * FROM exams WHERE type='objective' ORDER BY created
                 <option value="average">Calculate Average of all attempts</option>
               </select>
             </div>
+            <div class="row">
+              <div class="col-6 mb-3">
+                <label class="form-label">Start Time</label>
+                <input type="datetime-local" name="start_time" class="form-control">
+              </div>
+              <div class="col-6 mb-3">
+                <label class="form-label">End Time</label>
+                <input type="datetime-local" name="end_time" class="form-control">
+              </div>
+            </div>
             <div class="form-check mb-3">
               <input class="form-check-input" type="checkbox" name="is_active" id="activeCreate">
               <label class="form-check-label" for="activeCreate">Active</label>
@@ -279,12 +368,49 @@ $exams = $db->query("SELECT * FROM exams WHERE type='objective' ORDER BY created
               <label class="form-check-label" for="viewScoreCreate">Allow students to view their score after
                 submission</label>
             </div>
+            <div class="row">
+              <div class="col-6">
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="checkbox" name="proctor_fullscreen" id="pfsCreate" checked>
+                  <label class="form-check-label small" for="pfsCreate">Force Fullscreen</label>
+                </div>
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="checkbox" name="proctor_tab_lock" id="ptabCreate" checked>
+                  <label class="form-check-label small" for="ptabCreate">Tab/Window Switch Lock</label>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="checkbox" name="proctor_kb_lock" id="pkbCreate" checked>
+                  <label class="form-check-label small" for="pkbCreate">Keyboard/Copy Lock</label>
+                </div>
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="checkbox" name="proctor_auto_submit" id="pautoCreate" checked>
+                  <label class="form-check-label small" for="pautoCreate">3-Strike Auto-Submit</label>
+                </div>
+              </div>
+              <div class="col-12">
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="checkbox" name="proctor_browser_check" id="pbcCreate" checked>
+                  <label class="form-check-label small" for="pbcCreate">Enforce Proctoring Browser Check</label>
+                </div>
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="checkbox" name="proctor_webcam" id="pwcCreate" checked>
+                  <label class="form-check-label small" for="pwcCreate">Force Webcam Access</label>
+                </div>
+                <div class="form-check mb-3">
+                  <input class="form-check-input" type="checkbox" name="proctor_live_video" id="pliveCreate" checked>
+                  <label class="form-check-label small text-danger fw-bold" for="pliveCreate">Enable Live Video
+                    Stream</label>
+                </div>
+              </div>
+            </div>
             <div class="form-check mb-3">
               <input class="form-check-input" type="checkbox" name="is_strict" id="strictCreate" checked>
               <label class="form-check-label text-danger fw-bold" for="strictCreate">
-                <i class="bi bi-shield-lock"></i> Strict Mode (Enable Tab-Switch Detection)
+                <i class="bi bi-shield-lock"></i> Strict Mode (Enable All Above)
               </label>
-              <br><small class="text-muted">Student cannot switch tabs in this mode.</small>
+              <br><small class="text-muted">Advanced proctoring features for this exam.</small>
             </div>
           </div>
           <div class="modal-footer">

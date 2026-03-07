@@ -113,9 +113,26 @@
           <li><a href="report.php"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'report.php' ? ' active' : '' ?>">
               <i class="bi bi-file-earmark-bar-graph me-2"></i><span>Generate Reports</span></a></li>
+        </ul>
+      </div>
+    </li>
+
+    <!-- Proctoring Center -->
+    <li class="nav-section mt-2">
+      <div
+        class="nav-section-header d-flex align-items-center justify-content-between px-3 py-2 small text-uppercase fw-bold text-muted cursor-pointer"
+        data-bs-toggle="collapse" data-bs-target="#navProctor">
+        <span>Proctoring Center</span>
+        <i class="bi bi-chevron-down section-arrow"></i>
+      </div>
+      <div class="collapse show" id="navProctor">
+        <ul class="nav flex-column ps-2">
+          <li><a href="admin_live_proctor.php"
+              class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_live_proctor.php' ? ' active' : '' ?>">
+              <i class="bi bi-broadcast text-danger me-2"></i><span>Live Monitor</span></a></li>
           <li><a href="admin_exam_audit.php"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_exam_audit.php' ? ' active' : '' ?>">
-              <i class="bi bi-person-workspace me-2"></i><span>Exam Audit Trail</span></a></li>
+              <i class="bi bi-shield-check me-2"></i><span>Exam Audit Trail</span></a></li>
         </ul>
       </div>
     </li>
@@ -144,7 +161,7 @@
     <li class="mt-3">
       <hr>
     </li>
-    <li><a href="assessment_portal1_testing_checklist.html" class="nav-link text-info fw-bold" target="_blank">
+    <li><a href="assessment_portal_testing_checklist.html" class="nav-link text-info fw-bold" target="_blank">
         <i class="bi bi-clipboard-check me-2"></i><span>Testing Checklist</span></a></li>
     <li><a href="logout.php" class="nav-link text-danger">
         <i class="bi bi-box-arrow-right me-2"></i><span>Logout</span></a></li>

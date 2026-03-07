@@ -110,7 +110,8 @@ $login_instruction = $db->query("SELECT setting_value FROM system_settings WHERE
               <a href="admin_students.php" class="btn btn-primary rounded-pill py-2">Manage Students</a>
               <a href="admin_staff.php" class="btn btn-dark rounded-pill py-2">Manage Staff / Examiners</a>
               <a href="admin_questions.php" class="btn btn-success rounded-pill py-2">Manage Practical Questions</a>
-              <a href="admin_objective_exams.php" class="btn btn-outline-primary fw-bold rounded-pill py-2">Manage Objective Questions</a>
+              <a href="admin_objective_exams.php" class="btn btn-outline-primary fw-bold rounded-pill py-2">Manage
+                Objective Questions</a>
               <a href="admin_exams.php" class="btn btn-info rounded-pill py-2">General Exam Settings</a>
               <a href="admin_analytics.php" class="btn btn-warning rounded-pill py-2">View Analytics</a>
             </div>
@@ -120,20 +121,22 @@ $login_instruction = $db->query("SELECT setting_value FROM system_settings WHERE
           <div class="card border-0 shadow-sm rounded-4 h-100 p-4">
             <h4 class="fw-bold mb-3"><i class="bi bi-gear me-2 text-secondary"></i>System Settings</h4>
             <?php if ($success_msg): ?>
-                <div class="alert alert-success alert-dismissible fade show rounded-3 border-0 py-2 shadow-sm mb-3">
-                    <i class="bi bi-check-circle-fill me-2"></i><?= $success_msg ?>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
+              <div class="alert alert-success alert-dismissible fade show rounded-3 border-0 py-2 shadow-sm mb-3">
+                <i class="bi bi-check-circle-fill me-2"></i><?= $success_msg ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+              </div>
             <?php endif; ?>
             <form method="post">
-                <div class="mb-3">
-                    <label class="form-label fw-bold small">Student Login Instructions</label>
-                    <textarea name="login_instruction" class="form-control border-light-subtle bg-light rounded-3" rows="4" required><?= htmlspecialchars($login_instruction) ?></textarea>
-                    <div class="form-text mt-1 small">This text appears next to the student login form. Use it for help or reminders.</div>
-                </div>
-                <button type="submit" name="save_settings" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
-                    <i class="bi bi-save me-2"></i> Save Settings
-                </button>
+              <div class="mb-3">
+                <label class="form-label fw-bold small">Student Login Instructions</label>
+                <textarea name="login_instruction" class="form-control border-light-subtle bg-light rounded-3" rows="4"
+                  required><?= htmlspecialchars($login_instruction) ?></textarea>
+                <div class="form-text mt-1 small">This text appears next to the student login form. Use it for help or
+                  reminders.</div>
+              </div>
+              <button type="submit" name="save_settings" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="bi bi-save me-2"></i> Save Settings
+              </button>
             </form>
           </div>
         </div>
