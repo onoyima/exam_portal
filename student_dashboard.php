@@ -100,6 +100,7 @@ $active_exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
       }
     }
   </style>
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>
@@ -110,12 +111,11 @@ $active_exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <nav class="navbar navbar-light bg-white shadow-sm mb-4 d-lg-none">
       <div class="container-fluid d-flex justify-content-between align-items-center">
         <div class="d-flex align-items-center gap-2">
-          <button class="btn btn-outline-primary" id="sidebarToggle">
-            <i class="bi bi-list"></i>
-          </button>
+          <button class="btn btn-outline-primary d-lg-none me-2" id="sidebarToggle"><i
+              class="bi bi-list fs-4"></i></button>
           <span class="navbar-brand fw-bold">Student Portal</span>
         </div>
-        <a href="student_logout.php" class="btn btn-sm btn-outline-danger rounded-pill"><i
+        <a href="student_logout" class="btn btn-sm btn-outline-danger rounded-pill"><i
             class="bi bi-box-arrow-right"></i> Logout</a>
       </div>
     </nav>
@@ -222,7 +222,7 @@ $active_exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
                 <div class="d-grid gap-2">
                   <?php if ($is_active): ?>
-                    <a href="student_objective_exam.php?exam_id=<?= $exam['id'] ?>&resume=1"
+                    <a href="student_objective_exam?exam_id=<?= $exam['id'] ?>&resume=1"
                       class="btn btn-warning py-3 rounded-4 shadow-sm fw-bold">
                       <i class="bi bi-play-circle-fill me-2"></i> RESUME EXAM
                     </a>
@@ -249,7 +249,7 @@ $active_exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
                   <?php endif; ?>
 
                   <?php if ($has_finished): ?>
-                    <a href="student_objective_exam.php?exam_id=<?= $exam['id'] ?>&view_result=1"
+                    <a href="student_objective_exam?exam_id=<?= $exam['id'] ?>&view_result=1"
                       class="btn btn-outline-info py-2 rounded-4 fw-bold">
                       <i class="bi bi-eye me-2"></i> VIEW RESULTS
                     </a>
@@ -303,19 +303,9 @@ $active_exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
       document.getElementById('confirmStartBtn').href = url;
       startModal.show();
     }
-    // Sidebar toggle for mobile
-    const sidebar = document.getElementById('studentSidebar');
-    const sidebarBackdrop = document.getElementById('sidebarBackdrop');
     const sidebarToggle = document.getElementById('sidebarToggle');
     if (sidebarToggle) {
-      sidebarToggle.onclick = function () {
-        sidebar.classList.toggle('show');
-        sidebarBackdrop.classList.toggle('show');
-      };
-      sidebarBackdrop.onclick = function () {
-        sidebar.classList.remove('show');
-        sidebarBackdrop.classList.remove('show');
-      };
+      // Logic handled by student_sidebar.php
     }
 
     // Hash-based highlighting
@@ -338,6 +328,95 @@ $active_exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
     window.addEventListener('hashchange', checkHash);
     window.addEventListener('load', checkHash);
   </script>
+<!-- sweetalert_custom_injected_v1 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Override global alert
+        window.alert = function(msg) {
+            Swal.fire({
+                title: 'Message',
+                text: msg,
+                icon: 'info',
+                confirmButtonColor: '#092c19'
+            });
+        };
+
+        // Intercept inline onsubmit confirms
+        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onsubmit');
+                el.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover') 
+                                      || el.querySelector('button[type="submit"], input[type="submit"]');
+                            if(btn && btn.name) {
+                                let hidden = document.createElement('input');
+                                hidden.type = 'hidden';
+                                hidden.name = btn.name;
+                                hidden.value = btn.value || '1';
+                                el.appendChild(hidden);
+                            }
+                            HTMLFormElement.prototype.submit.call(el);
+                        }
+                    });
+                });
+            }
+        });
+
+        // Intercept inline onclick confirms for anchors
+        document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onclick');
+                el.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            if(el.tagName === 'A' && el.href) {
+                                window.location.href = el.href;
+                            } else if(el.tagName === 'BUTTON') {
+                                // if it's a submit button inside a form
+                                if(el.type === 'submit' && el.form) {
+                                    if(el.name) {
+                                        let hidden = document.createElement('input');
+                                        hidden.type = 'hidden';
+                                        hidden.name = el.name;
+                                        hidden.value = el.value || '1';
+                                        el.form.appendChild(hidden);
+                                    }
+                                    HTMLFormElement.prototype.submit.call(el.form);
+                                }
+                            }
+                        }
+                    });
+                });
+            }
+        });
+    });
+</script>
 </body>
+
 
 </html>

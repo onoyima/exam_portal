@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $stmt = $db->prepare("INSERT INTO exams (name, description, is_active, type, student_can_view_score, total_mark, duration_minutes, shuffle_objective, questions_to_show, max_attempts, grading_method, is_strict, shuffle_options, proctor_fullscreen, proctor_tab_lock, proctor_kb_lock, proctor_auto_submit, proctor_browser_check, proctor_webcam, proctor_live_video, start_time, end_time) VALUES (?, ?, ?, 'objective', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->execute([$name, $desc, $is_active, $student_can_view_score, $total_mark, $duration, $shuffle, $q_to_show, $max_attempts, $grading_method, $is_strict, $shuffle_opts, $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time]);
-    header('Location: admin_objective_exams.php?success=created');
+    header('Location: admin_objective_exams?success=created');
     exit;
   }
   if (isset($_POST['edit']) && isset($_POST['id'])) {
@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $stmt = $db->prepare("UPDATE exams SET name=?, description=?, is_active=?, student_can_view_score=?, total_mark=?, duration_minutes=?, shuffle_objective=?, questions_to_show=?, max_attempts=?, grading_method=?, is_strict=?, shuffle_options=?, proctor_fullscreen=?, proctor_tab_lock=?, proctor_kb_lock=?, proctor_auto_submit=?, proctor_browser_check=?, proctor_webcam=?, proctor_live_video=?, start_time=?, end_time=? WHERE id=? AND type='objective'");
     $stmt->execute([$name, $desc, $is_active, $student_can_view_score, $total_mark, $duration, $shuffle, $q_to_show, $max_attempts, $grading_method, $is_strict, $shuffle_opts, $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time, $id]);
-    header('Location: admin_objective_exams.php?success=edited');
+    header('Location: admin_objective_exams?success=edited');
     exit;
   }
   if (isset($_POST['delete']) && isset($_POST['id'])) {
@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $db->prepare("DELETE FROM objective_answers WHERE exam_id=?")->execute([$id]);
     $db->prepare("DELETE FROM objective_questions WHERE exam_id=?")->execute([$id]);
     $db->prepare("DELETE FROM exams WHERE id=? AND type='objective'")->execute([$id]);
-    header('Location: admin_objective_exams.php?success=deleted');
+    header('Location: admin_objective_exams?success=deleted');
     exit;
   }
 }
@@ -85,6 +85,7 @@ $exams = $db->query("SELECT * FROM exams WHERE type='objective' ORDER BY created
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>
@@ -132,9 +133,9 @@ $exams = $db->query("SELECT * FROM exams WHERE type='objective' ORDER BY created
                     <input type="hidden" name="id" value="<?= $exam['id'] ?>">
                     <button type="submit" name="delete" class="btn btn-sm btn-danger">Delete</button>
                   </form>
-                  <a href="admin_objective_questions.php?exam_id=<?= $exam['id'] ?>"
+                  <a href="admin_objective_questions?exam_id=<?= $exam['id'] ?>"
                     class="btn btn-sm btn-secondary">Questions</a>
-                  <a href="admin_assign_students.php?exam_id=<?= $exam['id'] ?>"
+                  <a href="admin_assign_students?exam_id=<?= $exam['id'] ?>"
                     class="btn btn-sm btn-outline-primary">Assign Students</a>
                 </td>
               </tr>
@@ -422,6 +423,95 @@ $exams = $db->query("SELECT * FROM exams WHERE type='objective' ORDER BY created
     </div>
   </div>
   <script src="assets/js/bootstrap.bundle.min.js"></script>
+<!-- sweetalert_custom_injected_v1 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Override global alert
+        window.alert = function(msg) {
+            Swal.fire({
+                title: 'Message',
+                text: msg,
+                icon: 'info',
+                confirmButtonColor: '#092c19'
+            });
+        };
+
+        // Intercept inline onsubmit confirms
+        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onsubmit');
+                el.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover') 
+                                      || el.querySelector('button[type="submit"], input[type="submit"]');
+                            if(btn && btn.name) {
+                                let hidden = document.createElement('input');
+                                hidden.type = 'hidden';
+                                hidden.name = btn.name;
+                                hidden.value = btn.value || '1';
+                                el.appendChild(hidden);
+                            }
+                            HTMLFormElement.prototype.submit.call(el);
+                        }
+                    });
+                });
+            }
+        });
+
+        // Intercept inline onclick confirms for anchors
+        document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onclick');
+                el.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            if(el.tagName === 'A' && el.href) {
+                                window.location.href = el.href;
+                            } else if(el.tagName === 'BUTTON') {
+                                // if it's a submit button inside a form
+                                if(el.type === 'submit' && el.form) {
+                                    if(el.name) {
+                                        let hidden = document.createElement('input');
+                                        hidden.type = 'hidden';
+                                        hidden.name = el.name;
+                                        hidden.value = el.value || '1';
+                                        el.form.appendChild(hidden);
+                                    }
+                                    HTMLFormElement.prototype.submit.call(el.form);
+                                }
+                            }
+                        }
+                    });
+                });
+            }
+        });
+    });
+</script>
 </body>
+
 
 </html>

@@ -2,7 +2,7 @@
 require 'auth.php';
 // If already logged in as student, redirect to dashboard
 if (isset($_SESSION['role']) && $_SESSION['role'] === 'student') {
-  header("Location: student_dashboard.php");
+  header("Location: student_dashboard");
   exit;
 }
 require 'db.php';
@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ]);
     $_SESSION['login_id'] = $db->lastInsertId();
 
-    header('Location: student_dashboard.php');
+    header('Location: student_dashboard');
     exit;
   } else {
     // Log failed login attempt
@@ -81,13 +81,14 @@ $instruction = $instruction_stmt->fetchColumn() ?: "Welcome to the Assessment Po
   <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>
   <!-- Navigation -->
   <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm mb-4">
     <div class="container-xl">
-      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="index.php">
+      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="index">
         <img src="assets/favicon.ico" alt="Logo" width="30" height="30">
         <span>Assessment Portal</span>
       </a>
@@ -129,12 +130,12 @@ $instruction = $instruction_stmt->fetchColumn() ?: "Welcome to the Assessment Po
                   <div>
                     <h6 class="fw-bold mb-1">Security Alert</h6>
                     <p class="mb-0 small opacity-75">
-                      <?php 
-                        if (isset($_GET['error']) && $_GET['error'] === 'multi_login') {
-                            echo "This account was logged out because it was accessed from another device. For security, only one session is allowed during examinations.";
-                        } else {
-                            echo htmlspecialchars($error);
-                        }
+                      <?php
+                      if (isset($_GET['error']) && $_GET['error'] === 'multi_login') {
+                        echo "This account was logged out because it was accessed from another device. For security, only one session is allowed during examinations.";
+                      } else {
+                        echo htmlspecialchars($error);
+                      }
                       ?>
                     </p>
                   </div>
@@ -143,10 +144,10 @@ $instruction = $instruction_stmt->fetchColumn() ?: "Welcome to the Assessment Po
             <?php endif; ?>
 
             <div id="browserCheckAlert" class="mb-4" style="display:none;">
-                <div class="alert alert-warning border-0 rounded-4 shadow-sm p-3">
-                  <i class="bi bi-browser-chrome me-2"></i>
-                  <span class="small fw-bold">Warning: Use Chrome or Edge for the best proctoring experience.</span>
-                </div>
+              <div class="alert alert-warning border-0 rounded-4 shadow-sm p-3">
+                <i class="bi bi-browser-chrome me-2"></i>
+                <span class="small fw-bold">Warning: Use Chrome or Edge for the best proctoring experience.</span>
+              </div>
             </div>
 
             <form method="post">
@@ -166,28 +167,28 @@ $instruction = $instruction_stmt->fetchColumn() ?: "Welcome to the Assessment Po
             </form>
 
             <script>
-                // Basic proctoring pre-check
-                (function() {
-                    const ua = navigator.userAgent;
-                    const isChrome = /Chrome/.test(ua) && /Google Inc/.test(navigator.vendor);
-                    const isEdge = /Edg/.test(ua);
-                    
-                    if (!isChrome && !isEdge) {
-                        document.getElementById('browserCheckAlert').style.display = 'block';
-                    }
-                    
-                    // Simple check for potential recorders using navigator.mediaDevices
-                    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-                        navigator.mediaDevices.enumerateDevices().then(devices => {
-                            const hasVirtualCam = devices.any(d => d.label.toLowerCase().includes('virtual') || d.label.toLowerCase().includes('obs'));
-                            if (hasVirtualCam) console.warn("Virtual device detected");
-                        }).catch(e => {});
-                    }
-                })();
+              // Basic proctoring pre-check
+              (function () {
+                const ua = navigator.userAgent;
+                const isChrome = /Chrome/.test(ua) && /Google Inc/.test(navigator.vendor);
+                const isEdge = /Edg/.test(ua);
+
+                if (!isChrome && !isEdge) {
+                  document.getElementById('browserCheckAlert').style.display = 'block';
+                }
+
+                // Simple check for potential recorders using navigator.mediaDevices
+                if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+                  navigator.mediaDevices.enumerateDevices().then(devices => {
+                    const hasVirtualCam = devices.any(d => d.label.toLowerCase().includes('virtual') || d.label.toLowerCase().includes('obs'));
+                    if (hasVirtualCam) console.warn("Virtual device detected");
+                  }).catch(e => { });
+                }
+              })();
             </script>
 
             <div class="text-center mt-5 pt-3 border-top">
-              <p class="mb-0 small text-muted">Administrative Staff? <a href="login.php"
+              <p class="mb-0 small text-muted">Administrative Staff? <a href="login"
                   class="fw-bold text-decoration-none">Login to Staff Panel</a></p>
             </div>
           </div>
@@ -196,6 +197,95 @@ $instruction = $instruction_stmt->fetchColumn() ?: "Welcome to the Assessment Po
     </div>
   </div>
   <script src="assets/js/bootstrap.bundle.min.js"></script>
+<!-- sweetalert_custom_injected_v1 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Override global alert
+        window.alert = function(msg) {
+            Swal.fire({
+                title: 'Message',
+                text: msg,
+                icon: 'info',
+                confirmButtonColor: '#092c19'
+            });
+        };
+
+        // Intercept inline onsubmit confirms
+        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onsubmit');
+                el.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover') 
+                                      || el.querySelector('button[type="submit"], input[type="submit"]');
+                            if(btn && btn.name) {
+                                let hidden = document.createElement('input');
+                                hidden.type = 'hidden';
+                                hidden.name = btn.name;
+                                hidden.value = btn.value || '1';
+                                el.appendChild(hidden);
+                            }
+                            HTMLFormElement.prototype.submit.call(el);
+                        }
+                    });
+                });
+            }
+        });
+
+        // Intercept inline onclick confirms for anchors
+        document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onclick');
+                el.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            if(el.tagName === 'A' && el.href) {
+                                window.location.href = el.href;
+                            } else if(el.tagName === 'BUTTON') {
+                                // if it's a submit button inside a form
+                                if(el.type === 'submit' && el.form) {
+                                    if(el.name) {
+                                        let hidden = document.createElement('input');
+                                        hidden.type = 'hidden';
+                                        hidden.name = el.name;
+                                        hidden.value = el.value || '1';
+                                        el.form.appendChild(hidden);
+                                    }
+                                    HTMLFormElement.prototype.submit.call(el.form);
+                                }
+                            }
+                        }
+                    });
+                });
+            }
+        });
+    });
+</script>
 </body>
+
 
 </html>

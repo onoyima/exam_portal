@@ -95,6 +95,7 @@ $avg_score = $avg_score_res ?: 0;
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>
@@ -105,13 +106,13 @@ $avg_score = $avg_score_res ?: 0;
         <div class="d-flex align-items-center gap-2">
           <button class="btn btn-outline-primary d-lg-none me-2" id="sidebarToggle"><span
               class="navbar-toggler-icon"></span></button>
-          <a href="admin_dashboard.php" class="btn btn-outline-secondary me-2">Back</a>
+          <a href="admin_dashboard" class="btn btn-outline-secondary me-2">Back</a>
           <span class="navbar-brand fw-bold">Analytics Dashboard</span>
         </div>
         <div class="d-flex align-items-center gap-2">
           <span class="profile-icon"><?= strtoupper(substr($name, 0, 1)) ?></span>
           <span class="fw-semibold"><?= htmlspecialchars($name) ?></span>
-          <a href="logout.php" class="btn btn-outline-danger ms-2">Logout</a>
+          <a href="logout" class="btn btn-outline-danger ms-2">Logout</a>
         </div>
       </div>
     </nav>
@@ -355,6 +356,95 @@ $avg_score = $avg_score_res ?: 0;
       });
     }
   </script>
+<!-- sweetalert_custom_injected_v1 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Override global alert
+        window.alert = function(msg) {
+            Swal.fire({
+                title: 'Message',
+                text: msg,
+                icon: 'info',
+                confirmButtonColor: '#092c19'
+            });
+        };
+
+        // Intercept inline onsubmit confirms
+        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onsubmit');
+                el.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover') 
+                                      || el.querySelector('button[type="submit"], input[type="submit"]');
+                            if(btn && btn.name) {
+                                let hidden = document.createElement('input');
+                                hidden.type = 'hidden';
+                                hidden.name = btn.name;
+                                hidden.value = btn.value || '1';
+                                el.appendChild(hidden);
+                            }
+                            HTMLFormElement.prototype.submit.call(el);
+                        }
+                    });
+                });
+            }
+        });
+
+        // Intercept inline onclick confirms for anchors
+        document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onclick');
+                el.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            if(el.tagName === 'A' && el.href) {
+                                window.location.href = el.href;
+                            } else if(el.tagName === 'BUTTON') {
+                                // if it's a submit button inside a form
+                                if(el.type === 'submit' && el.form) {
+                                    if(el.name) {
+                                        let hidden = document.createElement('input');
+                                        hidden.type = 'hidden';
+                                        hidden.name = el.name;
+                                        hidden.value = el.value || '1';
+                                        el.form.appendChild(hidden);
+                                    }
+                                    HTMLFormElement.prototype.submit.call(el.form);
+                                }
+                            }
+                        }
+                    });
+                });
+            }
+        });
+    });
+</script>
 </body>
+
 
 </html>

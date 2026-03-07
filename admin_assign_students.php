@@ -26,29 +26,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
       $msg = "removed";
     }
-    header("Location: admin_assign_students.php?exam_id=$exam_id&success=$msg");
+    header("Location: admin_assign_students?exam_id=$exam_id&success=$msg");
     exit;
   }
   if (isset($_POST['remove']) && isset($_POST['student_id'])) {
     $sid = intval($_POST['student_id']);
     $db->prepare("DELETE FROM exam_students WHERE exam_id=? AND student_id=?")->execute([$exam_id, $sid]);
-    header("Location: admin_assign_students.php?exam_id=$exam_id&success=removed");
+    header("Location: admin_assign_students?exam_id=$exam_id&success=removed");
     exit;
   }
   if (isset($_POST['clear_all'])) {
     $db->prepare("DELETE FROM exam_students WHERE exam_id=?")->execute([$exam_id]);
-    header("Location: admin_assign_students.php?exam_id=$exam_id&success=cleared");
+    header("Location: admin_assign_students?exam_id=$exam_id&success=cleared");
     exit;
   }
   if (isset($_POST['assign_all_system'])) {
     $db->prepare("INSERT IGNORE INTO exam_students (exam_id, student_id) SELECT ?, id FROM students")->execute([$exam_id]);
-    header("Location: admin_assign_students.php?exam_id=$exam_id&success=all_assigned");
+    header("Location: admin_assign_students?exam_id=$exam_id&success=all_assigned");
     exit;
   }
   if (isset($_POST['assign_by_email_domain']) && !empty($_POST['email_domain'])) {
     $domain = '%' . trim($_POST['email_domain']);
     $db->prepare("INSERT IGNORE INTO exam_students (exam_id, student_id) SELECT ?, id FROM students WHERE email LIKE ?")->execute([$exam_id, $domain]);
-    header("Location: admin_assign_students.php?exam_id=$exam_id&success=domain_assigned");
+    header("Location: admin_assign_students?exam_id=$exam_id&success=domain_assigned");
     exit;
   }
 }
@@ -77,6 +77,7 @@ $assigned_ids = array_column($assigned->fetchAll(PDO::FETCH_ASSOC), 'student_id'
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>
@@ -85,20 +86,24 @@ $assigned_ids = array_column($assigned->fetchAll(PDO::FETCH_ASSOC), 'student_id'
     <div class="container-xl py-4">
       <div class="row g-3 mb-4">
         <div class="col-md-8">
-          <h2 class="mb-0">Assign Students to: <span class="text-primary fw-bold"><?= htmlspecialchars($exam['name']) ?></span></h2>
+          <h2 class="mb-0">Assign Students to: <span
+              class="text-primary fw-bold"><?= htmlspecialchars($exam['name']) ?></span></h2>
         </div>
         <div class="col-md-4 text-md-end">
           <div class="d-flex flex-column gap-2">
             <!-- Enroll All Button -->
-            <form method="post" onsubmit="return confirm('Note: This will enroll EVERY student in your database to this exam. Proceed?')">
+            <form method="post"
+              onsubmit="return confirm('Note: This will enroll EVERY student in your database to this exam. Proceed?')">
               <button type="submit" name="assign_all_system" class="btn btn-success rounded-pill px-4 fw-bold w-100">
                 <i class="bi bi-person-plus-fill me-1"></i> Enroll All System Students
               </button>
             </form>
 
             <!-- Domain Enroll Tool -->
-            <form method="post" class="input-group" onsubmit="return confirm('Enroll all students with this email domain?')">
-              <input type="text" name="email_domain" class="form-control rounded-start-pill" placeholder="e.g. @hum.veritas.edu.ng" required>
+            <form method="post" class="input-group"
+              onsubmit="return confirm('Enroll all students with this email domain?')">
+              <input type="text" name="email_domain" class="form-control rounded-start-pill"
+                placeholder="e.g. @hum.veritas.edu.ng" required>
               <button type="submit" name="assign_by_email_domain" class="btn btn-info rounded-end-pill px-3 fw-bold">
                 Enroll by Domain
               </button>
@@ -111,10 +116,14 @@ $assigned_ids = array_column($assigned->fetchAll(PDO::FETCH_ASSOC), 'student_id'
           <i class="bi bi-check-circle-fill me-1"></i>
           <?php
           $msg = $_GET['success'];
-          if ($msg == 'domain_assigned') echo "Successfully enrolled all matching domain students!";
-          elseif ($msg == 'all_assigned') echo "Successfully enrolled EVERY student in the system!";
-          elseif ($msg == 'cleared') echo "All assignments cleared for this exam.";
-          else echo "Action successful.";
+          if ($msg == 'domain_assigned')
+            echo "Successfully enrolled all matching domain students!";
+          elseif ($msg == 'all_assigned')
+            echo "Successfully enrolled EVERY student in the system!";
+          elseif ($msg == 'cleared')
+            echo "All assignments cleared for this exam.";
+          else
+            echo "Action successful.";
           ?>
           <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
@@ -125,7 +134,8 @@ $assigned_ids = array_column($assigned->fetchAll(PDO::FETCH_ASSOC), 'student_id'
         <div class="card-body p-3 bg-light">
           <div class="input-group">
             <span class="input-group-text bg-transparent border-0"><i class="bi bi-search"></i></span>
-            <input type="text" id="tableSearch" class="form-control border-0 bg-transparent" placeholder="Search matric, name, or email in the list below...">
+            <input type="text" id="tableSearch" class="form-control border-0 bg-transparent"
+              placeholder="Search matric, name, or email in the list below...">
           </div>
         </div>
       </div>
@@ -207,14 +217,24 @@ $assigned_ids = array_column($assigned->fetchAll(PDO::FETCH_ASSOC), 'student_id'
         `Assign ${selected} selected students to this exam?` :
         `Remove ${selected} selected students from this exam?`;
 
-      if (confirm(confirmMsg)) {
-        document.getElementById('bulkActionInput').value = action;
-        document.getElementById('bulkForm').submit();
-      }
+      Swal.fire({
+        title: 'Confirm Bulk Action',
+        text: confirmMsg,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, proceed',
+        confirmButtonColor: '#092c19'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          document.getElementById('bulkActionInput').value = action;
+          // Since SweetAlert intercepts, submit using the DOM natively
+          HTMLFormElement.prototype.submit.call(document.getElementById('bulkForm'));
+        }
+      });
     }
 
     // Table search filter
-    document.getElementById('tableSearch').addEventListener('keyup', function() {
+    document.getElementById('tableSearch').addEventListener('keyup', function () {
       const query = this.value.toLowerCase();
       const rows = document.querySelectorAll('#studentTable tbody tr');
       rows.forEach(row => {
@@ -238,6 +258,79 @@ $assigned_ids = array_column($assigned->fetchAll(PDO::FETCH_ASSOC), 'student_id'
       };
     }
   </script>
+  <!-- sweetalert_custom_injected_v1 -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      // Override global alert
+      window.alert = function (msg) {
+        Swal.fire({
+          title: 'Message',
+          text: msg,
+          icon: 'info',
+          confirmButtonColor: '#092c19'
+        });
+      };
+
+      // Intercept inline onsubmit confirms
+      document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
+        let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
+        if (match) {
+          let msg = match[1];
+          el.removeAttribute('onsubmit');
+          el.addEventListener('submit', function (e) {
+            e.preventDefault();
+            Swal.fire({
+              title: 'Are you sure?',
+              text: msg,
+              icon: 'warning',
+              showCancelButton: true,
+              confirmButtonColor: '#092c19',
+              cancelButtonColor: '#d33',
+              confirmButtonText: 'Yes, proceed'
+            }).then((result) => {
+              if (result.isConfirmed) {
+                HTMLFormElement.prototype.submit.call(el);
+              }
+            });
+          });
+        }
+      });
+
+      // Intercept inline onclick confirms for anchors
+      document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
+        let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
+        if (match) {
+          let msg = match[1];
+          el.removeAttribute('onclick');
+          el.addEventListener('click', function (e) {
+            e.preventDefault();
+            Swal.fire({
+              title: 'Are you sure?',
+              text: msg,
+              icon: 'warning',
+              showCancelButton: true,
+              confirmButtonColor: '#092c19',
+              cancelButtonColor: '#d33',
+              confirmButtonText: 'Yes, proceed'
+            }).then((result) => {
+              if (result.isConfirmed) {
+                if (el.tagName === 'A' && el.href) {
+                  window.location.href = el.href;
+                } else if (el.tagName === 'BUTTON') {
+                  // if it's a submit button inside a form
+                  if (el.type === 'submit' && el.form) {
+                    HTMLFormElement.prototype.submit.call(el.form);
+                  }
+                }
+              }
+            });
+          });
+        }
+      });
+    });
+  </script>
 </body>
+
 
 </html>

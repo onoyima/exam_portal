@@ -99,13 +99,14 @@ $role = $_SESSION['role'] ?? '';
       flex-shrink: 0;
     }
   </style>
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>
   <!-- Navigation -->
   <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
     <div class="container-xl">
-      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="index.php">
+      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="index">
         <img src="assets/favicon.ico" alt="Logo" width="30" height="30">
         <span>Assessment Portal</span>
       </a>
@@ -115,18 +116,18 @@ $role = $_SESSION['role'] ?? '';
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto">
           <li class="nav-item">
-            <a class="nav-link active" href="services.php">Services</a>
+            <a class="nav-link active" href="services">Services</a>
           </li>
           <?php if ($role): ?>
             <li class="nav-item">
-              <a class="nav-link" href="<?= $role == 'admin' ? 'admin_dashboard.php' : 'assess.php' ?>">Dashboard</a>
+              <a class="nav-link" href="<?= $role == 'admin' ? 'admin_dashboard.php' : 'assess' ?>">Dashboard</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="logout.php">Logout</a>
+              <a class="nav-link" href="logout">Logout</a>
             </li>
           <?php else: ?>
             <li class="nav-item">
-              <a class="nav-link" href="login.php">Login</a>
+              <a class="nav-link" href="login">Login</a>
             </li>
           <?php endif; ?>
         </ul>
@@ -412,7 +413,7 @@ $role = $_SESSION['role'] ?? '';
       <h2 class="fw-bold mb-3">Ready to Get Started?</h2>
       <p class="lead mb-4">Transform your assessment process with our comprehensive portal</p>
       <div class="d-flex justify-content-center gap-3 flex-wrap">
-        <a href="login.php" class="btn btn-light btn-lg">Login Now</a>
+        <a href="login" class="btn btn-light btn-lg">Login Now</a>
         <a href="https://wa.me/+2348168438930?text=Hi%20BMXcode%20Initiator,%20I%20want%20to%20learn%20more%20about%20the%20Assessment%20Portal"
           class="btn btn-outline-light btn-lg" target="_blank">Contact Developer</a>
       </div>
@@ -422,6 +423,95 @@ $role = $_SESSION['role'] ?? '';
   <?php include 'footer.php'; ?>
 
   <script src="assets/js/bootstrap.bundle.min.js"></script>
+<!-- sweetalert_custom_injected_v1 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Override global alert
+        window.alert = function(msg) {
+            Swal.fire({
+                title: 'Message',
+                text: msg,
+                icon: 'info',
+                confirmButtonColor: '#092c19'
+            });
+        };
+
+        // Intercept inline onsubmit confirms
+        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onsubmit');
+                el.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover') 
+                                      || el.querySelector('button[type="submit"], input[type="submit"]');
+                            if(btn && btn.name) {
+                                let hidden = document.createElement('input');
+                                hidden.type = 'hidden';
+                                hidden.name = btn.name;
+                                hidden.value = btn.value || '1';
+                                el.appendChild(hidden);
+                            }
+                            HTMLFormElement.prototype.submit.call(el);
+                        }
+                    });
+                });
+            }
+        });
+
+        // Intercept inline onclick confirms for anchors
+        document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onclick');
+                el.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            if(el.tagName === 'A' && el.href) {
+                                window.location.href = el.href;
+                            } else if(el.tagName === 'BUTTON') {
+                                // if it's a submit button inside a form
+                                if(el.type === 'submit' && el.form) {
+                                    if(el.name) {
+                                        let hidden = document.createElement('input');
+                                        hidden.type = 'hidden';
+                                        hidden.name = el.name;
+                                        hidden.value = el.value || '1';
+                                        el.form.appendChild(hidden);
+                                    }
+                                    HTMLFormElement.prototype.submit.call(el.form);
+                                }
+                            }
+                        }
+                    });
+                });
+            }
+        });
+    });
+</script>
 </body>
+
 
 </html>

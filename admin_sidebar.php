@@ -2,12 +2,19 @@
   <div class="d-flex align-items-center justify-content-between mb-4 sidebar-header-container">
     <div class="text-center sidebar-logo-section">
       <img src="assets/favicon.ico" alt="Logo" width="40" height="40" class="mb-1">
-      <h4 class="fw-bold mb-0 small">Admin</h4>
+      <h4 class="fw-bold mb-0 small text-dark">Admin</h4>
     </div>
-    <button class="btn btn-sm btn-light border shadow-sm sidebar-toggle-btn d-none d-lg-block"
-      id="desktopSidebarToggle">
-      <i class="bi bi-chevron-left"></i>
-    </button>
+    <div class="d-flex gap-2">
+      <!-- Desktop Toggle -->
+      <button class="btn btn-sm btn-light border shadow-sm sidebar-toggle-btn d-none d-lg-block"
+        id="desktopSidebarToggle">
+        <i class="bx bx-chevron-left"></i>
+      </button>
+      <!-- Mobile Close Button (Visible only on mobile when sidebar is shown) -->
+      <button class="btn btn-sm btn-danger d-lg-none" id="mobileSidebarClose">
+        <i class="bx bx-x"></i>
+      </button>
+    </div>
   </div>
 
   <ul class="nav nav-pills flex-column mb-auto" id="sidebarNav">
@@ -17,16 +24,16 @@
         class="nav-section-header d-flex align-items-center justify-content-between px-3 py-2 small text-uppercase fw-bold text-muted cursor-pointer"
         data-bs-toggle="collapse" data-bs-target="#navOverview">
         <span>Overview</span>
-        <i class="bi bi-chevron-down section-arrow"></i>
+        <i class="bx bx-chevron-down section-arrow"></i>
       </div>
       <div class="collapse show" id="navOverview">
         <ul class="nav flex-column ps-2">
-          <li><a href="admin_dashboard.php"
+          <li><a href="admin_dashboard"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_dashboard.php' ? ' active' : '' ?>">
-              <i class="bi bi-speedometer2 me-2"></i><span>Dashboard</span></a></li>
-          <li><a href="admin_analytics.php"
+              <i class="bx bxs-dashboard me-2"></i><span>Dashboard</span></a></li>
+          <li><a href="admin_analytics"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_analytics.php' ? ' active' : '' ?>">
-              <i class="bi bi-graph-up me-2"></i><span>Analytics</span></a></li>
+              <i class="bx bx-line-chart me-2"></i><span>Analytics</span></a></li>
         </ul>
       </div>
     </li>
@@ -37,16 +44,16 @@
         class="nav-section-header d-flex align-items-center justify-content-between px-3 py-2 small text-uppercase fw-bold text-muted cursor-pointer"
         data-bs-toggle="collapse" data-bs-target="#navUsers">
         <span>User Management</span>
-        <i class="bi bi-chevron-down section-arrow"></i>
+        <i class="bx bx-chevron-down section-arrow"></i>
       </div>
       <div class="collapse show" id="navUsers">
         <ul class="nav flex-column ps-2">
-          <li><a href="admin_students.php"
+          <li><a href="admin_students"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_students.php' ? ' active' : '' ?>">
-              <i class="bi bi-people me-2"></i><span>Manage Students</span></a></li>
-          <li><a href="admin_staff.php"
+              <i class="bx bx-group me-2"></i><span>Manage Students</span></a></li>
+          <li><a href="admin_staff"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_staff.php' ? ' active' : '' ?>">
-              <i class="bi bi-person-badge me-2"></i><span>Manage Staff</span></a></li>
+              <i class="bx bx-id-card me-2"></i><span>Manage Staff</span></a></li>
         </ul>
       </div>
     </li>
@@ -57,16 +64,16 @@
         class="nav-section-header d-flex align-items-center justify-content-between px-3 py-2 small text-uppercase fw-bold text-muted cursor-pointer"
         data-bs-toggle="collapse" data-bs-target="#navExams">
         <span>Exam Management</span>
-        <i class="bi bi-chevron-down section-arrow"></i>
+        <i class="bx bx-chevron-down section-arrow"></i>
       </div>
       <div class="collapse show" id="navExams">
         <ul class="nav flex-column ps-2">
-          <li><a href="admin_exams.php"
+          <li><a href="admin_exams"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_exams.php' ? ' active' : '' ?>">
-              <i class="bi bi-gear me-2"></i><span>Manage Practical</span></a></li>
-          <li><a href="admin_objective_exams.php"
+              <i class="bx bx-cog me-2"></i><span>Manage Practical</span></a></li>
+          <li><a href="admin_objective_exams"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_objective_exams.php' ? ' active' : '' ?>">
-              <i class="bi bi-card-checklist me-2"></i><span>Manage Objective</span></a></li>
+              <i class="bx bx-list-check me-2"></i><span>Manage Objective</span></a></li>
         </ul>
       </div>
     </li>
@@ -77,16 +84,16 @@
         class="nav-section-header d-flex align-items-center justify-content-between px-3 py-2 small text-uppercase fw-bold text-muted cursor-pointer"
         data-bs-toggle="collapse" data-bs-target="#navContent">
         <span>Content & Uploads</span>
-        <i class="bi bi-chevron-down section-arrow"></i>
+        <i class="bx bx-chevron-down section-arrow"></i>
       </div>
       <div class="collapse show" id="navContent">
         <ul class="nav flex-column ps-2">
-          <li><a href="admin_questions.php"
+          <li><a href="admin_questions"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_questions.php' ? ' active' : '' ?>">
-              <i class="bi bi-journal-text me-2"></i><span>Practical Bank</span></a></li>
-          <li><a href="admin_upload.php"
+              <i class="bx bx-book-content me-2"></i><span>Practical Bank</span></a></li>
+          <li><a href="admin_upload"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_upload.php' ? ' active' : '' ?>">
-              <i class="bi bi-cloud-upload me-2"></i><span>Upload Data Center</span></a></li>
+              <i class="bx bx-cloud-upload me-2"></i><span>Upload Data Center</span></a></li>
         </ul>
       </div>
     </li>
@@ -97,22 +104,21 @@
         class="nav-section-header d-flex align-items-center justify-content-between px-3 py-2 small text-uppercase fw-bold text-muted cursor-pointer"
         data-bs-toggle="collapse" data-bs-target="#navResults">
         <span>Results & Reports</span>
-        <i class="bi bi-chevron-down section-arrow"></i>
+        <i class="bx bx-chevron-down section-arrow"></i>
       </div>
       <div class="collapse show" id="navResults">
         <ul class="nav flex-column ps-2">
-          <li><a href="admin_student_scores.php"
+          <li><a href="admin_student_scores"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_student_scores.php' ? ' active' : '' ?>">
-              <i class="bi bi-list-check me-2"></i><span>Practical Results</span></a></li>
-          <li><a href="examiner_objective_results.php"
+              <i class="bx bx-task me-2"></i><span>Practical Results</span></a></li>
+          <li><a href="examiner_objective_results"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'examiner_objective_results.php' ? ' active' : '' ?>">
-              <i class="bi bi-check2-circle me-2"></i><span>Objective Results</span></a></li>
-          <li><a href="all_students_score.php"
+              <i class="bx bx-check-circle me-2"></i><span>Objective Results</span></a></li>
+          <li><a href="all_students_score"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'all_students_score.php' ? ' active' : '' ?>">
-              <i class="bi bi-calculator me-2"></i><span>Score Summary (All)</span></a></li>
-          <li><a href="report.php"
-              class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'report.php' ? ' active' : '' ?>">
-              <i class="bi bi-file-earmark-bar-graph me-2"></i><span>Generate Reports</span></a></li>
+              <i class="bx bx-calculator me-2"></i><span>Score Summary (All)</span></a></li>
+          <li><a href="report" class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'report.php' ? ' active' : '' ?>">
+              <i class="bx bx-file me-2"></i><span>Generate Reports</span></a></li>
         </ul>
       </div>
     </li>
@@ -123,16 +129,16 @@
         class="nav-section-header d-flex align-items-center justify-content-between px-3 py-2 small text-uppercase fw-bold text-muted cursor-pointer"
         data-bs-toggle="collapse" data-bs-target="#navProctor">
         <span>Proctoring Center</span>
-        <i class="bi bi-chevron-down section-arrow"></i>
+        <i class="bx bx-chevron-down section-arrow"></i>
       </div>
       <div class="collapse show" id="navProctor">
         <ul class="nav flex-column ps-2">
-          <li><a href="admin_live_proctor.php"
+          <li><a href="admin_live_proctor"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_live_proctor.php' ? ' active' : '' ?>">
-              <i class="bi bi-broadcast text-danger me-2"></i><span>Live Monitor</span></a></li>
-          <li><a href="admin_exam_audit.php"
+              <i class="bx bx-broadcast text-danger me-2"></i><span>Live Monitor</span></a></li>
+          <li><a href="admin_exam_audit"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_exam_audit.php' ? ' active' : '' ?>">
-              <i class="bi bi-shield-check me-2"></i><span>Exam Audit Trail</span></a></li>
+              <i class="bx bx-shield-quarter me-2"></i><span>Exam Audit Trail</span></a></li>
         </ul>
       </div>
     </li>
@@ -143,17 +149,17 @@
         class="nav-section-header d-flex align-items-center justify-content-between px-3 py-2 small text-uppercase fw-bold text-muted cursor-pointer"
         data-bs-toggle="collapse" data-bs-target="#navSystem">
         <span>System & Tools</span>
-        <i class="bi bi-chevron-down section-arrow"></i>
+        <i class="bx bx-chevron-down section-arrow"></i>
       </div>
       <div class="collapse show" id="navSystem">
         <ul class="nav flex-column ps-2">
-          <li><a href="chat.php" class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'chat.php' ? ' active' : '' ?>">
-              <i class="bi bi-chat-dots me-2"></i><span>Staff Chat</span></a></li>
-          <li><a href="admin_audit_trail.php"
+          <li><a href="chat" class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'chat.php' ? ' active' : '' ?>">
+              <i class="bx bx-message-square-dots me-2"></i><span>Staff Chat</span></a></li>
+          <li><a href="admin_audit_trail"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_audit_trail.php' ? ' active' : '' ?>">
-              <i class="bi bi-shield-lock me-2"></i><span>Audit Trail</span></a></li>
+              <i class="bx bx-shield-alt-2 me-2"></i><span>Audit Trail</span></a></li>
           <li><a href="#" id="clearAllChatsSidebar" class="nav-link text-danger">
-              <i class="bi bi-trash me-2"></i><span>Clear All Chats</span></a></li>
+              <i class="bx bx-trash me-2"></i><span>Clear All Chats</span></a></li>
         </ul>
       </div>
     </li>
@@ -162,9 +168,9 @@
       <hr>
     </li>
     <li><a href="assessment_portal_testing_checklist.html" class="nav-link text-info fw-bold" target="_blank">
-        <i class="bi bi-clipboard-check me-2"></i><span>Testing Checklist</span></a></li>
-    <li><a href="logout.php" class="nav-link text-danger">
-        <i class="bi bi-box-arrow-right me-2"></i><span>Logout</span></a></li>
+        <i class="bx bx-clipboard me-2"></i><span>Testing Checklist</span></a></li>
+    <li><a href="logout" class="nav-link text-danger">
+        <i class="bx bx-log-out me-2"></i><span>Logout</span></a></li>
   </ul>
 
   <!-- System Status -->
@@ -188,40 +194,46 @@
     const sidebar = document.getElementById('sidebarMenu');
     const mainContent = document.querySelector('.main-content');
     const desktopToggle = document.getElementById('desktopSidebarToggle');
-    const mobileToggle = document.getElementById('sidebarToggle');
+    const mobileClose = document.getElementById('mobileSidebarClose');
     const sidebarBackdrop = document.getElementById('sidebarBackdrop');
 
-    // Restore state from localStorage
-    const IS_COLLAPSED = localStorage.getItem('sidebarCollapsed') === 'true';
-    if (IS_COLLAPSED && window.innerWidth >= 992) {
-      sidebar.classList.add('collapsed');
-      if (mainContent) mainContent.classList.add('sidebar-collapsed');
-      if (desktopToggle) desktopToggle.querySelector('i').classList.replace('bi-chevron-left', 'bi-chevron-right');
+    // We use a broader search for the toggle button since it's defined in each page's navbar
+    function setupMobileToggle() {
+      const mobileToggle = document.getElementById('sidebarToggle');
+      if (mobileToggle) {
+        // Remove any existing click handlers to prevent double-toggling
+        mobileToggle.onclick = null;
+
+        mobileToggle.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          sidebar.classList.toggle('show');
+          if (sidebarBackdrop) sidebarBackdrop.classList.toggle('show');
+        });
+      }
     }
+
+    // Run setup immediately and also after a small delay to catch dynamically loaded elements
+    setupMobileToggle();
+    setTimeout(setupMobileToggle, 500);
 
     // Desktop Toggle
     if (desktopToggle) {
       desktopToggle.addEventListener('click', function () {
         sidebar.classList.toggle('collapsed');
         if (mainContent) mainContent.classList.toggle('sidebar-collapsed');
-
         const isCollapsed = sidebar.classList.contains('collapsed');
         localStorage.setItem('sidebarCollapsed', isCollapsed);
-
         const icon = desktopToggle.querySelector('i');
-        if (isCollapsed) {
-          icon.classList.replace('bi-chevron-left', 'bi-chevron-right');
-        } else {
-          icon.classList.replace('bi-chevron-right', 'bi-chevron-left');
-        }
+        icon.classList.replace(isCollapsed ? 'bi-chevron-left' : 'bi-chevron-right', isCollapsed ? 'bi-chevron-right' : 'bi-chevron-left');
       });
     }
 
-    // Mobile Toggle Logic (Shared across all pages)
-    if (mobileToggle) {
-      mobileToggle.addEventListener('click', function () {
-        sidebar.classList.toggle('show');
-        if (sidebarBackdrop) sidebarBackdrop.classList.toggle('show');
+    // Mobile Close Logic
+    if (mobileClose) {
+      mobileClose.addEventListener('click', function () {
+        sidebar.classList.remove('show');
+        if (sidebarBackdrop) sidebarBackdrop.classList.remove('show');
       });
     }
 
@@ -232,23 +244,42 @@
       });
     }
 
+    // Restore state from localStorage
+    const IS_COLLAPSED = localStorage.getItem('sidebarCollapsed') === 'true';
+    if (IS_COLLAPSED && window.innerWidth >= 992) {
+      sidebar.classList.add('collapsed');
+      if (mainContent) mainContent.classList.add('sidebar-collapsed');
+      const icon = desktopToggle ? desktopToggle.querySelector('i') : null;
+      if (icon) icon.classList.replace('bi-chevron-left', 'bi-chevron-right');
+    }
+
     // Chat clear logic
     var clearBtn = document.getElementById('clearAllChatsSidebar');
     if (clearBtn) {
       clearBtn.addEventListener('click', function (e) {
         e.preventDefault();
-        if (confirm('Are you sure you want to clear all chat messages? This cannot be undone.')) {
-          fetch('chat_backend.php?action=clear_chats', { method: 'POST' })
-            .then(r => r.json())
-            .then(data => {
-              if (data.success) {
-                alert('All chat messages cleared!');
-                if (window.location.pathname.endsWith('chat.php')) location.reload();
-              } else {
-                alert('Failed to clear chats: ' + (data.error || 'Unknown error'));
-              }
-            });
-        }
+        Swal.fire({
+          title: 'Clear All Chats',
+          text: 'Are you sure you want to clear all chat messages? This cannot be undone.',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          confirmButtonText: 'Yes, clear it'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            fetch('chat_backend?action=clear_chats', { method: 'POST' })
+              .then(r => r.json())
+              .then(data => {
+                if (data.success) {
+                  Swal.fire('Cleared!', 'All chat messages cleared!', 'success').then(() => {
+                    if (window.location.pathname.endsWith('chat')) location.reload();
+                  });
+                } else {
+                  Swal.fire('Error', 'Failed to clear chats: ' + (data.error || 'Unknown error'), 'error');
+                }
+              });
+          }
+        });
       });
     }
   });

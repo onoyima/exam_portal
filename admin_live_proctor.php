@@ -277,6 +277,7 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
             }
         }
     </style>
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body class="bg-light">
@@ -304,7 +305,8 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                     </div>
                     <div class="col-md-3">
                         <label class="form-label small fw-bold text-muted">Filter by Exam</label>
-                        <select name="exam_id" class="form-select border-0 bg-light rounded-3" onchange="this.form.submit()">
+                        <select name="exam_id" class="form-select border-0 bg-light rounded-3"
+                            onchange="this.form.submit()">
                             <option value="0">All Scheduled Exams</option>
                             <?php foreach ($all_exams as $ex): ?>
                                 <option value="<?= $ex['id'] ?>" <?= $selected_exam == $ex['id'] ? 'selected' : '' ?>>
@@ -315,7 +317,8 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                     </div>
                     <div class="col-md-2">
                         <label class="form-label small fw-bold text-muted">Sort By</label>
-                        <select name="sort" class="form-select border-0 bg-light rounded-3" onchange="this.form.submit()">
+                        <select name="sort" class="form-select border-0 bg-light rounded-3"
+                            onchange="this.form.submit()">
                             <option value="active_desc" <?= $sort_by === 'active_desc' ? 'selected' : '' ?>>Activity
                                 (Newest)</option>
                             <option value="active_asc" <?= $sort_by === 'active_asc' ? 'selected' : '' ?>>Activity (Oldest)
@@ -327,7 +330,8 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                     </div>
                     <div class="col-md-2">
                         <label class="form-label small fw-bold text-muted">Status</label>
-                        <select name="status" class="form-select border-0 bg-light rounded-3" onchange="this.form.submit()">
+                        <select name="status" class="form-select border-0 bg-light rounded-3"
+                            onchange="this.form.submit()">
                             <option value="active" <?= $status_filter === 'active' ? 'selected' : '' ?>>Active</option>
                             <option value="history" <?= $status_filter === 'history' ? 'selected' : '' ?>>History</option>
                         </select>
@@ -543,7 +547,7 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
             fd.append('attempt_id', attemptId);
             fd.append('type', type);
             fd.append('payload', payload);
-            fetch('webrtc_api.php?action=send', { method: 'POST', body: fd });
+            fetch('webrtc_api?action=send', { method: 'POST', body: fd });
         }
 
         // Warning/Violation logic (same as before)
@@ -558,25 +562,43 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
             const msg = document.getElementById('warnMessage').value;
             const fd = new FormData();
             fd.append('attempt_id', id); fd.append('message', msg);
-            fetch('admin_live_proctor.php?action=warn', { method: 'POST', body: fd }).then(r => r.json()).then(d => { if (d.success) warnModal.hide(); });
+            fetch('admin_live_proctor?action=warn', { method: 'POST', body: fd }).then(r => r.json()).then(d => { if (d.success) warnModal.hide(); });
         }
         function tagViolation(id, name) {
-            if (!confirm(`Tag manual violation for ${name}?`)) return;
-            const fd = new FormData();
-            fd.append('attempt_id', id);
-            fetch('admin_live_proctor.php?action=violation', { method: 'POST', body: fd }).then(() => location.reload());
+            Swal.fire({
+                title: 'Tag Violation?',
+                text: `Tag manual violation for ${name}?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#092c19'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const fd = new FormData();
+                    fd.append('attempt_id', id);
+                    fetch('admin_live_proctor?action=violation', { method: 'POST', body: fd }).then(() => location.reload());
+                }
+            });
         }
 
         function forceSubmit(id, name) {
-            if (!confirm(`CAUTION: Are you sure you want to FORCE SUBMIT this exam for ${name}? This will calculate their current score and end the session immediately.`)) return;
-            const fd = new FormData();
-            fd.append('attempt_id', id);
-            fetch('admin_live_proctor.php?action=force_submit', { method: 'POST', body: fd }).then(r => r.json()).then(d => {
-                if (d.success) {
-                    alert(`Exam submitted for ${name}. Score: ${d.score}`);
-                    location.reload();
-                } else {
-                    alert('Error: ' + d.error);
+            Swal.fire({
+                title: 'Force Submit?',
+                text: `CAUTION: Are you sure you want to FORCE SUBMIT this exam for ${name}? This will calculate their current score and end the session immediately.`,
+                icon: 'error',
+                showCancelButton: true,
+                confirmButtonColor: '#e3342f'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const fd = new FormData();
+                    fd.append('attempt_id', id);
+                    fetch('admin_live_proctor?action=force_submit', { method: 'POST', body: fd }).then(r => r.json()).then(d => {
+                        if (d.success) {
+                            alert(`Exam submitted for ${name}. Score: ${d.score}`);
+                            location.reload();
+                        } else {
+                            alert('Error: ' + d.error);
+                        }
+                    });
                 }
             });
         }
@@ -588,6 +610,79 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
             zoomModal.show();
         }
     </script>
+    <!-- sweetalert_custom_injected_v1 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Override global alert
+            window.alert = function (msg) {
+                Swal.fire({
+                    title: 'Message',
+                    text: msg,
+                    icon: 'info',
+                    confirmButtonColor: '#092c19'
+                });
+            };
+
+            // Intercept inline onsubmit confirms
+            document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
+                let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
+                if (match) {
+                    let msg = match[1];
+                    el.removeAttribute('onsubmit');
+                    el.addEventListener('submit', function (e) {
+                        e.preventDefault();
+                        Swal.fire({
+                            title: 'Are you sure?',
+                            text: msg,
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonColor: '#092c19',
+                            cancelButtonColor: '#d33',
+                            confirmButtonText: 'Yes, proceed'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                HTMLFormElement.prototype.submit.call(el);
+                            }
+                        });
+                    });
+                }
+            });
+
+            // Intercept inline onclick confirms for anchors
+            document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
+                let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
+                if (match) {
+                    let msg = match[1];
+                    el.removeAttribute('onclick');
+                    el.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        Swal.fire({
+                            title: 'Are you sure?',
+                            text: msg,
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonColor: '#092c19',
+                            cancelButtonColor: '#d33',
+                            confirmButtonText: 'Yes, proceed'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                if (el.tagName === 'A' && el.href) {
+                                    window.location.href = el.href;
+                                } else if (el.tagName === 'BUTTON') {
+                                    // if it's a submit button inside a form
+                                    if (el.type === 'submit' && el.form) {
+                                        HTMLFormElement.prototype.submit.call(el.form);
+                                    }
+                                }
+                            }
+                        });
+                    });
+                }
+            });
+        });
+    </script>
 </body>
+
 
 </html>

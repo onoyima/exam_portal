@@ -26,7 +26,7 @@ function check_auth($allowed_roles)
 
         // Optionally set a flash message
         $_SESSION['auth_error'] = "You do not have permission to access that page.";
-        header("Location: index.php");
+        header("Location: index");
         exit;
     }
 }
@@ -37,9 +37,9 @@ function check_auth($allowed_roles)
 function redirect_to_login($target_roles)
 {
     if (in_array('student', $target_roles) && count($target_roles) === 1) {
-        header("Location: student_login.php");
+        header("Location: student_login");
     } else {
-        header("Location: login.php");
+        header("Location: login");
     }
     exit;
 }

@@ -24,6 +24,7 @@ $login_instruction = $db->query("SELECT setting_value FROM system_settings WHERE
   <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>
@@ -32,8 +33,9 @@ $login_instruction = $db->query("SELECT setting_value FROM system_settings WHERE
     <nav class="navbar navbar-light bg-white shadow-sm mb-4">
       <div class="container-fluid d-flex justify-content-between align-items-center">
         <div class="d-flex align-items-center gap-2">
-          <button class="btn btn-outline-primary d-lg-none me-2" id="sidebarToggle"><i class="bi bi-list"></i></button>
-          <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="index.php">
+          <button class="btn btn-outline-primary d-lg-none me-2" id="sidebarToggle"><i
+              class="bi bi-list fs-4"></i></button>
+          <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="index">
             <img src="assets/favicon.ico" alt="Logo" width="30" height="30">
             <span>Admin Console</span>
           </a>
@@ -47,7 +49,7 @@ $login_instruction = $db->query("SELECT setting_value FROM system_settings WHERE
             <span id="navbarChatBadge"
               style="display:none;position:absolute;top:0;right:-8px;background:#dc3545;color:#fff;border-radius:50%;padding:2px 7px;font-size:13px;z-index:1100;min-width:22px;text-align:center;"></span>
           </button>
-          <a href="logout.php" class="btn btn-outline-danger ms-2">Logout</a>
+          <a href="logout" class="btn btn-outline-danger ms-2">Logout</a>
         </div>
       </div>
     </nav>
@@ -107,13 +109,13 @@ $login_instruction = $db->query("SELECT setting_value FROM system_settings WHERE
           <div class="card border-0 shadow-sm rounded-4 h-100 p-4">
             <h4 class="fw-bold mb-3"><i class="bi bi-lightning-charge me-2 text-warning"></i>Quick Actions</h4>
             <div class="d-grid gap-2">
-              <a href="admin_students.php" class="btn btn-primary rounded-pill py-2">Manage Students</a>
-              <a href="admin_staff.php" class="btn btn-dark rounded-pill py-2">Manage Staff / Examiners</a>
-              <a href="admin_questions.php" class="btn btn-success rounded-pill py-2">Manage Practical Questions</a>
-              <a href="admin_objective_exams.php" class="btn btn-outline-primary fw-bold rounded-pill py-2">Manage
+              <a href="admin_students" class="btn btn-primary rounded-pill py-2">Manage Students</a>
+              <a href="admin_staff" class="btn btn-dark rounded-pill py-2">Manage Staff / Examiners</a>
+              <a href="admin_questions" class="btn btn-success rounded-pill py-2">Manage Practical Questions</a>
+              <a href="admin_objective_exams" class="btn btn-outline-primary fw-bold rounded-pill py-2">Manage
                 Objective Questions</a>
-              <a href="admin_exams.php" class="btn btn-info rounded-pill py-2">General Exam Settings</a>
-              <a href="admin_analytics.php" class="btn btn-warning rounded-pill py-2">View Analytics</a>
+              <a href="admin_exams" class="btn btn-info rounded-pill py-2">General Exam Settings</a>
+              <a href="admin_analytics" class="btn btn-warning rounded-pill py-2">View Analytics</a>
             </div>
           </div>
         </div>
@@ -146,22 +148,96 @@ $login_instruction = $db->query("SELECT setting_value FROM system_settings WHERE
 
   <?php include 'footer.php'; ?>
 
-  <script>
-    const sidebar = document.getElementById('sidebarMenu');
-    const sidebarBackdrop = document.getElementById('sidebarBackdrop');
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    if (sidebarToggle) {
-      sidebarToggle.onclick = function () {
-        sidebar.classList.toggle('show');
-        sidebarBackdrop.classList.toggle('show');
-      };
-      sidebarBackdrop.onclick = function () {
-        sidebar.classList.remove('show');
-        sidebarBackdrop.classList.remove('show');
-      };
-    }
-  </script>
   <script src="assets/js/bootstrap.bundle.min.js"></script>
+<!-- sweetalert_custom_injected_v1 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Override global alert
+        window.alert = function(msg) {
+            Swal.fire({
+                title: 'Message',
+                text: msg,
+                icon: 'info',
+                confirmButtonColor: '#092c19'
+            });
+        };
+
+        // Intercept inline onsubmit confirms
+        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onsubmit');
+                el.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover') 
+                                      || el.querySelector('button[type="submit"], input[type="submit"]');
+                            if(btn && btn.name) {
+                                let hidden = document.createElement('input');
+                                hidden.type = 'hidden';
+                                hidden.name = btn.name;
+                                hidden.value = btn.value || '1';
+                                el.appendChild(hidden);
+                            }
+                            HTMLFormElement.prototype.submit.call(el);
+                        }
+                    });
+                });
+            }
+        });
+
+        // Intercept inline onclick confirms for anchors
+        document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onclick');
+                el.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            if(el.tagName === 'A' && el.href) {
+                                window.location.href = el.href;
+                            } else if(el.tagName === 'BUTTON') {
+                                // if it's a submit button inside a form
+                                if(el.type === 'submit' && el.form) {
+                                    if(el.name) {
+                                        let hidden = document.createElement('input');
+                                        hidden.type = 'hidden';
+                                        hidden.name = el.name;
+                                        hidden.value = el.value || '1';
+                                        el.form.appendChild(hidden);
+                                    }
+                                    HTMLFormElement.prototype.submit.call(el.form);
+                                }
+                            }
+                        }
+                    });
+                });
+            }
+        });
+    });
+</script>
 </body>
+
 
 </html>

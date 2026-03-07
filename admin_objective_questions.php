@@ -45,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $_POST['correct_option'],
       floatval($_POST['mark'])
     ]);
-    header("Location: admin_objective_questions.php?exam_id=$exam_id&success=added");
+    header("Location: admin_objective_questions?exam_id=$exam_id&success=added");
     exit;
   }
   if (isset($_POST['edit']) && isset($_POST['id'])) {
@@ -67,21 +67,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $id,
       $exam_id
     ]);
-    header("Location: admin_objective_questions.php?exam_id=$exam_id&success=edited");
+    header("Location: admin_objective_questions?exam_id=$exam_id&success=edited");
     exit;
   }
   if (isset($_POST['delete']) && isset($_POST['id'])) {
     $id = intval($_POST['id']);
     $db->prepare("DELETE FROM objective_answers WHERE question_id=? AND exam_id=?")->execute([$id, $exam_id]);
     $db->prepare("DELETE FROM objective_questions WHERE id=? AND exam_id=?")->execute([$id, $exam_id]);
-    header("Location: admin_objective_questions.php?exam_id=$exam_id&success=deleted");
+    header("Location: admin_objective_questions?exam_id=$exam_id&success=deleted");
     exit;
   }
   if (isset($_POST['clear_all'])) {
     $db->prepare("DELETE FROM objective_answers WHERE exam_id=?")->execute([$exam_id]);
     $db->prepare("DELETE FROM objective_attempts WHERE exam_id=?")->execute([$exam_id]);
     $db->prepare("DELETE FROM objective_questions WHERE exam_id=?")->execute([$exam_id]);
-    header("Location: admin_objective_questions.php?exam_id=$exam_id&success=cleared");
+    header("Location: admin_objective_questions?exam_id=$exam_id&success=cleared");
     exit;
   }
 
@@ -171,7 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
       }
     }
-    header("Location: admin_objective_questions.php?exam_id=$exam_id&success=uploaded");
+    header("Location: admin_objective_questions?exam_id=$exam_id&success=uploaded");
     exit;
   }
 
@@ -183,7 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($zip->open($_FILES['zip']['tmp_name']) === TRUE) {
       $zip->extractTo('uploads/');
       $zip->close();
-      header("Location: admin_objective_questions.php?exam_id=$exam_id&success=images");
+      header("Location: admin_objective_questions?exam_id=$exam_id&success=images");
       exit;
     }
   }
@@ -208,6 +208,7 @@ $questions = $questions->fetchAll(PDO::FETCH_ASSOC);
   </script>
   <script type="text/javascript" id="MathJax-script" async
     src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>
@@ -217,7 +218,7 @@ $questions = $questions->fetchAll(PDO::FETCH_ASSOC);
       <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>Questions: <span class="text-primary"><?= htmlspecialchars($exam['name']) ?></span></h2>
         <div>
-          <a href="admin_objective_exams.php" class="btn btn-outline-secondary rounded-pill px-4 me-2">Back</a>
+          <a href="admin_objective_exams" class="btn btn-outline-secondary rounded-pill px-4 me-2">Back</a>
           <button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#addModal">+ Add
             Question</button>
         </div>
@@ -427,6 +428,95 @@ $questions = $questions->fetchAll(PDO::FETCH_ASSOC);
     </div>
   </div>
   <script src="assets/js/bootstrap.bundle.min.js"></script>
+<!-- sweetalert_custom_injected_v1 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Override global alert
+        window.alert = function(msg) {
+            Swal.fire({
+                title: 'Message',
+                text: msg,
+                icon: 'info',
+                confirmButtonColor: '#092c19'
+            });
+        };
+
+        // Intercept inline onsubmit confirms
+        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onsubmit');
+                el.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover') 
+                                      || el.querySelector('button[type="submit"], input[type="submit"]');
+                            if(btn && btn.name) {
+                                let hidden = document.createElement('input');
+                                hidden.type = 'hidden';
+                                hidden.name = btn.name;
+                                hidden.value = btn.value || '1';
+                                el.appendChild(hidden);
+                            }
+                            HTMLFormElement.prototype.submit.call(el);
+                        }
+                    });
+                });
+            }
+        });
+
+        // Intercept inline onclick confirms for anchors
+        document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onclick');
+                el.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            if(el.tagName === 'A' && el.href) {
+                                window.location.href = el.href;
+                            } else if(el.tagName === 'BUTTON') {
+                                // if it's a submit button inside a form
+                                if(el.type === 'submit' && el.form) {
+                                    if(el.name) {
+                                        let hidden = document.createElement('input');
+                                        hidden.type = 'hidden';
+                                        hidden.name = el.name;
+                                        hidden.value = el.value || '1';
+                                        el.form.appendChild(hidden);
+                                    }
+                                    HTMLFormElement.prototype.submit.call(el.form);
+                                }
+                            }
+                        }
+                    });
+                });
+            }
+        });
+    });
+</script>
 </body>
+
 
 </html>

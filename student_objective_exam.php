@@ -24,13 +24,13 @@ $end_ts = !empty($exam['end_time']) ? strtotime($exam['end_time']) : null;
 $is_view_mode = isset($_GET['view_result']) || isset($_GET['review_attempt']);
 if (!$is_view_mode) {
   if ($start_ts && $now_ts < $start_ts) {
-    header("Location: student_dashboard.php?error=Exam has not started yet. Scheduled for " . date('M j, Y H:i', $start_ts));
+    header("Location: student_dashboard?error=Exam has not started yet. Scheduled for " . date('M j, Y H:i', $start_ts));
     exit;
   }
   if ($end_ts && $now_ts > $end_ts) {
     // If an attempt is currently IN PROGRESS, we might want to allow it to finish via auto-submit, 
     // but generally prevent new entry/resume if 'EXAM CLOSED'.
-    header("Location: student_dashboard.php?error=Exam access has closed.");
+    header("Location: student_dashboard?error=Exam access has closed.");
     exit;
   }
 }
@@ -64,7 +64,7 @@ if (isset($_POST['confirm_final_submit'])) {
   $finish_stmt = $db->prepare("UPDATE objective_attempts SET finished_at=NOW(), time_taken = TIMESTAMPDIFF(SECOND, started_at, NOW()), score=? WHERE exam_id=? AND student_id=? AND attempt_no=? AND finished_at IS NULL");
   $finish_stmt->execute([$calculated_score, $exam_id, $student_id, $attempt_no]);
 
-  header("Location: student_objective_exam.php?exam_id=$exam_id&view_result=1&submitted=true");
+  header("Location: student_objective_exam?exam_id=$exam_id&view_result=1&submitted=true");
   exit;
 }
 
@@ -87,7 +87,7 @@ if ($is_review_mode) {
   $attempt_to_review = $stmt->fetch();
 
   if (!$attempt_to_review || !$attempt_to_review['finished_at']) {
-    header("Location: student_objective_exam.php?exam_id=$exam_id&view_result=1");
+    header("Location: student_objective_exam?exam_id=$exam_id&view_result=1");
     exit;
   }
   $current_attempt_id = $attempt_to_review['id'];
@@ -108,7 +108,7 @@ if (!$view_result && !$is_review_mode) {
       $started_at = date('Y-m-d H:i:s');
       $is_new_attempt = true; // Fix: Set this to true for first attempt
     } else {
-      header("Location: student_dashboard.php?error=Exam not started.");
+      header("Location: student_dashboard?error=Exam not started.");
       exit;
     }
   } else {
@@ -122,7 +122,7 @@ if (!$view_result && !$is_review_mode) {
         $is_new_attempt = true;
       } else {
         // Redirect to results but only if we aren't already trying to go there
-        header("Location: student_objective_exam.php?exam_id=$exam_id&view_result=1");
+        header("Location: student_objective_exam?exam_id=$exam_id&view_result=1");
         exit;
       }
     } else {
@@ -132,7 +132,7 @@ if (!$view_result && !$is_review_mode) {
         $current_attempt_no = $last_attempt['attempt_no'];
         $started_at = $last_attempt['started_at'];
       } else {
-        header("Location: student_objective_exam.php?exam_id=$exam_id&view_result=1");
+        header("Location: student_objective_exam?exam_id=$exam_id&view_result=1");
         exit;
       }
     }
@@ -227,7 +227,8 @@ if ($view_result) {
     <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
     <link href="assets/css/bootstrap.min.css" rel="stylesheet">
     <link href="style_enhanced.css" rel="stylesheet">
-  </head>
+    <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+</head>
 
   <body class="bg-light">
     <?php
@@ -315,7 +316,7 @@ if ($view_result) {
                           <div class="fw-bold">Attempt #<?= $res['attempt_no'] ?></div>
                           <div class="text-muted small"><?= date('M j, Y - H:i', strtotime($res['finished_at'])) ?></div>
                         </div>
-                        <a href="student_objective_exam.php?exam_id=<?= $exam_id ?>&review_attempt=<?= $res['attempt_no'] ?>"
+                        <a href="student_objective_exam?exam_id=<?= $exam_id ?>&review_attempt=<?= $res['attempt_no'] ?>"
                           class="btn btn-sm btn-outline-primary rounded-pill px-3">
                           <i class="bi bi-eye me-1"></i> Review
                         </a>
@@ -339,7 +340,7 @@ if ($view_result) {
 
           <div class="d-grid gap-3">
             <?php if ($has_active): ?>
-              <a href="student_objective_exam.php?exam_id=<?= $exam_id ?>&resume=1"
+              <a href="student_objective_exam?exam_id=<?= $exam_id ?>&resume=1"
                 class="btn btn-warning btn-lg rounded-pill py-3 shadow-sm border-0 d-flex align-items-center justify-content-center gap-2">
                 <i class="bi bi-play-fill fs-4"></i> Resume Current Attempt
               </a>
@@ -351,7 +352,7 @@ if ($view_result) {
                 Start Next Attempt (<?= $exam['max_attempts'] - count($attempt_results) ?> Left)
               </button>
             <?php endif; ?>
-            <a href="student_dashboard.php"
+            <a href="student_dashboard"
               class="btn btn-light btn-lg rounded-pill py-3 border text-secondary d-flex align-items-center justify-content-center gap-2">
               <i class="bi bi-house-door"></i> Back to Dashboard
             </a>
@@ -374,7 +375,96 @@ if ($view_result) {
         };
       }
     </script>
-  </body>
+  <!-- sweetalert_custom_injected_v1 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Override global alert
+        window.alert = function(msg) {
+            Swal.fire({
+                title: 'Message',
+                text: msg,
+                icon: 'info',
+                confirmButtonColor: '#092c19'
+            });
+        };
+
+        // Intercept inline onsubmit confirms
+        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onsubmit');
+                el.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover') 
+                                      || el.querySelector('button[type="submit"], input[type="submit"]');
+                            if(btn && btn.name) {
+                                let hidden = document.createElement('input');
+                                hidden.type = 'hidden';
+                                hidden.name = btn.name;
+                                hidden.value = btn.value || '1';
+                                el.appendChild(hidden);
+                            }
+                            HTMLFormElement.prototype.submit.call(el);
+                        }
+                    });
+                });
+            }
+        });
+
+        // Intercept inline onclick confirms for anchors
+        document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onclick');
+                el.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            if(el.tagName === 'A' && el.href) {
+                                window.location.href = el.href;
+                            } else if(el.tagName === 'BUTTON') {
+                                // if it's a submit button inside a form
+                                if(el.type === 'submit' && el.form) {
+                                    if(el.name) {
+                                        let hidden = document.createElement('input');
+                                        hidden.type = 'hidden';
+                                        hidden.name = el.name;
+                                        hidden.value = el.value || '1';
+                                        el.form.appendChild(hidden);
+                                    }
+                                    HTMLFormElement.prototype.submit.call(el.form);
+                                }
+                            }
+                        }
+                    });
+                });
+            }
+        });
+    });
+</script>
+</body>
+
 
   </html>
   <?php exit;
@@ -482,6 +572,7 @@ $current_index = 0;
       font-size: 1rem !important;
     }
   </style>
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body class="bg-light">
@@ -500,7 +591,7 @@ $current_index = 0;
         <div id="proctorErrorBtn" class="d-none">
           <button onclick="location.reload()" class="btn btn-primary rounded-pill px-5 py-3 fw-bold">RETRY
             CONNECTION</button>
-          <a href="student_dashboard.php" class="btn btn-link text-muted mt-3 d-block">Exit to Dashboard</a>
+          <a href="student_dashboard" class="btn btn-link text-muted mt-3 d-block">Exit to Dashboard</a>
         </div>
       </div>
     </div>
@@ -604,7 +695,7 @@ $current_index = 0;
                   Finish <i class="bi bi-send-fill ms-1"></i>
                 </button>
                 <?php if ($is_review_mode): ?>
-                  <a href="student_objective_exam.php?exam_id=<?= $exam_id ?>&view_result=1"
+                  <a href="student_objective_exam?exam_id=<?= $exam_id ?>&view_result=1"
                     class="btn btn-outline-danger px-3 py-2 rounded-pill fw-bold shadow-sm btn-sm">
                     <i class="bi bi-x-circle me-1"></i> Exit Review
                   </a>
@@ -967,7 +1058,7 @@ $current_index = 0;
       formData.append('question_id', questionId);
       formData.append('option', selectedOption);
 
-      fetch('objective_exam_api.php?action=save_answer', {
+      fetch('objective_exam_api?action=save_answer', {
         method: 'POST',
         body: formData
       }).then(r => r.json()).then(data => {
@@ -1292,7 +1383,7 @@ $current_index = 0;
       fd.append('attempt_id', currentAttemptId);
       fd.append('type', type);
       fd.append('payload', payload);
-      fetch('webrtc_api.php?action=send', { method: 'POST', body: fd });
+      fetch('webrtc_api?action=send', { method: 'POST', body: fd });
     }
 
     function getWebcamSnapshot() {
@@ -1322,7 +1413,7 @@ $current_index = 0;
         if (snap) formData.append('webcam_snapshot', snap);
       }
 
-      fetch('proctor_ping.php', { method: 'POST', body: formData })
+      fetch('proctor_ping', { method: 'POST', body: formData })
         .then(r => r.json())
         .then(data => {
           if (data.status === 'TERMINATE' || data.status === 'FORCED_LOGOUT') {
@@ -1483,6 +1574,95 @@ $current_index = 0;
       </div>
     </div>
   </div>
+<!-- sweetalert_custom_injected_v1 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Override global alert
+        window.alert = function(msg) {
+            Swal.fire({
+                title: 'Message',
+                text: msg,
+                icon: 'info',
+                confirmButtonColor: '#092c19'
+            });
+        };
+
+        // Intercept inline onsubmit confirms
+        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onsubmit');
+                el.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover') 
+                                      || el.querySelector('button[type="submit"], input[type="submit"]');
+                            if(btn && btn.name) {
+                                let hidden = document.createElement('input');
+                                hidden.type = 'hidden';
+                                hidden.name = btn.name;
+                                hidden.value = btn.value || '1';
+                                el.appendChild(hidden);
+                            }
+                            HTMLFormElement.prototype.submit.call(el);
+                        }
+                    });
+                });
+            }
+        });
+
+        // Intercept inline onclick confirms for anchors
+        document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
+            let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
+            if(match) {
+                let msg = match[1];
+                el.removeAttribute('onclick');
+                el.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            if(el.tagName === 'A' && el.href) {
+                                window.location.href = el.href;
+                            } else if(el.tagName === 'BUTTON') {
+                                // if it's a submit button inside a form
+                                if(el.type === 'submit' && el.form) {
+                                    if(el.name) {
+                                        let hidden = document.createElement('input');
+                                        hidden.type = 'hidden';
+                                        hidden.name = el.name;
+                                        hidden.value = el.value || '1';
+                                        el.form.appendChild(hidden);
+                                    }
+                                    HTMLFormElement.prototype.submit.call(el.form);
+                                }
+                            }
+                        }
+                    });
+                });
+            }
+        });
+    });
+</script>
 </body>
+
 
 </html>

@@ -1,0 +1,13 @@
+RewriteEngine On
+
+# Ensure we're in the right directory if needed
+# RewriteBase /exam_portal/
+
+# Redirect /file.php to /file (External Redirect)
+RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /([^/]+)\.php\ HTTP/
+RewriteRule ^(.+)\.php$ /$1 [R=301,L,NC]
+
+# Serve /file as /file.php (Internal Rewrite)
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}\.php -f
+RewriteRule ^(.*?)/?$ $1.php [L,NC]
