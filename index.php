@@ -90,8 +90,10 @@ try {
 
         @media (max-width: 991px) {
             .hero-section {
-                padding-top: 120px;
-                padding-bottom: 50px;
+                padding-top: 150px !important;
+                padding-bottom: 60px !important;
+                align-items: flex-start !important;
+                min-height: auto !important;
             }
 
             .hero-badge i {
