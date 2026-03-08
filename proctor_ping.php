@@ -26,11 +26,34 @@ if ($stored_session !== session_id() && $stored_session !== null) {
 }
 
 // 2. Update Heartbeat, Snapshot, and Proctor Status
-$snapshot = isset($_POST['webcam_snapshot']) ? $_POST['webcam_snapshot'] : null;
+$snapshot_base64 = isset($_POST['webcam_snapshot']) ? $_POST['webcam_snapshot'] : null;
+$snapshot_path = null;
 
-if ($snapshot) {
-    $update = $db->prepare("UPDATE objective_attempts SET last_active = NOW(), proctor_status = ?, webcam_snapshot = ? WHERE exam_id = ? AND student_id = ? AND attempt_no = ? AND finished_at IS NULL");
-    $update->execute([$status, $snapshot, $exam_id, $student_id, $attempt_no]);
+if ($snapshot_base64 && strpos($snapshot_base64, 'data:image') === 0) {
+    try {
+        // Process Base64 to File
+        $data = explode(',', $snapshot_base64);
+        if (isset($data[1])) {
+            $decoded = base64_decode($data[1]);
+            if ($decoded) {
+                $filename = "snap_" . $student_id . "_" . $exam_id . "_" . time() . ".jpg";
+                $full_path = "uploads/snapshots/" . $filename;
+                if (file_put_contents($full_path, $decoded)) {
+                    $snapshot_path = $full_path;
+                }
+            }
+        }
+    } catch (Exception $e) {
+        // Silently fail if file write fails, continue with status update
+        error_log("Snapshot save error: " . $e->getMessage());
+    }
+}
+
+// Update DB - Using path instead of blob for performance
+if ($snapshot_path) {
+    // Clear the binary blob (webcam_snapshot) and use the path instead
+    $update = $db->prepare("UPDATE objective_attempts SET last_active = NOW(), proctor_status = ?, snapshot_path = ?, webcam_snapshot = NULL WHERE exam_id = ? AND student_id = ? AND attempt_no = ? AND finished_at IS NULL");
+    $update->execute([$status, $snapshot_path, $exam_id, $student_id, $attempt_no]);
 } else {
     $update = $db->prepare("UPDATE objective_attempts SET last_active = NOW(), proctor_status = ? WHERE exam_id = ? AND student_id = ? AND attempt_no = ? AND finished_at IS NULL");
     $update->execute([$status, $exam_id, $student_id, $attempt_no]);

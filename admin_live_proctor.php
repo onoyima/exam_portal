@@ -352,8 +352,15 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                         <div class="col-12 col-md-6 col-lg-4" id="card-<?= $att['id'] ?>">
                             <div class="card proctor-card shadow-sm h-100">
                                 <div class="video-wrapper">
-                                    <img src="<?= $att['webcam_snapshot'] ?: 'assets/img/user_placeholder.png' ?>"
-                                        class="placeholder-snap zoom-img" id="snap-<?= $att['id'] ?>"
+                                    <?php
+                                    $snap_src = 'assets/img/user_placeholder.png';
+                                    if ($att['snapshot_path'] && file_exists($att['snapshot_path'])) {
+                                        $snap_src = $att['snapshot_path'];
+                                    } elseif ($att['webcam_snapshot']) {
+                                        $snap_src = $att['webcam_snapshot'];
+                                    }
+                                    ?>
+                                    <img src="<?= $snap_src ?>" class="placeholder-snap zoom-img" id="snap-<?= $att['id'] ?>"
                                         onclick="zoomImage(this.src, '<?= addslashes($att['student_name']) ?>')">
                                     <video id="video-<?= $att['id'] ?>" class="student-video" autoplay playsinline
                                         muted></video>
