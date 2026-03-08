@@ -1376,8 +1376,10 @@ $current_index = 0;
         await peerConnection.setLocalDescription(answer);
         sendSignal('answer', JSON.stringify(answer));
       } else if (signal.type === 'ice') {
-        if (peerConnection) {
-          await peerConnection.addIceCandidate(new RTCIceCandidate(payload));
+        if (peerConnection && payload) {
+          try {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(payload));
+          } catch (e) { console.error("Error adding ice candidate:", e); }
         }
       }
     }

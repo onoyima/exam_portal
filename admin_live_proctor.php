@@ -496,8 +496,8 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
             const btn = document.querySelector(`#card-${attemptId} .btn-live`);
             if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Syncing...';
 
-            // Clear old signals
-            await fetch(`webrtc_api?action=clear&attempt_id=${attemptId}`);
+            // We don't clear signals anymore to avoid race conditions
+            // signals are attempt-specific anyway.
 
             const pc = new RTCPeerConnection(rtcConfig);
             activeConnections[attemptId] = pc;
@@ -536,13 +536,17 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                         lastSignalIds[attemptId] = signal.id;
                         const payload = JSON.parse(signal.payload);
                         if (signal.type === 'answer') {
+                            console.log("Received answer for", attemptId);
                             await pc.setRemoteDescription(new RTCSessionDescription(payload));
                         } else if (signal.type === 'ice') {
-                            await pc.addIceCandidate(new RTCIceCandidate(payload));
+                            console.log("Received ICE candidate for", attemptId);
+                            try {
+                                await pc.addIceCandidate(new RTCIceCandidate(payload));
+                            } catch (e) { console.error("ICE error:", e); }
                         }
                     }
                 }
-            }, 3000);
+            }, 1000); // Poll faster (1s) for handshake
         }
 
         function sendSignal(attemptId, type, payload) {
