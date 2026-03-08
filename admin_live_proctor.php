@@ -502,6 +502,15 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
             const pc = new RTCPeerConnection(rtcConfig);
             activeConnections[attemptId] = pc;
 
+            // CRITICAL: Since the admin/proctor is only RECEIVING video, we must explicitly 
+            // add a transceiver to the connection to tell the browser to negotiate a video track.
+            // Without this, createOffer() will produce an SDP with no media sections.
+            pc.addTransceiver('video', { direction: 'recvonly' });
+
+            pc.oniceconnectionstatechange = () => {
+                console.log(`ICE Connection [${attemptId}]:`, pc.iceConnectionState);
+            };
+
             pc.ontrack = (event) => {
                 const video = document.getElementById(`video-${attemptId}`);
                 const snap = document.getElementById(`snap-${attemptId}`);

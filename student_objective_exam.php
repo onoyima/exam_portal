@@ -1191,7 +1191,9 @@ $current_index = 0;
       });
     }
 
+    let globalStatusModalInstance = null;
     function showGlobalAlert(title, message, type, callback) {
+      if (isLocked && !isReviewMode && title !== 'Final Result') return; // Don't show alerts if locked unless result
       const modal = document.getElementById('globalStatusModal');
       const titleEl = document.getElementById('globalModalTitle');
       const messageEl = document.getElementById('globalModalMessage');
@@ -1219,12 +1221,15 @@ $current_index = 0;
         okBtn.classList.add('btn-danger');
       }
 
-      const bsModal = new bootstrap.Modal(modal);
+      if (!globalStatusModalInstance) {
+        globalStatusModalInstance = new bootstrap.Modal(modal);
+      }
+
       okBtn.onclick = () => {
-        bsModal.hide();
+        globalStatusModalInstance.hide();
         if (callback) callback();
       };
-      bsModal.show();
+      globalStatusModalInstance.show();
     }
 
     function confirmGlobalAction(title, message, type, confirmText, callback) {
@@ -1326,8 +1331,14 @@ $current_index = 0;
 
           // Remove blocker only on success
           if (blocker) {
+            blocker.style.pointerEvents = 'none';
             blocker.style.opacity = '0';
-            setTimeout(() => blocker.remove(), 500);
+            setTimeout(() => {
+              blocker.remove();
+              startExamFlow();
+            }, 500);
+          } else {
+            startExamFlow();
           }
 
           console.log("Webcam initialized" + (pLive ? " (Live Streaming Enabled)" : " (Snapshot Mode)"));
@@ -1351,10 +1362,10 @@ $current_index = 0;
         if (data.signals) {
           for (const signal of data.signals) {
             lastSignalId = signal.id;
-            handleAdminSignal(signal);
+            handleAdminSignal(signal).catch(e => console.error("Signal handle error:", e));
           }
         }
-      }, 3000);
+      }, 1000); // Polling every 1 second for faster handshake
     }
 
     async function handleAdminSignal(signal) {
@@ -1498,40 +1509,39 @@ $current_index = 0;
       }
     }
 
-    // Initialization
+    // Refactored flow: Initialization helpers
+    function startExamFlow() {
+      // Show questions and start clock
+      if (questions.length > 0) renderQuestion(currentIndex);
+      startTimer();
+      // Only show Strict Mode alert if needed (needs user gesture for FS)
+      if (pFS && !isReviewMode) {
+        showGlobalAlert("Strict Mode", "Fullscreen is required to continue. Click OK to establish a secure workspace.", "info", resumeExam);
+      }
+    }
+
     window.onload = function () {
       if (!isReviewMode) {
         if (pBrowser) {
           const ua = navigator.userAgent;
           if (!/Chrome/.test(ua) && !/Edg/.test(ua)) {
-            showGlobalAlert("Browser Warning", "Please use Chrome or Edge for the best experience.", "warning");
+            showGlobalAlert("Browser Warning", "Please use Chrome or Edge for the best experience (Detected: " + ua.split(' ').pop() + ").", "warning");
           }
         }
 
         if (pWebcam) {
+          // initWebcam will trigger startExamFlow() on success
           initWebcam();
-          // We do NOT call renderQuestion or startTimer here yet, 
-          // the blocker removal logic handles that mentally, but wait, 
-          // actually we can render question but it will be hidden behind blocker.
         } else {
-          // No webcam required, show immediately
-          if (questions.length > 0) renderQuestion(0);
+          startExamFlow();
         }
-
-        if (pFS) {
-          showGlobalAlert("Strict Mode", "Fullscreen is required. Click OK to start.", "info", resumeExam);
-        }
-        setInterval(() => sendPing(proctorStatus), 15000);
       } else {
-        // Review mode doesn't need webcam
+        // Review mode: simple setup
         if (questions.length > 0) renderQuestion(0);
+        startTimer();
       }
-      startTimer();
-      // If webcam required, renderQuestion will be called after camera success? 
-      // Actually, it's safer to render it now but keep it hidden by blocker.
-      if (pWebcam && !isReviewMode) {
-        if (questions.length > 0) renderQuestion(0);
-      }
+      
+      setInterval(() => sendPing(proctorStatus), 15000);
     };
 
     document.getElementById('resumeExamBtn').onclick = resumeExam;

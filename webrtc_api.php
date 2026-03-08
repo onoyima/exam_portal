@@ -18,9 +18,15 @@ if ($action === 'send') {
 
 if ($action === 'get') {
     $last_id = intval($_GET['last_id'] ?? 0);
-    $other_role = ($role === 'student') ? 'admin' : 'student';
-    $stmt = $db->prepare("SELECT * FROM webrtc_signals WHERE attempt_id = ? AND from_role = ? AND id > ? ORDER BY id ASC");
-    $stmt->execute([$attempt_id, $other_role, $last_id]);
+    // If you are a student, you get signals from anyone who is NOT a student (admin/examiner)
+    // If you are not a student, you get signals only from the student
+    if ($role === 'student') {
+        $stmt = $db->prepare("SELECT * FROM webrtc_signals WHERE attempt_id = ? AND from_role != 'student' AND id > ? ORDER BY id ASC");
+        $stmt->execute([$attempt_id, $last_id]);
+    } else {
+        $stmt = $db->prepare("SELECT * FROM webrtc_signals WHERE attempt_id = ? AND from_role = 'student' AND id > ? ORDER BY id ASC");
+        $stmt->execute([$attempt_id, $last_id]);
+    }
     $signals = $stmt->fetchAll(PDO::FETCH_ASSOC);
     echo json_encode(['success' => true, 'signals' => $signals]);
     exit;
