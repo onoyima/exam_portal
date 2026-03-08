@@ -577,7 +577,7 @@ $current_index = 0;
 
 <body class="bg-light">
   <!-- Proctoring Blocker Overlay -->
-  <?php if ($exam['proctor_webcam'] || $exam['proctor_live_video']): ?>
+  <?php if (($exam['proctor_webcam'] || $exam['proctor_live_video']) && !$is_review_mode): ?>
     <div id="proctorBlocker"
       class="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-white"
       style="z-index: 9999;">
