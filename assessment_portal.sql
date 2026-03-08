@@ -25,22 +25,22 @@ DELIMITER $$
 --
 -- Procedures
 --
-CREATE DEFINER=`root`@`localhost` PROCEDURE `LogExport` (IN `p_user_id` INT, IN `p_username` VARCHAR(100), IN `p_export_type` VARCHAR(100), IN `p_file_name` VARCHAR(255), IN `p_record_count` INT, IN `p_ip_address` VARCHAR(45))   BEGIN
+CREATE  PROCEDURE `LogExport` (IN `p_user_id` INT, IN `p_username` VARCHAR(100), IN `p_export_type` VARCHAR(100), IN `p_file_name` VARCHAR(255), IN `p_record_count` INT, IN `p_ip_address` VARCHAR(45))   BEGIN
   INSERT INTO export_history (user_id, username, export_type, file_name, record_count, ip_address)
   VALUES (p_user_id, p_username, p_export_type, p_file_name, p_record_count, p_ip_address);
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `LogLogin` (IN `p_user_id` INT, IN `p_username` VARCHAR(100), IN `p_user_type` VARCHAR(20), IN `p_ip_address` VARCHAR(45), IN `p_user_agent` TEXT, IN `p_status` VARCHAR(20))   BEGIN
+CREATE  PROCEDURE `LogLogin` (IN `p_user_id` INT, IN `p_username` VARCHAR(100), IN `p_user_type` VARCHAR(20), IN `p_ip_address` VARCHAR(45), IN `p_user_agent` TEXT, IN `p_status` VARCHAR(20))   BEGIN
   INSERT INTO login_history (user_id, username, user_type, ip_address, user_agent, status)
   VALUES (p_user_id, p_username, p_user_type, p_ip_address, p_user_agent, p_status);
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `LogSystemEvent` (IN `p_event_type` VARCHAR(100), IN `p_event_description` TEXT, IN `p_severity` VARCHAR(20), IN `p_user_id` INT, IN `p_username` VARCHAR(100), IN `p_ip_address` VARCHAR(45))   BEGIN
+CREATE  PROCEDURE `LogSystemEvent` (IN `p_event_type` VARCHAR(100), IN `p_event_description` TEXT, IN `p_severity` VARCHAR(20), IN `p_user_id` INT, IN `p_username` VARCHAR(100), IN `p_ip_address` VARCHAR(45))   BEGIN
   INSERT INTO system_events (event_type, event_description, severity, user_id, username, ip_address)
   VALUES (p_event_type, p_event_description, p_severity, p_user_id, p_username, p_ip_address);
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `SetAuditContext` (IN `p_user_id` INT, IN `p_user_type` VARCHAR(20), IN `p_username` VARCHAR(100), IN `p_ip_address` VARCHAR(45), IN `p_user_agent` TEXT)   BEGIN
+CREATE  PROCEDURE `SetAuditContext` (IN `p_user_id` INT, IN `p_user_type` VARCHAR(20), IN `p_username` VARCHAR(100), IN `p_ip_address` VARCHAR(45), IN `p_user_agent` TEXT)   BEGIN
   SET @current_user_id = p_user_id;
   SET @current_user_type = p_user_type;
   SET @current_username = p_username;
