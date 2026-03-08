@@ -4,8 +4,8 @@ require 'db.php';
 header('Content-Type: application/json');
 
 $action = $_GET['action'] ?? '';
-$attempt_id = intval($_POST['attempt_id'] ?? 0);
-$role = $_SESSION['role'] ?? ($_SESSION['student_id'] ? 'student' : 'unknown');
+$attempt_id = intval($_POST['attempt_id'] ?? ($_GET['attempt_id'] ?? 0));
+$role = $_SESSION['role'] ?? (isset($_SESSION['student_id']) ? 'student' : 'unknown');
 
 if ($action === 'send') {
     $type = $_POST['type'] ?? '';

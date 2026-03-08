@@ -277,7 +277,7 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
             }
         }
     </style>
-  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+    <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body class="bg-light">
@@ -355,7 +355,8 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                                     <img src="<?= $att['webcam_snapshot'] ?: 'assets/img/user_placeholder.png' ?>"
                                         class="placeholder-snap zoom-img" id="snap-<?= $att['id'] ?>"
                                         onclick="zoomImage(this.src, '<?= addslashes($att['student_name']) ?>')">
-                                    <video id="video-<?= $att['id'] ?>" class="student-video" autoplay playsinline></video>
+                                    <video id="video-<?= $att['id'] ?>" class="student-video" autoplay playsinline
+                                        muted></video>
 
                                     <div class="video-status-overlay">
                                         <span id="live-tag-<?= $att['id'] ?>" class="live-tag">LIVE VIDEO</span>
@@ -496,7 +497,7 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
             if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Syncing...';
 
             // Clear old signals
-            await fetch(`webrtc_api.php?action=clear&attempt_id=${attemptId}`);
+            await fetch(`webrtc_api?action=clear&attempt_id=${attemptId}`);
 
             const pc = new RTCPeerConnection(rtcConfig);
             activeConnections[attemptId] = pc;
@@ -507,7 +508,9 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                 const liveTag = document.getElementById(`live-tag-${attemptId}`);
 
                 video.srcObject = event.streams[0];
+                video.muted = true;
                 video.style.display = 'block';
+                video.play().catch(e => console.error("Autoplay prevented:", e));
                 if (snap) snap.style.display = 'none';
                 if (liveTag) liveTag.style.display = 'block';
                 if (btn) btn.style.display = 'none';
@@ -526,7 +529,7 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
             // Start Monitoring Answer
             lastSignalIds[attemptId] = 0;
             const checkSignals = setInterval(async () => {
-                const resp = await fetch(`webrtc_api.php?action=get&attempt_id=${attemptId}&last_id=${lastSignalIds[attemptId]}`);
+                const resp = await fetch(`webrtc_api?action=get&attempt_id=${attemptId}&last_id=${lastSignalIds[attemptId]}`);
                 const data = await resp.json();
                 if (data.signals) {
                     for (const signal of data.signals) {
