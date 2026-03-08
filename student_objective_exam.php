@@ -1435,9 +1435,18 @@ $current_index = 0;
         .then(data => {
           if (data.status === 'TERMINATE' || data.status === 'FORCED_LOGOUT') {
             isLocked = true;
-            alert(data.message);
             window.onbeforeunload = null;
-            location.href = (data.status === 'TERMINATE') ? 'student_dashboard.php' : 'logout.php';
+            const target = (data.status === 'TERMINATE') ? 'student_dashboard.php' : 'logout.php';
+            // Use window.alert (which we overrode) and handle redirect in its callback/then
+            Swal.fire({
+              title: 'Security Alert',
+              text: data.message,
+              icon: 'error',
+              confirmButtonColor: '#092c19'
+            }).then(() => {
+              location.href = target;
+            });
+            return;
           }
 
           if (data.violation_count !== undefined) {
@@ -1460,8 +1469,10 @@ $current_index = 0;
       }
     }
 
+    let isResumingFlag = false;
     function handleViolation(type = "Unknown", details = "") {
-      if (isLocked || isReviewMode || (!isWebcamReady && pWebcam)) return;
+      if (isLocked || isReviewMode || isResumingFlag || (!isWebcamReady && pWebcam)) return;
+
       proctorStatus = 'blur';
       const overlay = document.getElementById('violationOverlay');
       const timerDisplay = document.getElementById('violationTimer');
@@ -1478,13 +1489,27 @@ $current_index = 0;
     }
 
     function resumeExam() {
-      if (isLocked) return;
-      if (pFS) document.documentElement.requestFullscreen().catch(() => { });
+      if (isLocked || isResumingFlag) return;
+      isResumingFlag = true;
+
+      // Request Fullscreen - User gesture provided via button click or Modal OK click
+      if (pFS) {
+        document.documentElement.requestFullscreen().catch((e) => {
+          console.warn("Fullscreen request failed:", e);
+        });
+      }
+
       const overlay = document.getElementById('violationOverlay');
       if (overlay) overlay.style.display = 'none';
       if (violationTimerInterval) clearInterval(violationTimerInterval);
+
       proctorStatus = 'active';
       sendPing('active');
+
+      // Allow state to settle before accepting new violations (e.g. exit fullscreen transitions)
+      setTimeout(() => {
+        isResumingFlag = false;
+      }, 1500);
     }
 
     // Event Listeners for Proctoring
@@ -1540,11 +1565,15 @@ $current_index = 0;
         if (questions.length > 0) renderQuestion(0);
         startTimer();
       }
-      
+
       setInterval(() => sendPing(proctorStatus), 15000);
     };
 
-    document.getElementById('resumeExamBtn').onclick = resumeExam;
+    // Attach Recovery Button
+    const resBtn = document.getElementById('resumeExamBtn');
+    if (resBtn) {
+      resBtn.onclick = resumeExam;
+    }
   </script>
 
   <!-- Global Modals System -->
