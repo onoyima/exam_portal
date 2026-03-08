@@ -1342,7 +1342,6 @@ $current_index = 0;
           }
 
           console.log("Webcam initialized" + (pLive ? " (Live Streaming Enabled)" : " (Snapshot Mode)"));
-          if (pLive) startSignaling();
         })
         .catch(err => {
           console.error("Webcam error:", err);
@@ -1455,6 +1454,10 @@ $current_index = 0;
             const progressBar = document.getElementById('violationProgressBar');
             if (countBadge) countBadge.textContent = `${violationCount} / ${maxViolations}`;
             if (progressBar) progressBar.style.width = (violationCount / maxViolations * 100) + '%';
+          }
+
+          if (data.is_live_requested && pLive) {
+            startSignaling();
           }
 
           if (data.warning) showAdminWarning(data.warning);

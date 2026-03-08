@@ -32,6 +32,13 @@ if ($action === 'get') {
     exit;
 }
 
+if ($action === 'request_live') {
+    $stmt = $db->prepare("UPDATE objective_attempts SET is_live_requested = 1 WHERE id = ?");
+    $stmt->execute([$attempt_id]);
+    echo json_encode(['success' => true]);
+    exit;
+}
+
 if ($action === 'clear') {
     $stmt = $db->prepare("DELETE FROM webrtc_signals WHERE attempt_id = ?");
     $stmt->execute([$attempt_id]);

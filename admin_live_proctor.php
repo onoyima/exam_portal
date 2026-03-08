@@ -503,6 +503,10 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
             const btn = document.querySelector(`#card-${attemptId} .btn-live`);
             if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Syncing...';
 
+            // PHASE 3: SCALE OPTIMIZATION
+            // First, trigger the student to start their signaling loop
+            await fetch(`webrtc_api?action=request_live&attempt_id=${attemptId}`);
+
             // We don't clear signals anymore to avoid race conditions
             // signals are attempt-specific anyway.
 

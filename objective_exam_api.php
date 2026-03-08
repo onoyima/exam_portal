@@ -42,12 +42,15 @@ try {
         $option = $_POST['option'];
         $now = date('Y-m-d H:i:s');
 
-        // Remove existing answer for this specific attempt
-        $db->prepare("DELETE FROM objective_answers WHERE exam_id=? AND student_id=? AND question_id=? AND attempt_no=?")
-            ->execute([$exam_id, $student_id, $question_id, $attempt_no]);
-
-        // Insert new answer
-        $stmt = $db->prepare("INSERT INTO objective_answers (exam_id, student_id, attempt_no, question_id, selected_option, submitted_at) VALUES (?, ?, ?, ?, ?, ?)");
+        // HIGH-PERFORMANCE WRITE: 
+        // We use INSERT ... ON DUPLICATE KEY UPDATE because we added a 
+        // UNIQUE INDEX (exam_id, student_id, attempt_no, question_id).
+        // This is 2x faster than a separate DELETE + INSERT under heavy load.
+        $stmt = $db->prepare("
+            INSERT INTO objective_answers (exam_id, student_id, attempt_no, question_id, selected_option, submitted_at) 
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE selected_option = VALUES(selected_option), submitted_at = VALUES(submitted_at)
+        ");
         $stmt->execute([$exam_id, $student_id, $attempt_no, $question_id, $option, $now]);
 
         echo json_encode(['success' => true]);

@@ -93,14 +93,17 @@ if ($violation_type) {
     }
 }
 
-// Get current violation count for the student to keep UI in sync
-$count_stmt = $db->prepare("SELECT violation_count FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ?");
+// Get current violation count and live request status
+$count_stmt = $db->prepare("SELECT violation_count, is_live_requested FROM objective_attempts WHERE id = (SELECT id FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ? AND finished_at IS NULL LIMIT 1)");
 $count_stmt->execute([$exam_id, $student_id, $attempt_no]);
-$current_count = $count_stmt->fetchColumn() ?: 0;
+$attempt_info = $count_stmt->fetch(PDO::FETCH_ASSOC);
+$current_count = $attempt_info['violation_count'] ?? 0;
+$is_live_requested = $attempt_info['is_live_requested'] ?? 0;
 
 echo json_encode([
     'status' => 'OK',
     'violation_count' => $current_count,
+    'is_live_requested' => (int) $is_live_requested,
     'warning' => $warning_to_send,
     'time_ping' => date('H:i:s')
 ]);
