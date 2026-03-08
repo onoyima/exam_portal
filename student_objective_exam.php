@@ -589,9 +589,11 @@ $current_index = 0;
         <p class="text-muted mb-4" id="proctorBlockerMsg">Detecting your camera and establishing a secure connection.
           Please stay on this page.</p>
         <div id="proctorErrorBtn" class="d-none">
-          <button onclick="location.reload()" class="btn btn-primary rounded-pill px-5 py-3 fw-bold">RETRY
-            CONNECTION</button>
-          <a href="student_dashboard" class="btn btn-link text-muted mt-3 d-block">Exit to Dashboard</a>
+          <button onclick="initWebcam()" class="btn btn-primary rounded-pill px-5 py-3 fw-bold shadow">
+            <i class="bi bi-camera-fill me-2"></i> GRANT CAMERA PERMISSION
+          </button>
+          <a href="student_dashboard" class="btn btn-link text-muted mt-3 d-block text-decoration-none fw-bold">Exit to
+            Dashboard</a>
         </div>
       </div>
     </div>
@@ -1275,6 +1277,7 @@ $current_index = 0;
     let proctorStatus = 'active';
     let violationTimerInterval = null;
     let isLocked = false;
+    let isWebcamReady = false; // Prevents violations during initialization
 
     // Proctor Ping & WebRTC Live Logic
     let webcamStream = null;
@@ -1319,6 +1322,7 @@ $current_index = 0;
           webcamStream = stream;
           webcamVideo.srcObject = stream;
           webcamVideo.play();
+          isWebcamReady = true; // Security established, now we can track violations
 
           // Remove blocker only on success
           if (blocker) {
@@ -1444,7 +1448,7 @@ $current_index = 0;
     }
 
     function handleViolation(type = "Unknown", details = "") {
-      if (isLocked || isReviewMode) return;
+      if (isLocked || isReviewMode || (!isWebcamReady && pWebcam)) return;
       proctorStatus = 'blur';
       const overlay = document.getElementById('violationOverlay');
       const timerDisplay = document.getElementById('violationTimer');
