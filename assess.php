@@ -42,19 +42,23 @@ try {
         FROM students s 
         JOIN exam_students es ON s.id = es.student_id 
         WHERE (
-          s.name LIKE :search 
-          OR s.username LIKE :search
-          OR s.matric_no LIKE :search 
-          OR RIGHT(s.matric_no, 6) = :exact 
-          OR RIGHT(s.matric_no, 5) = :exact 
-          OR RIGHT(s.matric_no, 4) = :exact
+          s.name LIKE :search1 
+          OR s.username LIKE :search2
+          OR s.matric_no LIKE :search3 
+          OR RIGHT(s.matric_no, 6) = :exact1 
+          OR RIGHT(s.matric_no, 5) = :exact2 
+          OR RIGHT(s.matric_no, 4) = :exact3
         ) 
         AND es.exam_id = :exam_id 
         LIMIT 1
       ");
       $stmt->execute([
-        ':search' => $searchParam,
-        ':exact' => $search,
+        ':search1' => $searchParam,
+        ':search2' => $searchParam,
+        ':search3' => $searchParam,
+        ':exact1' => $search,
+        ':exact2' => $search,
+        ':exact3' => $search,
         ':exam_id' => $selected_exam
       ]);
       $stu = $stmt->fetch();
