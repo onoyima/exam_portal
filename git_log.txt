@@ -1,0 +1,3 @@
+﻿f0d34d7 session
+b342e36 Compete scalability suite: On-demand signaling and high-performance answer writes
+a4f52f3 Phase 2: Offload webcam snapshots to filesystem for high concurrency

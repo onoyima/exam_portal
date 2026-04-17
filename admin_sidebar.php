@@ -119,6 +119,10 @@
               <i class="bx bx-calculator me-2"></i><span>Score Summary (All)</span></a></li>
           <li><a href="report" class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'report.php' ? ' active' : '' ?>">
               <i class="bx bx-file me-2"></i><span>Generate Reports</span></a></li>
+          <li><a href="admin_session_report"
+              class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_session_report.php' ? ' active' : '' ?>">
+              <i class="bx bx-bar-chart-alt-2 me-2 text-primary"></i><span>Session Reports</span>
+              <span class="badge bg-primary-subtle text-primary ms-auto" style="font-size:0.6rem;">NEW</span></a></li>
         </ul>
       </div>
     </li>
@@ -136,6 +140,10 @@
           <li><a href="admin_live_proctor"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_live_proctor.php' ? ' active' : '' ?>">
               <i class="bx bx-broadcast text-danger me-2"></i><span>Live Monitor</span></a></li>
+          <li><a href="admin_devices"
+              class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_devices.php' ? ' active' : '' ?>">
+              <i class="bx bx-devices text-warning me-2"></i><span>Device Auth</span>
+              <span class="badge bg-warning-subtle text-warning ms-auto" style="font-size:0.6rem;">NEW</span></a></li>
           <li><a href="admin_exam_audit"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_exam_audit.php' ? ' active' : '' ?>">
               <i class="bx bx-shield-quarter me-2"></i><span>Exam Audit Trail</span></a></li>
@@ -155,6 +163,9 @@
         <ul class="nav flex-column ps-2">
           <li><a href="chat" class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'chat.php' ? ' active' : '' ?>">
               <i class="bx bx-message-square-dots me-2"></i><span>Staff Chat</span></a></li>
+          <li><a href="admin_portal_settings"
+              class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_portal_settings.php' ? ' active' : '' ?>">
+              <i class="bx bx-palette me-2 text-info"></i><span>Portal Customization</span></a></li>
           <li><a href="admin_audit_trail"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_audit_trail.php' ? ' active' : '' ?>">
               <i class="bx bx-shield-alt-2 me-2"></i><span>Audit Trail</span></a></li>

@@ -36,8 +36,12 @@ if ($snapshot_base64 && strpos($snapshot_base64, 'data:image') === 0) {
         if (isset($data[1])) {
             $decoded = base64_decode($data[1]);
             if ($decoded) {
-                $filename = "snap_" . $student_id . "_" . $exam_id . "_" . time() . ".jpg";
-                $full_path = "uploads/snapshots/" . $filename;
+                $dir = "uploads/snapshots";
+                if (!is_dir($dir)) {
+                    mkdir($dir, 0777, true);
+                }
+                $filename = "snap_" . $student_id . "_" . $exam_id . ".jpg";
+                $full_path = $dir . "/" . $filename;
                 if (file_put_contents($full_path, $decoded)) {
                     $snapshot_path = $full_path;
                 }
@@ -82,13 +86,28 @@ if ($violation_type) {
     $inc_stmt = $db->prepare("UPDATE objective_attempts SET violation_count = violation_count + 1 WHERE exam_id = ? AND student_id = ? AND attempt_no = ? AND finished_at IS NULL");
     $inc_stmt->execute([$exam_id, $student_id, $attempt_no]);
 
-    // Check total violations
-    $check_stmt = $db->prepare("SELECT violation_count FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ?");
+    // Check total violations or if record is already locked
+    $check_stmt = $db->prepare("SELECT violation_count, is_locked FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ?");
     $check_stmt->execute([$exam_id, $student_id, $attempt_no]);
-    $count = $check_stmt->fetchColumn();
+    $attempt_record = $check_stmt->fetch(PDO::FETCH_ASSOC);
+    $count = $attempt_record['violation_count'] ?? 0;
+    $is_db_locked = $attempt_record['is_locked'] ?? 0;
 
-    if ($count >= 3) {
-        echo json_encode(['status' => 'TERMINATE', 'message' => 'Multiple violations detected. Your exam has been automatically submitted.', 'count' => $count]);
+    if ($count >= 5 || $is_db_locked) {
+        // Phase 4: Enforce persistent lock
+        if (!$is_db_locked) {
+            $db->prepare("UPDATE objective_attempts SET is_locked = 1 WHERE exam_id = ? AND student_id = ? AND attempt_no = ?")->execute([$exam_id, $student_id, $attempt_no]);
+        }
+        echo json_encode(['status' => 'LOCKED', 'message' => 'Your exam interface has been locked due to repeated security violations. Please contact the administrator.', 'count' => $count]);
+        exit;
+    }
+} else {
+    // Even if no violation was just sent, check if it's already locked from a previous ping or manual lock
+    $check_stmt = $db->prepare("SELECT violation_count, is_locked FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ?");
+    $check_stmt->execute([$exam_id, $student_id, $attempt_no]);
+    $attempt_record = $check_stmt->fetch(PDO::FETCH_ASSOC);
+    if ($attempt_record && ($attempt_record['is_locked'] || $attempt_record['violation_count'] >= 5)) {
+        echo json_encode(['status' => 'LOCKED', 'message' => 'Your exam interface is locked.', 'count' => $attempt_record['violation_count']]);
         exit;
     }
 }
@@ -100,10 +119,23 @@ $attempt_info = $count_stmt->fetch(PDO::FETCH_ASSOC);
 $current_count = $attempt_info['violation_count'] ?? 0;
 $is_live_requested = $attempt_info['is_live_requested'] ?? 0;
 
+// 4. Remote Command Check (Admin-to-Student)
+$remote_cmd = null;
+$cmd_stmt = $db->prepare("SELECT remote_command FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ? AND finished_at IS NULL");
+$cmd_stmt->execute([$exam_id, $student_id, $attempt_no]);
+$cmd_res = $cmd_stmt->fetch(PDO::FETCH_ASSOC);
+
+if ($cmd_res && $cmd_res['remote_command']) {
+    $remote_cmd = $cmd_res['remote_command'];
+    // Clear command immediately after consumption
+    $db->prepare("UPDATE objective_attempts SET remote_command = NULL WHERE exam_id = ? AND student_id = ? AND attempt_no = ?")->execute([$exam_id, $student_id, $attempt_no]);
+}
+
 echo json_encode([
     'status' => 'OK',
     'violation_count' => $current_count,
     'is_live_requested' => (int) $is_live_requested,
     'warning' => $warning_to_send,
+    'remote_command' => $remote_cmd,
     'time_ping' => date('H:i:s')
 ]);

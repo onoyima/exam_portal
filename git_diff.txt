@@ -1,0 +1,299 @@
+﻿diff --git a/admin_live_proctor.php b/admin_live_proctor.php
+index 8022c5c..0dd0418 100644
+--- a/admin_live_proctor.php
++++ b/admin_live_proctor.php
+@@ -352,8 +352,15 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
+                         <div class="col-12 col-md-6 col-lg-4" id="card-<?= $att['id'] ?>">
+                             <div class="card proctor-card shadow-sm h-100">
+                                 <div class="video-wrapper">
+-                                    <img src="<?= $att['webcam_snapshot'] ?: 'assets/img/user_placeholder.png' ?>"
+-                                        class="placeholder-snap zoom-img" id="snap-<?= $att['id'] ?>"
++                                    <?php
++                                    $snap_src = 'assets/img/user_placeholder.png';
++                                    if ($att['snapshot_path'] && file_exists($att['snapshot_path'])) {
++                                        $snap_src = $att['snapshot_path'];
++                                    } elseif ($att['webcam_snapshot']) {
++                                        $snap_src = $att['webcam_snapshot'];
++                                    }
++                                    ?>
++                                    <img src="<?= $snap_src ?>" class="placeholder-snap zoom-img" id="snap-<?= $att['id'] ?>"
+                                         onclick="zoomImage(this.src, '<?= addslashes($att['student_name']) ?>')">
+                                     <video id="video-<?= $att['id'] ?>" class="student-video" autoplay playsinline
+                                         muted></video>
+@@ -496,6 +503,10 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
+             const btn = document.querySelector(`#card-${attemptId} .btn-live`);
+             if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Syncing...';
+ 
++            // PHASE 3: SCALE OPTIMIZATION
++            // First, trigger the student to start their signaling loop
++            await fetch(`webrtc_api?action=request_live&attempt_id=${attemptId}`);
++
+             // We don't clear signals anymore to avoid race conditions
+             // signals are attempt-specific anyway.
+ 
+diff --git a/assess.php b/assess.php
+index 7b27c81..5894d20 100644
+--- a/assess.php
++++ b/assess.php
+@@ -42,19 +42,23 @@ try {
+         FROM students s 
+         JOIN exam_students es ON s.id = es.student_id 
+         WHERE (
+-          s.name LIKE :search 
+-          OR s.username LIKE :search
+-          OR s.matric_no LIKE :search 
+-          OR RIGHT(s.matric_no, 6) = :exact 
+-          OR RIGHT(s.matric_no, 5) = :exact 
+-          OR RIGHT(s.matric_no, 4) = :exact
++          s.name LIKE :search1 
++          OR s.username LIKE :search2
++          OR s.matric_no LIKE :search3 
++          OR RIGHT(s.matric_no, 6) = :exact1 
++          OR RIGHT(s.matric_no, 5) = :exact2 
++          OR RIGHT(s.matric_no, 4) = :exact3
+         ) 
+         AND es.exam_id = :exam_id 
+         LIMIT 1
+       ");
+       $stmt->execute([
+-        ':search' => $searchParam,
+-        ':exact' => $search,
++        ':search1' => $searchParam,
++        ':search2' => $searchParam,
++        ':search3' => $searchParam,
++        ':exact1' => $search,
++        ':exact2' => $search,
++        ':exact3' => $search,
+         ':exam_id' => $selected_exam
+       ]);
+       $stu = $stmt->fetch();
+diff --git a/db.php b/db.php
+new file mode 100644
+index 0000000..90d150f
+--- /dev/null
++++ b/db.php
+@@ -0,0 +1,14 @@
++<?php
++$host = 'localhost';
++$dbname = 'assessment_db';
++$user = 'root';      // Change to your DB username
++$pass = '';          // Change to your DB password
++
++try {
++    $db = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass);
++    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
++} catch (PDOException $e) {
++    die("Database connection failed: " . $e->getMessage());
++}
++require_once 'exam_logic.php';
++?>
+diff --git a/objective_exam_api.php b/objective_exam_api.php
+index f0c2e40..8907480 100644
+--- a/objective_exam_api.php
++++ b/objective_exam_api.php
+@@ -42,12 +42,15 @@ try {
+         $option = $_POST['option'];
+         $now = date('Y-m-d H:i:s');
+ 
+-        // Remove existing answer for this specific attempt
+-        $db->prepare("DELETE FROM objective_answers WHERE exam_id=? AND student_id=? AND question_id=? AND attempt_no=?")
+-            ->execute([$exam_id, $student_id, $question_id, $attempt_no]);
+-
+-        // Insert new answer
+-        $stmt = $db->prepare("INSERT INTO objective_answers (exam_id, student_id, attempt_no, question_id, selected_option, submitted_at) VALUES (?, ?, ?, ?, ?, ?)");
++        // HIGH-PERFORMANCE WRITE: 
++        // We use INSERT ... ON DUPLICATE KEY UPDATE because we added a 
++        // UNIQUE INDEX (exam_id, student_id, attempt_no, question_id).
++        // This is 2x faster than a separate DELETE + INSERT under heavy load.
++        $stmt = $db->prepare("
++            INSERT INTO objective_answers (exam_id, student_id, attempt_no, question_id, selected_option, submitted_at) 
++            VALUES (?, ?, ?, ?, ?, ?)
++            ON DUPLICATE KEY UPDATE selected_option = VALUES(selected_option), submitted_at = VALUES(submitted_at)
++        ");
+         $stmt->execute([$exam_id, $student_id, $attempt_no, $question_id, $option, $now]);
+ 
+         echo json_encode(['success' => true]);
+diff --git a/proctor_ping.php b/proctor_ping.php
+index 42bdc99..9c823f3 100644
+--- a/proctor_ping.php
++++ b/proctor_ping.php
+@@ -26,11 +26,34 @@ if ($stored_session !== session_id() && $stored_session !== null) {
+ }
+ 
+ // 2. Update Heartbeat, Snapshot, and Proctor Status
+-$snapshot = isset($_POST['webcam_snapshot']) ? $_POST['webcam_snapshot'] : null;
++$snapshot_base64 = isset($_POST['webcam_snapshot']) ? $_POST['webcam_snapshot'] : null;
++$snapshot_path = null;
+ 
+-if ($snapshot) {
+-    $update = $db->prepare("UPDATE objective_attempts SET last_active = NOW(), proctor_status = ?, webcam_snapshot = ? WHERE exam_id = ? AND student_id = ? AND attempt_no = ? AND finished_at IS NULL");
+-    $update->execute([$status, $snapshot, $exam_id, $student_id, $attempt_no]);
++if ($snapshot_base64 && strpos($snapshot_base64, 'data:image') === 0) {
++    try {
++        // Process Base64 to File
++        $data = explode(',', $snapshot_base64);
++        if (isset($data[1])) {
++            $decoded = base64_decode($data[1]);
++            if ($decoded) {
++                $filename = "snap_" . $student_id . "_" . $exam_id . "_" . time() . ".jpg";
++                $full_path = "uploads/snapshots/" . $filename;
++                if (file_put_contents($full_path, $decoded)) {
++                    $snapshot_path = $full_path;
++                }
++            }
++        }
++    } catch (Exception $e) {
++        // Silently fail if file write fails, continue with status update
++        error_log("Snapshot save error: " . $e->getMessage());
++    }
++}
++
++// Update DB - Using path instead of blob for performance
++if ($snapshot_path) {
++    // Clear the binary blob (webcam_snapshot) and use the path instead
++    $update = $db->prepare("UPDATE objective_attempts SET last_active = NOW(), proctor_status = ?, snapshot_path = ?, webcam_snapshot = NULL WHERE exam_id = ? AND student_id = ? AND attempt_no = ? AND finished_at IS NULL");
++    $update->execute([$status, $snapshot_path, $exam_id, $student_id, $attempt_no]);
+ } else {
+     $update = $db->prepare("UPDATE objective_attempts SET last_active = NOW(), proctor_status = ? WHERE exam_id = ? AND student_id = ? AND attempt_no = ? AND finished_at IS NULL");
+     $update->execute([$status, $exam_id, $student_id, $attempt_no]);
+@@ -70,14 +93,17 @@ if ($violation_type) {
+     }
+ }
+ 
+-// Get current violation count for the student to keep UI in sync
+-$count_stmt = $db->prepare("SELECT violation_count FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ?");
++// Get current violation count and live request status
++$count_stmt = $db->prepare("SELECT violation_count, is_live_requested FROM objective_attempts WHERE id = (SELECT id FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ? AND finished_at IS NULL LIMIT 1)");
+ $count_stmt->execute([$exam_id, $student_id, $attempt_no]);
+-$current_count = $count_stmt->fetchColumn() ?: 0;
++$attempt_info = $count_stmt->fetch(PDO::FETCH_ASSOC);
++$current_count = $attempt_info['violation_count'] ?? 0;
++$is_live_requested = $attempt_info['is_live_requested'] ?? 0;
+ 
+ echo json_encode([
+     'status' => 'OK',
+     'violation_count' => $current_count,
++    'is_live_requested' => (int) $is_live_requested,
+     'warning' => $warning_to_send,
+     'time_ping' => date('H:i:s')
+ ]);
+diff --git a/student_objective_exam.php b/student_objective_exam.php
+index 8f9b4cf..134d9b2 100644
+--- a/student_objective_exam.php
++++ b/student_objective_exam.php
+@@ -1342,7 +1342,6 @@ $current_index = 0;
+           }
+ 
+           console.log("Webcam initialized" + (pLive ? " (Live Streaming Enabled)" : " (Snapshot Mode)"));
+-          if (pLive) startSignaling();
+         })
+         .catch(err => {
+           console.error("Webcam error:", err);
+@@ -1457,6 +1456,10 @@ $current_index = 0;
+             if (progressBar) progressBar.style.width = (violationCount / maxViolations * 100) + '%';
+           }
+ 
++          if (data.is_live_requested && pLive) {
++            startSignaling();
++          }
++
+           if (data.warning) showAdminWarning(data.warning);
+         });
+     }
+diff --git a/tmp/migrate_answers_index.php b/tmp/migrate_answers_index.php
+new file mode 100644
+index 0000000..f7fef13
+--- /dev/null
++++ b/tmp/migrate_answers_index.php
+@@ -0,0 +1,27 @@
++<?php
++require 'db.php';
++
++try {
++    // 1. Ensure objective_answers has all required columns (audit for scale)
++    $db->exec("ALTER TABLE `objective_answers` ADD COLUMN IF NOT EXISTS `attempt_no` INT DEFAULT 1 AFTER `student_id`;");
++
++    // 2. Add composite UNIQUE index. 
++    // This allows us to use "INSERT ... ON DUPLICATE KEY UPDATE"
++    // It also allows the database to find existing records for an actual student/question combo much faster.
++
++    // Check if index already exists
++    $idx_check = $db->query("SHOW INDEX FROM `objective_answers` WHERE Key_name = 'idx_unique_exam_attempt_question'");
++    if ($idx_check->rowCount() === 0) {
++        // Clean up duplicates if any before adding unique index (safety first)
++        echo "Cleaning pre-existing duplicate answers to prepare for unique index...\n";
++        $db->exec("DELETE t1 FROM objective_answers t1 INNER JOIN objective_answers t2 WHERE t1.id < t2.id AND t1.exam_id = t2.exam_id AND t1.student_id = t2.student_id AND t1.attempt_no = t2.attempt_no AND t1.question_id = t2.question_id;");
++
++        $db->exec("ALTER TABLE `objective_answers` ADD UNIQUE INDEX `idx_unique_exam_attempt_question` (`exam_id`, `student_id`, `attempt_no`, `question_id`);");
++        echo "Successfully added UNIQUE INDEX for high-performance writes.\n";
++    } else {
++        echo "Unique Index already exists.\n";
++    }
++} catch (PDOException $e) {
++    die("Database migration error: " . $e->getMessage() . "\n");
++}
++?>
+\ No newline at end of file
+diff --git a/tmp/migrate_on_demand.php b/tmp/migrate_on_demand.php
+new file mode 100644
+index 0000000..d2c9d20
+--- /dev/null
++++ b/tmp/migrate_on_demand.php
+@@ -0,0 +1,15 @@
++<?php
++require 'db.php';
++
++try {
++    $check = $db->query("SHOW COLUMNS FROM `objective_attempts` LIKE 'is_live_requested'");
++    if ($check->rowCount() === 0) {
++        $db->exec("ALTER TABLE `objective_attempts` ADD COLUMN `is_live_requested` TINYINT(1) DEFAULT 0 AFTER `snapshot_path`;");
++        echo "Successfully added is_live_requested column.\n";
++    } else {
++        echo "Column already exists.\n";
++    }
++} catch (PDOException $e) {
++    die("Error: " . $e->getMessage() . "\n");
++}
++?>
+\ No newline at end of file
+diff --git a/tmp/migrate_snapshots.php b/tmp/migrate_snapshots.php
+new file mode 100644
+index 0000000..72f741f
+--- /dev/null
++++ b/tmp/migrate_snapshots.php
+@@ -0,0 +1,16 @@
++<?php
++require 'db.php';
++
++try {
++    // Check if the snapshot_path column already exists to avoid errors
++    $check = $db->query("SHOW COLUMNS FROM `objective_attempts` LIKE 'snapshot_path'");
++    if ($check->rowCount() === 0) {
++        $db->exec("ALTER TABLE `objective_attempts` ADD COLUMN `snapshot_path` VARCHAR(255) DEFAULT NULL AFTER `webcam_snapshot`;");
++        echo "Successfully added snapshot_path column to objective_attempts table.\n";
++    } else {
++        echo "snapshot_path column already exists.\n";
++    }
++} catch (PDOException $e) {
++    die("Database error during migration: " . $e->getMessage() . "\n");
++}
++?>
+\ No newline at end of file
+diff --git a/webrtc_api.php b/webrtc_api.php
+index c677ffc..da84a5a 100644
+--- a/webrtc_api.php
++++ b/webrtc_api.php
+@@ -32,6 +32,13 @@ if ($action === 'get') {
+     exit;
+ }
+ 
++if ($action === 'request_live') {
++    $stmt = $db->prepare("UPDATE objective_attempts SET is_live_requested = 1 WHERE id = ?");
++    $stmt->execute([$attempt_id]);
++    echo json_encode(['success' => true]);
++    exit;
++}
++
+ if ($action === 'clear') {
+     $stmt = $db->prepare("DELETE FROM webrtc_signals WHERE attempt_id = ?");
+     $stmt->execute([$attempt_id]);

@@ -154,3 +154,7 @@
         }
     });
 </script>
+<!-- Dependencies for Secure Mode -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<!-- Phase 5: Global Student Lockdown -->
+<script src="assets/js/student_lockdown.js"></script>

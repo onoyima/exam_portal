@@ -64,6 +64,13 @@ if (isset($_GET['action'])) {
         }
         exit;
     }
+
+    if ($_GET['action'] === 'remote_bypass') {
+        $stmt = $db->prepare("UPDATE objective_attempts SET remote_command = 'SECURITY_BYPASS' WHERE id = ?");
+        $stmt->execute([$id]);
+        echo json_encode(['success' => true]);
+        exit;
+    }
 }
 
 // Filter Logic
@@ -378,8 +385,12 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
 
                                     <?php if (!$att['finished_at'] && $att['idle_seconds'] < 60): ?>
                                         <button class="btn btn-sm btn-danger rounded-pill fw-bold btn-live shadow"
-                                            onclick="startLiveVideo('<?= $att['id'] ?>')">
+                                            onclick="startLiveVideo('<?= $att['id'] ?>')" id="btn-stream-<?= $att['id'] ?>">
                                             <i class="bi bi-play-fill"></i> Stream
+                                        </button>
+                                        <button class="btn btn-sm btn-dark rounded-pill fw-bold btn-stop shadow"
+                                            onclick="stopLiveVideo('<?= $att['id'] ?>')" id="btn-stop-<?= $att['id'] ?>" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:20;">
+                                            <i class="bi bi-stop-fill"></i> Stop
                                         </button>
                                     <?php endif; ?>
                                 </div>
@@ -408,7 +419,7 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                                     </div>
 
                                     <?php if (!$att['finished_at']): ?>
-                                        <div class="d-flex gap-2">
+                                        <div class="d-flex flex-wrap gap-2">
                                             <button
                                                 onclick="warnStudent(<?= $att['id'] ?>, '<?= addslashes($att['student_name']) ?>')"
                                                 class="btn btn-sm btn-outline-warning flex-grow-1 fw-bold"
@@ -416,10 +427,22 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                                                 Warn
                                             </button>
                                             <button
+                                                onclick="remoteBypass(<?= $att['id'] ?>, '<?= addslashes($att['student_name']) ?>')"
+                                                class="btn btn-sm btn-outline-success flex-grow-1 fw-bold"
+                                                style="font-size: 0.7rem;">
+                                                Bypass
+                                            </button>
+                                            <button
                                                 onclick="tagViolation(<?= $att['id'] ?>, '<?= addslashes($att['student_name']) ?>')"
                                                 class="btn btn-sm btn-outline-danger flex-grow-1 fw-bold"
                                                 style="font-size: 0.7rem;">
                                                 Tag
+                                            </button>
+                                            <button id="btn-speak-<?= $att['id'] ?>"
+                                                onclick="speakToStudent('<?= $att['id'] ?>')"
+                                                class="btn btn-sm btn-outline-primary flex-grow-1 fw-bold"
+                                                style="font-size: 0.7rem;">
+                                                <i class="bi bi-mic-fill me-1"></i>Speak
                                             </button>
                                             <button
                                                 onclick="forceSubmit(<?= $att['id'] ?>, '<?= addslashes($att['student_name']) ?>')"
@@ -526,6 +549,7 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                 const video = document.getElementById(`video-${attemptId}`);
                 const snap = document.getElementById(`snap-${attemptId}`);
                 const liveTag = document.getElementById(`live-tag-${attemptId}`);
+                const stopBtn = document.getElementById(`btn-stop-${attemptId}`);
 
                 video.srcObject = event.streams[0];
                 video.muted = true;
@@ -534,6 +558,10 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                 if (snap) snap.style.display = 'none';
                 if (liveTag) liveTag.style.display = 'block';
                 if (btn) btn.style.display = 'none';
+                if (stopBtn) stopBtn.style.display = 'block';
+
+                // Phase 5: Auto-start recording
+                startRecording(attemptId, event.streams[0]);
             };
 
             pc.onicecandidate = (event) => {
@@ -575,6 +603,86 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
             fd.append('type', type);
             fd.append('payload', payload);
             fetch('webrtc_api?action=send', { method: 'POST', body: fd });
+        }
+
+        async function stopLiveVideo(attemptId) {
+            const stopBtn = document.getElementById(`btn-stop-${attemptId}`);
+            if (stopBtn) stopBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Closing...';
+
+            // Phase 5: Stop recording if active
+            if (activeRecorders[attemptId]) {
+                activeRecorders[attemptId].stop();
+                delete activeRecorders[attemptId];
+            }
+
+            await fetch(`webrtc_api?action=stop_live&attempt_id=${attemptId}`);
+            
+            if (activeConnections[attemptId]) {
+                activeConnections[attemptId].close();
+                delete activeConnections[attemptId];
+            }
+
+            const video = document.getElementById(`video-${attemptId}`);
+            const liveTag = document.getElementById(`live-tag-${attemptId}`);
+            const btn = document.querySelector(`#card-${attemptId} .btn-live`);
+            const snap = document.getElementById(`snap-${attemptId}`);
+
+            if (video) { video.srcObject = null; video.style.display = 'none'; }
+            if (liveTag) liveTag.style.display = 'none';
+            if (stopBtn) stopBtn.style.display = 'none';
+            if (stopBtn) stopBtn.innerHTML = '<i class="bi bi-stop-fill"></i> Stop';
+            if (btn) { btn.style.display = 'block'; btn.innerHTML = '<i class="bi bi-play-fill"></i> Stream'; }
+            if (snap) snap.style.display = 'block';
+        }
+
+        // Phase 5: Video recording storage (MediaRecorder)
+        const activeRecorders = {};
+        const recordingChunks = {};
+
+        function startRecording(attemptId, stream) {
+            if (!window.MediaRecorder) return;
+            const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
+            recordingChunks[attemptId] = [];
+            recorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) {
+                    uploadVideoChunk(attemptId, e.data);
+                }
+            };
+            recorder.start(5000); // Upload chunk every 5 seconds
+            activeRecorders[attemptId] = recorder;
+            // Show recording badge
+            const liveTag = document.getElementById(`live-tag-${attemptId}`);
+            if (liveTag) liveTag.innerHTML = '⏺ RECORDING';
+        }
+
+        async function uploadVideoChunk(attemptId, blob) {
+            const fd = new FormData();
+            fd.append('attempt_id', attemptId);
+            fd.append('chunk', blob, `rec_${attemptId}_${Date.now()}.webm`);
+            await fetch('upload_recording?action=chunk', { method: 'POST', body: fd });
+        }
+
+        // Phase 5: Admin speaks to student (audio injection)
+        const activeMicStreams = {};
+        async function speakToStudent(attemptId) {
+            if (activeMicStreams[attemptId]) {
+                // Toggle off
+                activeMicStreams[attemptId].getTracks().forEach(t => t.stop());
+                delete activeMicStreams[attemptId];
+                document.getElementById(`btn-speak-${attemptId}`).innerHTML = '<i class="bi bi-mic-fill me-1"></i>Speak';
+                return;
+            }
+            try {
+                const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                activeMicStreams[attemptId] = micStream;
+                const pc = activeConnections[attemptId];
+                if (pc) {
+                    micStream.getAudioTracks().forEach(track => pc.addTrack(track, micStream));
+                }
+                document.getElementById(`btn-speak-${attemptId}`).innerHTML = '<i class="bi bi-mic-mute-fill me-1 text-danger"></i>Stop';
+            } catch (e) {
+                alert('Microphone access denied.');
+            }
         }
 
         // Warning/Violation logic (same as before)
@@ -626,6 +734,28 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                             alert('Error: ' + d.error);
                         }
                     });
+                }
+            });
+        }
+
+        function remoteBypass(id, name) {
+            Swal.fire({
+                title: 'Remote Bypass?',
+                text: `Force unlock the security gate for ${name}? Use this if they are stuck on initialization.`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#198754'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const fd = new FormData();
+                    fd.append('attempt_id', id);
+                    fetch('admin_live_proctor?action=remote_bypass', { method: 'POST', body: fd })
+                        .then(r => r.json())
+                        .then(d => {
+                            if (d.success) {
+                                Swal.fire('Command Sent', 'The security shield will be removed on the next student ping (approx. 1-15s).', 'success');
+                            }
+                        });
                 }
             });
         }

@@ -1,6 +1,6 @@
 <?php
 $host = 'localhost';
-$dbname = 'assessment_db';
+$dbname = 'backup_db_pre_implementation';
 $user = 'root';      // Change to your DB username
 $pass = '';          // Change to your DB password
 
