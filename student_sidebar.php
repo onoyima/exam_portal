@@ -66,17 +66,7 @@
             <?php endforeach; ?>
         <?php endif; ?>
 
-        <?php if (!empty($practical_exams)): ?>
-            <li class="nav-section-label small text-uppercase fw-bold text-muted mb-2 mt-4 px-3">Practical Exams</li>
-            <?php foreach ($practical_exams as $exam): ?>
-                <li>
-                    <a href="student_dashboard" class="nav-link d-flex justify-content-between align-items-center">
-                        <span class="text-truncate mr-2"><?= htmlspecialchars($exam['name']) ?></span>
-                        <span class="badge bg-primary rounded-pill sidebar-badge" style="font-size: 0.5rem;">Prac</span>
-                    </a>
-                </li>
-            <?php endforeach; ?>
-        <?php endif; ?>
+        <!-- Practical Exams section removed from student view -->
 
         <li class="mt-4">
             <hr>

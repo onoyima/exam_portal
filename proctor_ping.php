@@ -15,13 +15,18 @@ if (!in_array($status, ['active', 'blur', 'disconnected', 'submitted'])) {
     $status = 'active';
 }
 
-// 1. Check for Forced Logout (Multi-device login)
-$stmt = $db->prepare("SELECT current_session_id FROM students WHERE id = ?");
-$stmt->execute([$student_id]);
-$stored_session = $stmt->fetchColumn();
-
 if ($stored_session !== session_id() && $stored_session !== null) {
     echo json_encode(['status' => 'FORCED_LOGOUT', 'message' => 'This account has been logged in on another device.']);
+    exit;
+}
+
+// 1b. Check if Attempt is Finished
+$stmt = $db->prepare("SELECT finished_at FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ?");
+$stmt->execute([$exam_id, $student_id, $attempt_no]);
+$finished_at = $stmt->fetchColumn();
+
+if ($finished_at) {
+    echo json_encode(['status' => 'SUBMITTED', 'message' => 'Your assessment has been submitted.']);
     exit;
 }
 

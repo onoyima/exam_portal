@@ -589,43 +589,54 @@ $current_index = 0;
     window.examId = <?= $exam_id ?>;
     window.questions = <?= json_encode($questions) ?>;
     window.total = <?= $total ?>;
+    window.currentIndex = 0;
     window.isLocked = false;
     window.isWebcamReady = false;
-    window.currentIndex = 0;
-  </script>
 
-  <!-- ISOLATED EMERGENCY CONTROLLER (IMMUNE TO GLOBAL ERRORS) -->
-  <script>
+    // Unified Proctoring & System Logic
     window.finalizeEnrollment = function() {
         console.log("Proctoring Shield Cleared.");
-        window.isLocked = false; // Emergency Unlock for Startup
-        var blocker = document.getElementById('proctorBlocker');
+        window.isLocked = false;
+        const blocker = document.getElementById('proctorBlocker');
         if (blocker) {
             blocker.style.display = 'none';
             blocker.remove();
         }
-        
-        // Restore the original Exam Engine startup
-        if (typeof window.startExamFlow === 'function') {
-            window.startExamFlow();
-        }
+        if (typeof window.startExamFlow === 'function') window.startExamFlow();
     };
+
     window.initWebcam = function() {
-        var iUI = document.getElementById('proctorInitUI');
-        var lUI = document.getElementById('proctorLoadingUI');
+        const iUI = document.getElementById('proctorInitUI');
+        const lUI = document.getElementById('proctorLoadingUI');
         if (iUI) iUI.classList.add('d-none');
         if (lUI) lUI.classList.remove('d-none');
         
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            .then(function(s) { 
+            .then(() => { 
                 window.isWebcamReady = true; 
-                // Fullscreen is now handled by the user's click gesture
                 window.finalizeEnrollment(); 
             })
-            .catch(function(e) { 
-                window.finalizeEnrollment();
-            });
+            .catch(() => window.finalizeEnrollment());
     };
+
+    // System Monitor Hooks
+    window.addEventListener('load', () => {
+        if (navigator.getBattery) {
+            navigator.getBattery().then(battery => {
+                const updateBattery = () => {
+                    document.getElementById('batteryPct').innerText = Math.round(battery.level * 100);
+                };
+                battery.addEventListener('levelchange', updateBattery);
+                updateBattery();
+            });
+        }
+        const updateNetwork = () => {
+            document.getElementById('networkType').innerText = navigator.onLine ? 'Online' : 'Offline';
+        };
+        window.addEventListener('online', updateNetwork);
+        window.addEventListener('offline', updateNetwork);
+        updateNetwork();
+    });
   </script>
 
   <!-- Proctoring Blocker Overlay -->
@@ -837,7 +848,7 @@ $current_index = 0;
                     class="bi bi-arrow-right"></i>
                 </button>
                 <button id="submitBtn" class="btn btn-success px-4 py-2 rounded-pill d-none fw-bold shadow-lg btn-sm"
-                  data-bs-toggle="modal" data-bs-target="#finalSubmitModal">
+                  onclick="submitFinal(true)">
                   Finish <i class="bi bi-send-fill ms-1"></i>
                 </button>
                 <?php if ($is_review_mode): ?>
@@ -983,960 +994,441 @@ $current_index = 0;
     </div>
   </div>
 
-  <!-- Final Submit Modal -->
-  <div class="modal fade" id="finalSubmitModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content border-0 rounded-5 shadow-lg overflow-hidden">
-        <form id="finalSubmitForm" method="post">
-          <div class="modal-body p-5 text-center">
-            <div class="mb-4">
-              <div class="bg-warning-light p-4 rounded-circle d-inline-block">
-                <i class="bi bi-exclamation-triangle-fill text-warning fs-1"></i>
-              </div>
-            </div>
-            <h3 class="fw-bold mb-3 text-dark">Finish Examination</h3>
-            <p class="text-muted mb-5 px-3 fs-5">You are about to submit your final responses. You have completed <b
-                id="answeredCount" class="text-primary fs-4">0</b> out of <b><?= $total ?></b> questions.</p>
-
-            <div class="vstack gap-3 px-4">
-              <button type="submit" name="final_submit" class="btn btn-success btn-lg rounded-pill py-3 fw-bold shadow">
-                Yes, Submit My Exam <i class="bi bi-check2-all ms-2"></i>
-              </button>
-              <button type="button" class="btn btn-link text-muted fw-bold text-decoration-none"
-                data-bs-dismiss="modal">
-                Return to Exam
-              </button>
-            </div>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
+  <!-- Final Submit Form (Hidden) -->
+  <form id="finalSubmitForm" method="post" style="display:none;"></form>
 
   <script src="assets/js/bootstrap.bundle.min.js"></script>
   <script>
-    // Bridge data from the Peak-Priority header
+    /**
+     * ASSESSMENT PORTAL EXECUTIVE CONTROL UNIT v3.0
+     * Optimized for Stability, Security, and Live Oversight.
+     */
+
+    // --- 1. CONFIGURATION & STATE ---
     const examId = window.examId;
     const questions = window.questions;
     const total = window.total;
     const currentAttemptNo = <?= $current_attempt_no ?>;
     const currentAttemptId = <?= $current_attempt_id ?>;
     
-    // Self-Healing Render Guard: If we are not in review mode and questions aren't showing, force them.
-    setInterval(() => {
-        var loader = document.getElementById('questionArea');
-        if (loader && loader.innerHTML.includes('Preparing') && window.questions && window.questions.length > 0) {
-            console.log("Self-Healing: Re-triggering question render.");
-            renderQuestion(currentIndex);
-        }
-    }, 2000);
-
-    const isStrict = <?= $exam['is_strict'] ? 'true' : 'false' ?>;
+    // Security & Feature Policy
     const pFS = <?= ($exam['proctor_fullscreen'] || $exam['is_strict']) ? 'true' : 'false' ?>;
     const pTab = <?= ($exam['proctor_tab_lock'] || $exam['is_strict']) ? 'true' : 'false' ?>;
     const pKB = <?= ($exam['proctor_kb_lock'] || $exam['is_strict']) ? 'true' : 'false' ?>;
-    const pAuto = <?= ($exam['proctor_auto_submit'] || $exam['is_strict']) ? 'true' : 'false' ?>;
-    const pBrowser = <?= ($exam['proctor_browser_check'] || $exam['is_strict']) ? 'true' : 'false' ?>;
     const pWebcam = <?= ($exam['proctor_webcam'] || $exam['is_strict']) ? 'true' : 'false' ?>;
     const pLive = <?= ($exam['proctor_live_video'] || $exam['is_strict']) ? 'true' : 'false' ?>;
-    const shuffleOptions = <?= ($exam['shuffle_options'] ?? 0) ? 'true' : 'false' ?>;
     const isReviewMode = <?= $is_review_mode ? 'true' : 'false' ?>;
     const canViewScore = <?= $exam['student_can_view_score'] ? 'true' : 'false' ?>;
-    const correctAnswers = <?= json_encode($correct_answers_map) ?>;
-    let currentAnswers = <?= json_encode($finished_answers) ?>;
+    const shuffleOptions = <?= ($exam['shuffle_options'] ?? 0) ? 'true' : 'false' ?>;
+
+    // Runtime State
     let currentIndex = window.currentIndex || 0;
-    let durationMinutes = <?= (int) ($exam['duration_minutes'] ?? 0) ?>;
     let remainingSeconds = <?= (int) ($remaining_seconds ?? 0) ?>;
-    const maxViolations = 5; 
-    const maxStrikes = 5;
-    
-    // Proctoring State Variables
-    let isWebcamReady = false;
-    let isWebcamInitialized = false;
-    let proctorStatus = 'initial';
-    let webcamStream = null;
-    let recordingInterval = null;
-    let pingInterval = null;
-
-    // Debug Timer Setup
-    console.log("Timer Init - Remaining:", remainingSeconds, "Duration:", durationMinutes);
-
-    // Elements
-    const qNum = document.getElementById('qNum');
-    const markLabel = document.getElementById('markLabel');
-    const questionArea = document.getElementById('questionArea');
-    const optionsContainer = document.getElementById('optionsContainer');
-    const prevBtn = document.getElementById('prevBtn');
-    const nextBtn = document.getElementById('nextBtn');
-    const submitBtn = document.getElementById('submitBtn');
-    const navGrid = document.getElementById('navGrid');
-    const timerText = document.getElementById('timerText');
-    const sidebarTimer = document.getElementById('sidebarTimer');
-    const mobileTimer = document.getElementById('mobileTimer');
-    const timerContainer = document.getElementById('timer');
-
-    // Initialize Question
-    function renderQuestion(index) {
-      currentIndex = index;
-      const q = questions[index];
-
-      // Update Progress
-      const progress = ((index + 1) / total) * 100;
-      const progressBar = document.getElementById('examProgressBar');
-      if (progressBar) progressBar.style.width = progress + '%';
-      const answered = !!currentAnswers[q.id];
-
-      // Reset animation
-      questionArea.style.opacity = '0';
-      questionArea.style.transform = 'translateY(10px)';
-
-      setTimeout(() => {
-        qNum.textContent = index + 1;
-        markLabel.textContent = (q.mark || 1) + ' Mark' + (q.mark > 1 ? 's' : '');
-
-        let html = `<div class="badge bg-primary-light text-primary mb-3 px-3 py-2 rounded-pill fw-bold" style="font-size: 0.6rem; letter-spacing: 0.5px;">QUESTION ${index + 1} OF ${total}</div>`;
-        html += `<div class="question-text fw-bold" style="font-size: 1.25rem; color: #0f172a;">${q.question_text}</div>`;
-
-        if (q.question_image) {
-          html += `<div class="mt-4 text-center"><img src="uploads/${q.question_image}" class="img-fluid rounded-4 shadow-sm border p-1" style="max-height: 280px;" alt="question visual"></div>`;
-        }
-        questionArea.innerHTML = html;
-        questionArea.style.opacity = '1';
-        questionArea.style.transform = 'translateY(0)';
-
-        // Re-render MathJax
-        if (window.MathJax) {
-          MathJax.typesetPromise([questionArea]);
-        }
-      }, 150);
-
-      // Prepare Options to Render
-      let choices = ['a', 'b', 'c', 'd'].map(opt => {
-        return {
-          key: opt.toUpperCase(),
-          text: q['option_' + opt],
-          image: q['option_' + opt + '_image']
-        };
-      }).filter(c => c.text !== null && c.text !== '');
-
-      // In Review Mode, don't shuffle options visually if you want to be consistent with original pull
-      // OR you can still shuffle. User didn't specify. I'll keep shuffling if enabled.
-      if (shuffleOptions) {
-        // We use a seed based on student_id + attempt_no + question_id to keep it consistent 
-        // OR just random is fine since keys match. I'll keep it simple/random.
-        for (let i = choices.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [choices[i], choices[j]] = [choices[j], choices[i]];
-        }
-      }
-
-      optionsContainer.innerHTML = '';
-      choices.forEach((choice, choiceIdx) => {
-        const displayLetter = String.fromCharCode(65 + choiceIdx); // Always A, B, C, D...
-        const isSelected = currentAnswers[q.id] === choice.key;
-
-        const div = document.createElement('div');
-        div.className = `option-card ${isSelected ? 'selected' : ''}`;
-
-        if (isReviewMode) {
-          div.style.cursor = 'default';
-          div.style.pointerEvents = 'none';
-
-          if (canViewScore) {
-            const correctOpt = correctAnswers[q.id];
-            if (choice.key === correctOpt) {
-              div.classList.add('border-success', 'bg-success-light', 'review-correct');
-            } else if (isSelected && choice.key !== correctOpt) {
-              div.classList.add('border-danger', 'bg-danger-light', 'review-wrong');
-            }
-          }
-        }
-
-        let optHtml = `
-                <div class="d-flex align-items-center w-100">
-                    <div class="option-label shadow-sm">${displayLetter}</div>
-                    <div class="option-text flex-grow-1 fw-medium text-dark">
-                        ${choice.text}`;
-
-        if (choice.image) {
-          optHtml += `<div class="mt-3"><img src="uploads/${choice.image}" class="img-fluid rounded-3" style="max-height: 120px;" alt="option visual"></div>`;
-        }
-
-        optHtml += `</div>
-                  <div class="selection-indicator border rounded-2 d-flex align-items-center justify-content-center bg-white ms-3" style="width:24px; height:24px; flex-shrink:0;">
-                    <i class="bi bi-check2 text-white fs-6 ${isSelected ? '' : 'd-none'}"></i>
-                  </div>
-                </div>`;
-        div.innerHTML = optHtml;
-
-        div.onclick = (e) => {
-          // Update State using ORIGINAL key (A, B, C, D)
-          currentAnswers[q.id] = choice.key;
-          saveAnswer(q.id, choice.key, true);
-
-          const allOptionsInThisCard = optionsContainer.querySelectorAll('.option-card');
-          allOptionsInThisCard.forEach(c => {
-            c.classList.remove('selected');
-            const indicatorIcon = c.querySelector('.selection-indicator i');
-            if (indicatorIcon) indicatorIcon.classList.add('d-none');
-          });
-
-          div.classList.add('selected');
-          const currentIndicatorIcon = div.querySelector('.selection-indicator i');
-          if (currentIndicatorIcon) currentIndicatorIcon.classList.remove('d-none');
-          updateNavPalette();
-        };
-        optionsContainer.appendChild(div);
-      });
-
-      // Typeset options
-      if (window.MathJax) {
-        MathJax.typesetPromise([optionsContainer]);
-      }
-
-      // UI Controls
-      prevBtn.disabled = index === 0;
-      if (index === total - 1) {
-        nextBtn.classList.add('d-none');
-        if (!isReviewMode) submitBtn.classList.remove('d-none');
-      } else {
-        nextBtn.classList.remove('d-none');
-        submitBtn.classList.add('d-none');
-      }
-
-      updateNavPalette();
-    }
-
-    function updateNavPalette() {
-      navGrid.innerHTML = '';
-      questions.forEach((q, idx) => {
-        const btn = document.createElement('a');
-        btn.className = 'nav-dot';
-        btn.href = '#';
-        if (idx === currentIndex) {
-          btn.classList.add('active');
-          btn.title = "Current Question";
-        } else if (currentAnswers[q.id]) {
-          btn.classList.add('answered');
-          btn.title = "Answered";
-        } else {
-          btn.title = "Not Answered";
-        }
-
-        btn.textContent = idx + 1;
-        btn.onclick = (e) => {
-          e.preventDefault();
-          if (idx !== currentIndex) renderQuestion(idx);
-        };
-        navGrid.appendChild(btn);
-      });
-
-      // Update Dashboard counts
-      const count = Object.keys(currentAnswers).length;
-      const countEl = document.getElementById('answeredCount');
-      if (countEl) countEl.textContent = count;
-      const countBadge = document.getElementById('answeredCountBadge');
-      if (countBadge) countBadge.textContent = count;
-    }
-
-    function saveAnswer(questionId, selectedOption, skipRender = false) {
-      // Optimistic UI
-      currentAnswers[questionId] = selectedOption;
-      if (!skipRender) renderQuestion(currentIndex);
-
-      const formData = new FormData();
-      formData.append('exam_id', examId);
-      formData.append('attempt_no', currentAttemptNo);
-      formData.append('question_id', questionId);
-      formData.append('option', selectedOption);
-
-      fetch('objective_exam_api?action=save_answer', {
-        method: 'POST',
-        body: formData
-      }).then(r => r.json()).then(data => {
-        if (!data.success) console.error('Save failed:', data.error);
-      });
-    }
-
-    // Timer Logic
-    function startTimer() {
-      if (isReviewMode) {
-        document.getElementById('timerText').textContent = "REVIEWING";
-        document.getElementById('sidebarTimer').textContent = "REVIEWING";
-        document.getElementById('mobileTimer').textContent = "REVIEW";
-        return;
-      }
-      console.log("Timer Init - Duration:", durationMinutes, "Remaining:", remainingSeconds);
-
-      // Safety: Update display once before anything else
-      if (durationMinutes > 0) {
-        remainingSeconds = Math.max(0, remainingSeconds);
-      } else {
-        if (timerText) timerText.textContent = 'UNTRIED/UNTIMED';
-        if (sidebarTimer) sidebarTimer.textContent = 'UNTIMED';
-        return;
-      }
-
-      function updateDisplay() {
-        try {
-          const h = Math.floor(Math.max(0, remainingSeconds) / 3600);
-          const m = Math.floor((Math.max(0, remainingSeconds) % 3600) / 60);
-          const s = Math.max(0, remainingSeconds) % 60;
-
-          const timeStr = (h < 10 ? '0' : '') + h + ":" +
-            (m < 10 ? '0' : '') + m + ":" +
-            (s < 10 ? '0' : '') + s;
-
-          if (timerText) timerText.textContent = timeStr;
-          if (sidebarTimer) sidebarTimer.textContent = timeStr;
-          if (mobileTimer) mobileTimer.textContent = timeStr;
-
-          if (remainingSeconds <= 0) {
-            if (timerText) timerText.textContent = "00:00:00";
-            if (sidebarTimer) sidebarTimer.textContent = "00:00:00";
-            if (mobileTimer) mobileTimer.textContent = "00:00:00";
-            return false;
-          }
-          return true;
-        } catch (e) { console.error("Timer UI Error:", e); return false; }
-      }
-
-      // Initial update
-      updateDisplay();
-
-      const interval = setInterval(() => {
-        try {
-          if (remainingSeconds <= 0) {
-            clearInterval(interval);
-            autoSubmit();
-            return;
-          }
-
-          remainingSeconds--;
-          if (!updateDisplay()) {
-            clearInterval(interval);
-            autoSubmit();
-          }
-
-          // Critical warning
-          if (remainingSeconds < 300) { // 5 minutes left
-            timerContainer.classList.add('timer-critical');
-          }
-        } catch (e) { console.error("Timer Interval Error:", e); clearInterval(interval); }
-      }, 1000);
-    }
-
-    function autoSubmit() {
-      // Small visual delay so the student can see the timer hit zero
-      setTimeout(() => {
-        showGlobalAlert("Time is up!", "Your exam session has expired and will be submitted automatically.", "info", () => {
-          submitFinal();
-        });
-      }, 2000);
-    }
-
-    function submitFinal() {
-      isLocked = true;
-      window.onbeforeunload = null;
-      const form = document.getElementById('finalSubmitForm');
-      const input = document.createElement('input');
-      input.type = 'hidden'; input.name = 'confirm_final_submit'; input.value = '1';
-      form.appendChild(input);
-      const attInput = document.createElement('input');
-      attInput.type = 'hidden'; attInput.name = 'current_attempt_no'; attInput.value = currentAttemptNo;
-      form.appendChild(attInput);
-      // Phase 4: Unified submit — show confirm, then logout redirect
-      Swal.fire({
-        title: 'Submitting Exam...',
-        text: 'Please wait while your answers are being saved.',
-        icon: 'info',
-        allowOutsideClick: false,
-        showConfirmButton: false,
-        didOpen: () => Swal.showLoading()
-      });
-      form.submit();
-    }
-
-    // Interaction Listeners
-    nextBtn.onclick = () => { if (currentIndex < total - 1) renderQuestion(currentIndex + 1); };
-    prevBtn.onclick = () => { if (currentIndex > 0) renderQuestion(currentIndex - 1); };
-    document.getElementById('finalSubmitForm').onsubmit = (e) => {
-      e.preventDefault();
-      confirmGlobalAction("Final Submission", "Are you sure you want to submit your exam now? You will not be able to change your answers after submission.", "success", "Submit Now", () => {
-        submitFinal();
-      });
-    };
-
-    function confirmLeave(url) {
-      confirmGlobalAction("Leave Exam?", "Leaving the page will not submit your exam. You can resume later if time remains.", "warning", "Go to Dashboard", () => {
-        window.location.href = url;
-      });
-    }
-
-    function confirmLogout() {
-      confirmGlobalAction("Logout?", "Logging out during an exam will leave your attempt unfinished. You can return later if time remains.", "danger", "Logout", () => {
-        window.location.href = 'student_logout.php';
-      });
-    }
-
-    function confirmExamStart(name, url) {
-      // This is for the result view "Start Next Attempt"
-      confirmGlobalAction("Start Next Attempt?", `You are about to start a new attempt for <b>${name}</b>. This will consume one of your allowed attempts.`, "primary", "Start Now", () => {
-        window.location.href = url;
-      });
-    }
-
-    let globalStatusModalInstance = null;
-    function showGlobalAlert(title, message, type, callback) {
-      if (isLocked && !isReviewMode && title !== 'Final Result') return; // Don't show alerts if locked unless result
-      const modal = document.getElementById('globalStatusModal');
-      const titleEl = document.getElementById('globalModalTitle');
-      const messageEl = document.getElementById('globalModalMessage');
-      const okBtn = document.getElementById('globalModalOkBtn');
-      const iconEl = document.getElementById('globalModalIcon');
-
-      titleEl.textContent = title;
-      messageEl.innerHTML = message;
-
-      // Reset classes
-      iconEl.className = 'bi fs-1';
-      okBtn.className = 'btn btn-lg rounded-pill py-3 fw-bold shadow w-100 ';
-
-      if (type === 'info') {
-        iconEl.classList.add('bi-info-circle', 'text-info');
-        okBtn.classList.add('btn-info', 'text-white');
-      } else if (type === 'success') {
-        iconEl.classList.add('bi-check-circle', 'text-success');
-        okBtn.classList.add('btn-success');
-      } else if (type === 'warning') {
-        iconEl.classList.add('bi-exclamation-triangle', 'text-warning');
-        okBtn.classList.add('btn-warning');
-      } else if (type === 'danger') {
-        iconEl.classList.add('bi-x-circle', 'text-danger');
-        okBtn.classList.add('btn-danger');
-      }
-
-      if (!globalStatusModalInstance) {
-        globalStatusModalInstance = new bootstrap.Modal(modal);
-      }
-
-      okBtn.onclick = () => {
-        globalStatusModalInstance.hide();
-        if (callback) callback();
-      };
-      globalStatusModalInstance.show();
-    }
-
-    function confirmGlobalAction(title, message, type, confirmText, callback) {
-      const modal = document.getElementById('globalConfirmModal');
-      const titleEl = document.getElementById('globalConfirmTitle');
-      const messageEl = document.getElementById('globalConfirmMessage');
-      const actionBtn = document.getElementById('globalConfirmActionBtn');
-      const iconContainer = document.getElementById('globalConfirmIconContainer');
-      const iconEl = iconContainer.querySelector('i');
-
-      titleEl.textContent = title;
-      messageEl.innerHTML = message;
-      actionBtn.textContent = confirmText;
-
-      // Reset classes
-      iconContainer.className = 'p-4 rounded-circle d-inline-block ';
-      iconEl.className = 'bi fs-1 ';
-      actionBtn.className = 'btn btn-lg rounded-pill py-3 fw-bold shadow ';
-
-      if (type === 'primary') {
-        iconContainer.classList.add('bg-primary-light');
-        iconEl.classList.add('bi-journal-text', 'text-primary');
-        actionBtn.classList.add('btn-primary');
-      } else if (type === 'success') {
-        iconContainer.classList.add('bg-success-light');
-        iconEl.classList.add('bi-check2-circle', 'text-success');
-        actionBtn.classList.add('btn-success');
-      } else if (type === 'warning') {
-        iconContainer.classList.add('bg-warning-light');
-        iconEl.classList.add('bi-exclamation-circle', 'text-warning');
-        actionBtn.classList.add('btn-warning');
-      } else if (type === 'danger') {
-        iconContainer.classList.add('bg-danger-light');
-        iconEl.classList.add('bi-slash-circle', 'text-danger');
-        actionBtn.classList.add('btn-danger');
-      }
-
-      const bsModal = new bootstrap.Modal(modal);
-      actionBtn.onclick = () => {
-        bsModal.hide();
-        if (callback) callback();
-      };
-      bsModal.show();
-    }
-
-    // Anti-Cheating Lockdown Logic
-    let isCheatingSubmitting = false;
+    let currentAnswers = <?= json_encode($finished_answers) ?>;
+    const correctAnswers = <?= json_encode($correct_answers_map) ?>;
     let violationCount = <?= (int) ($last_attempt['violation_count'] ?? 0) ?>;
+    const maxStrikes = 5;
     const maxViolations = 3;
+
+    // Proctoring & Signaling
     let proctorStatus = 'active';
+    let isResumingFlag = false;
     let violationTimerInterval = null;
-    let isLocked = false;
-    let isWebcamReady = false; // Prevents violations during initialization
-
-    // Proctor Ping & WebRTC Live Logic
-    let webcamStream = null;
+    let webcamStream = null; // Set during handshake
     const webcamVideo = document.createElement('video');
-    const webcamCanvas = document.createElement('canvas'); // Keep for snapshots as fallback
-
-    // WebRTC State
+    const webcamCanvas = document.createElement('canvas'); // Thumbnail Buffer
+    
+    // WebRTC Live State
     let peerConnection = null;
     let signalingInterval = null;
     let lastSignalId = 0;
     const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-    window.togglePowerMenu = function() {
-        if (typeof confirmGlobalAction !== 'undefined') {
-            confirmGlobalAction("Session Control", "What would you like to do with this active session?", "danger", "Logout & Exit", () => {
-                window.location.href = "student_logout.php";
+    // UI Handle References
+    const questionArea = document.getElementById('questionArea');
+    const optionsContainer = document.getElementById('optionsContainer');
+    const timerText = document.getElementById('timerText');
+
+    // --- 2. RENDERING ENGINE ---
+
+    function renderQuestion(index) {
+        if (!questions || index >= questions.length || index < 0) return;
+        currentIndex = index;
+        window.currentIndex = index;
+        const q = questions[index];
+
+        // Update Progress UI
+        const pb = document.getElementById('examProgressBar');
+        if (pb) pb.style.width = ((index + 1) / total * 100) + '%';
+
+        // Animate Entry
+        questionArea.style.opacity = '0';
+        setTimeout(() => {
+            const qNumEl = document.getElementById('qNum');
+            const markLabelEl = document.getElementById('markLabel');
+            if(qNumEl) qNumEl.textContent = index + 1;
+            if(markLabelEl) markLabelEl.textContent = (q.mark || 1) + ' Mark' + (q.mark > 1 ? 's' : '');
+            
+            let html = `<div class="badge bg-primary-light text-primary mb-3 px-3 py-2 rounded-pill fw-bold" style="font-size: 0.6rem;">QUESTION ${index + 1} OF ${total}</div>`;
+            html += `<div class="question-text fw-bold fs-4 text-dark mb-4">${q.question_text}</div>`;
+            if (q.question_image) html += `<div class="text-center mb-4"><img src="uploads/${q.question_image}" class="img-fluid rounded-4 shadow-sm border p-1"></div>`;
+            
+            questionArea.innerHTML = html;
+            questionArea.style.opacity = '1';
+            if (window.MathJax) MathJax.typesetPromise([questionArea]);
+        }, 100);
+
+        // Options Engine
+        let opts = ['a', 'b', 'c', 'd'].map(k => ({ 
+            key: k.toUpperCase(), 
+            text: q['option_' + k], 
+            img: q['option_' + k + '_image'] 
+        })).filter(o => o.text);
+        
+        if (shuffleOptions) opts.sort(() => Math.random() - 0.5);
+
+        optionsContainer.innerHTML = '';
+        opts.forEach((o, i) => {
+            const letter = String.fromCharCode(65 + i);
+            const isSel = currentAnswers[q.id] === o.key;
+            const card = document.createElement('div');
+            card.className = `option-card ${isSel ? 'selected' : ''}`;
+            
+            if (isReviewMode && canViewScore) {
+                if (o.key === correctAnswers[q.id]) card.classList.add('border-success', 'bg-success-light', 'review-correct');
+                else if (isSel) card.classList.add('border-danger', 'bg-danger-light', 'review-wrong');
+            }
+
+            card.innerHTML = `
+                <div class="d-flex align-items-center w-100">
+                    <div class="option-label shadow-sm">${letter}</div>
+                    <div class="option-text flex-grow-1 text-dark fw-medium ms-3">
+                        ${o.text}
+                        ${o.img ? `<div class="mt-2 text-center"><img src="uploads/${o.img}" class="img-fluid rounded-3" style="max-height:100px;"></div>` : ''}
+                    </div>
+                    <div class="selection-indicator border rounded-2 ms-auto d-flex align-items-center justify-content-center bg-white" style="width:24px; height:24px; flex-shrink:0;">
+                        <i class="bi bi-check2 text-white ${isSel ? '' : 'd-none'}"></i>
+                    </div>
+                </div>`;
+            
+            if (!isReviewMode) {
+                card.onclick = () => {
+                    currentAnswers[q.id] = o.key;
+                    saveAnswer(q.id, o.key);
+                    optionsContainer.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+                    optionsContainer.querySelectorAll('i').forEach(i => i.classList.add('d-none'));
+                    card.classList.add('selected');
+                    card.querySelector('i').classList.remove('d-none');
+                    updateNav();
+                };
+            }
+            optionsContainer.appendChild(card);
+        });
+        
+        // Navigation Control
+        const prev = document.getElementById('prevBtn');
+        const nxt = document.getElementById('nextBtn');
+        const sub = document.getElementById('submitBtn');
+        if(prev) prev.disabled = index === 0;
+        if(nxt) {
+            if (index === total - 1) { 
+                nxt.classList.add('d-none'); 
+                if(!isReviewMode && sub) sub.classList.remove('d-none'); 
+            } else { 
+                nxt.classList.remove('d-none'); 
+                if(sub) sub.classList.add('d-none'); 
+            }
+        }
+        updateNav();
+    }
+
+    function updateNav() {
+        const grid = document.getElementById('navGrid');
+        if(!grid) return;
+        grid.innerHTML = '';
+        questions.forEach((q, i) => {
+            const dot = document.createElement('div');
+            dot.className = `nav-dot ${i === currentIndex ? 'active' : (currentAnswers[q.id] ? 'answered' : '')}`;
+            dot.textContent = i + 1;
+            dot.onclick = () => renderQuestion(i);
+            grid.appendChild(dot);
+        });
+        const cnt = Object.keys(currentAnswers).length;
+        if(document.getElementById('answeredCount')) document.getElementById('answeredCount').textContent = cnt;
+        if(document.getElementById('answeredCountBadge')) document.getElementById('answeredCountBadge').textContent = cnt;
+    }
+
+    function saveAnswer(qid, opt) {
+        const fd = new FormData();
+        fd.append('exam_id', examId); fd.append('attempt_no', currentAttemptNo);
+        fd.append('question_id', qid); fd.append('option', opt);
+        fetch('objective_exam_api?action=save_answer', { method: 'POST', body: fd });
+    }
+
+    // --- 3. PROCTORING & SECURITY SUITE ---
+
+    function startTimer() {
+        if (isReviewMode) { if(timerText) timerText.textContent = "REVIEW"; return; }
+        const interval = setInterval(() => {
+            if (window.isLocked) return;
+            remainingSeconds--;
+            if (remainingSeconds <= 0) { clearInterval(interval); submitFinal(); }
+            else {
+                const h = Math.floor(remainingSeconds/3600), m = Math.floor((remainingSeconds%3600)/60), s = remainingSeconds%60;
+                const ts = `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+                if(timerText) timerText.textContent = ts;
+                if (document.getElementById('sidebarTimer')) document.getElementById('sidebarTimer').textContent = ts;
+                if (document.getElementById('mobileTimer')) document.getElementById('mobileTimer').textContent = ts;
+            }
+        }, 1000);
+    }
+
+    function submitFinal(withConfirm = false) {
+        if (withConfirm) {
+            Swal.fire({
+                title: 'Finish Examination?',
+                text: "You are about to submit your final responses. This action cannot be undone and you will be logged out.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#198754',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, Submit & Logout'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    executeFinalSubmission();
+                }
             });
         } else {
-            if (confirm("Terminate session and logout?")) window.location.href = "student_logout.php";
+            executeFinalSubmission();
         }
-    };
+    }
 
-    // --- GLOBAL SECURITY CONTROLLERS ---
-    window.startExamFlow = function() {
-      if (typeof renderQuestion === 'function' && questions && questions.length > 0) {
-          renderQuestion(currentIndex);
-      }
-      if (typeof startTimer === 'function') startTimer();
-      console.log("Exam logic activated.");
-    };
-
-    window.finalizeEnrollment = function() {
-        const blocker = document.getElementById('proctorBlocker');
-        const eProgress = document.getElementById('enrollmentProgress');
-        if (eProgress) eProgress.style.width = '100%';
+    function executeFinalSubmission() {
+        window.isLocked = true; window.onbeforeunload = null;
+        const form = document.getElementById('finalSubmitForm');
+        if(!form) return;
         
-        console.log("Cleaning proctoring layers...");
-        if (blocker) {
-          blocker.style.transition = 'opacity 0.4s ease';
-          blocker.style.opacity = '0';
-          blocker.style.pointerEvents = 'none';
-          setTimeout(() => {
-              blocker.remove();
-              window.startExamFlow();
-          }, 400);
-        } else {
-           window.startExamFlow();
-        }
-    };
-
-    window.initWebcam = function() {
-      console.log("Initializing Hardware Handshake...");
-      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const blocker = document.getElementById('proctorBlocker');
-      const blockerMsg = document.getElementById('proctorBlockerMsg');
-      const errorBtn = document.getElementById('proctorErrorBtn');
-      const initUI = document.getElementById('proctorInitUI');
-      const loadUI = document.getElementById('proctorLoadingUI');
-
-      if (initUI) initUI.classList.add('d-none');
-      if (loadUI) loadUI.classList.remove('d-none');
-
-      if (!window.isSecureContext && !isLocal) {
-        alert("Security Error: Camera requires HTTPS.");
-        return;
-      }
-
-      navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 }, audio: true })
-        .then(stream => {
-          window.isWebcamReady = true;
-          window.webcamStream = stream;
-          if (window.webcamVideo) {
-              window.webcamVideo.srcObject = stream;
-              window.webcamVideo.play();
-          }
-          setTimeout(window.triggerKiosk, 400);
-        })
-        .catch(err => {
-          console.error("Camera Hardware Error:", err);
-          alert("Hardware Fail: Check your browser camera permissions.");
+        // Meta markers for finalization
+        const h1 = document.createElement('input'); h1.type='hidden'; h1.name='confirm_final_submit'; h1.value='1'; form.appendChild(h1);
+        const h2 = document.createElement('input'); h2.type='hidden'; h2.name='current_attempt_no'; h2.value=currentAttemptNo; form.appendChild(h2);
+        
+        Swal.fire({ 
+            title: 'Submitting Assessment...', 
+            text: 'Please wait while we secure your responses.',
+            icon: 'info',
+            didOpen: () => Swal.showLoading(), 
+            allowOutsideClick: false 
         });
-    };
-
-    window.triggerKiosk = function() {
-        const el = document.documentElement;
-        const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
-        if (rfs) {
-            rfs.call(el).then(window.finalizeEnrollment).catch(window.finalizeEnrollment);
-        } else {
-            window.finalizeEnrollment();
-        }
-    };
-
-    // Kill ghost backdrops every 3 seconds
-    setInterval(() => {
-        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-        document.body.classList.remove('modal-open');
-    }, 3000);
-
-    window.startProctoringServices = function() {
-        console.log("Activating Background Proctoring Engine...");
-        
-        // 1. Force Question Load
-        if (typeof renderQuestion === 'function') {
-            renderQuestion(0);
-        }
-        
-        // 2. Start Multi-Layer Ping/Heartbeat
-        if (typeof sendPing === 'function') {
-            setInterval(() => sendPing('active'), 15000); 
-            sendPing('active');
-        }
-        
-        // 3. Initialize Background Video if requested
-        if (pWebcam || pLive) {
-            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-                .then(stream => {
-                    window.isWebcamReady = true;
-                    window.webcamStream = stream;
-                    if (window.webcamVideo) window.webcamVideo.srcObject = stream;
-                    console.log("Background Camera Active.");
-                })
-                .catch(e => console.warn("Background Camera Fail:", e));
-        }
-    };
-
-    async function startSignaling() {
-      if (signalingInterval) return;
-      signalingInterval = setInterval(async () => {
-        const resp = await fetch(`webrtc_api?action=get&attempt_id=${currentAttemptId}&last_id=${lastSignalId}`);
-        const data = await resp.json();
-        if (data.signals) {
-          for (const signal of data.signals) {
-            lastSignalId = signal.id;
-            handleAdminSignal(signal).catch(e => console.error("Signal handle error:", e));
-          }
-        }
-      }, 1000); // Polling every 1 second for faster handshake
-    }
-
-    async function handleAdminSignal(signal) {
-      const payload = JSON.parse(signal.payload);
-      if (signal.type === 'offer') {
-        if (peerConnection) peerConnection.close();
-        peerConnection = new RTCPeerConnection(rtcConfig);
-
-        webcamStream.getTracks().forEach(track => peerConnection.addTrack(track, webcamStream));
-
-        peerConnection.onicecandidate = (event) => {
-          if (event.candidate) {
-            sendSignal('ice', JSON.stringify(event.candidate));
-          }
-        };
-
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(payload));
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        sendSignal('answer', JSON.stringify(answer));
-      } else if (signal.type === 'ice') {
-        if (peerConnection && payload) {
-          try {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(payload));
-          } catch (e) { console.error("Error adding ice candidate:", e); }
-        }
-      }
-    }
-
-    function sendSignal(type, payload) {
-      const fd = new FormData();
-      fd.append('attempt_id', currentAttemptId);
-      fd.append('type', type);
-      fd.append('payload', payload);
-      fetch('webrtc_api?action=send', { method: 'POST', body: fd });
-    }
-
-    function getWebcamSnapshot() {
-      if (!webcamStream) return null;
-      webcamCanvas.width = 160;
-      webcamCanvas.height = 120;
-      const ctx = webcamCanvas.getContext('2d');
-      ctx.drawImage(webcamVideo, 0, 0, 160, 120);
-      return webcamCanvas.toDataURL('image/jpeg', 0.4);
+        form.submit();
     }
 
     function sendPing(status = 'active', violation = null, details = null) {
-      if (isReviewMode || isLocked) return;
+        if (isReviewMode || window.isLocked) return;
+        const fd = new FormData();
+        fd.append('exam_id', examId); fd.append('attempt_no', currentAttemptNo); fd.append('status', status);
+        if (violation) { fd.append('violation_type', violation); fd.append('details', details); }
+        
+        // Thumbnail snapshot backup
+        if (pWebcam && window.isWebcamReady) {
+            webcamCanvas.width = 160; webcamCanvas.height = 120;
+            const ctx = webcamCanvas.getContext('2d');
+            // Try to capture from a video element if we have one globally
+            const v = document.querySelector('video') || webcamVideo;
+            if (v && v.readyState === 4) ctx.drawImage(v, 0, 0, 160, 120);
+            fd.append('webcam_snapshot', webcamCanvas.toDataURL('image/jpeg', 0.4));
+        }
 
-      const formData = new FormData();
-      formData.append('exam_id', examId);
-      formData.append('attempt_no', currentAttemptNo);
-      formData.append('status', status);
-      if (violation) {
-        formData.append('violation_type', violation);
-        formData.append('details', details);
-      }
-
-      // We still send a small low-res snapshot every ping as a backup thumbnail for the grid
-      if (pWebcam && webcamStream) {
-        const snap = getWebcamSnapshot();
-        if (snap) formData.append('webcam_snapshot', snap);
-      }
-
-      fetch('proctor_ping', { method: 'POST', body: formData })
-        .then(r => r.json())
-        .then(data => {
-          if (data.status === 'TERMINATE' || data.status === 'FORCED_LOGOUT' || data.status === 'LOCKED') {
-            isLocked = true;
-            window.onbeforeunload = null;
-            
-            if (data.status === 'LOCKED') {
-                const lockOverlay = document.getElementById('examLockedOverlay');
-                const vcDisplay = document.getElementById('lockViolationCount');
-                if (vcDisplay) vcDisplay.textContent = `${data.count || violationCount} / ${maxStrikes}`;
-                if (lockOverlay) lockOverlay.style.display = 'flex';
-                return;
-            }
-
-            const target = (data.status === 'TERMINATE') ? 'student_dashboard.php' : 'logout.php';
-            // Use window.alert (which we overrode) and handle redirect in its callback/then
-            Swal.fire({
-              title: 'Security Alert',
-              text: data.message,
-              icon: 'error',
-              confirmButtonColor: '#092c19'
-            }).then(() => {
-              location.href = target;
+        fetch('proctor_ping', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'FORCED_LOGOUT' || data.status === 'SUBMITTED') {
+                    window.isLocked = true;
+                    Swal.fire({
+                        title: data.status === 'FORCED_LOGOUT' ? 'Session Conflict' : 'Session Finished',
+                        text: data.message || 'You will be logged out now.',
+                        icon: 'error',
+                        allowOutsideClick: false,
+                        confirmButtonText: 'OK'
+                    }).then(() => {
+                        window.onbeforeunload = null;
+                        location.href = 'student_logout.php';
+                    });
+                    return;
+                }
+                if (data.status === 'LOCKED') {
+                    window.isLocked = true;
+                    const lockVc = document.getElementById('lockViolationCount');
+                    if(lockVc) lockVc.textContent = `${data.count} / ${maxStrikes}`;
+                    const lockOv = document.getElementById('examLockedOverlay');
+                    if(lockOv) lockOv.style.display = 'flex';
+                }
+                if (data.violation_count !== undefined) {
+                    violationCount = data.violation_count;
+                    const vcb = document.getElementById('violationCountBadge');
+                    if(vcb) vcb.textContent = `${violationCount} / ${maxViolations}`;
+                }
+                if (data.remote_command === 'SECURITY_BYPASS') window.finalizeEnrollment();
+                if (data.is_live_requested && pLive) startSignaling();
+                if (data.warning) showAdminWarning(data.warning);
             });
-            return;
-          }
-
-          if (data.violation_count !== undefined) {
-            violationCount = data.violation_count;
-            const countBadge = document.getElementById('violationCountBadge');
-            const progressBar = document.getElementById('violationProgressBar');
-            if (countBadge) countBadge.textContent = `${violationCount} / ${maxViolations}`;
-            if (progressBar) progressBar.style.width = (violationCount / maxViolations * 100) + '%';
-          }
-
-          if (data.is_live_requested && pLive) {
-            startSignaling();
-          }
-
-          if (data.warning) showAdminWarning(data.warning);
-
-          if (data.remote_command === 'SECURITY_BYPASS') {
-            console.warn("Administrative Remote Bypass triggered.");
-            if (typeof window.finalizeEnrollment === 'function') {
-                window.finalizeEnrollment();
-            }
-          }
-        });
     }
 
-    let notificationCount = 0;
-    function showAdminWarning(msg) {
-      const toastEl = document.getElementById('adminWarningToast');
-      if (toastEl) {
-        document.getElementById('adminWarningMsg').textContent = msg;
-        new bootstrap.Toast(toastEl).show();
+    function handleViolation(type, details = "") {
+        if (window.isLocked || isReviewMode || isResumingFlag) return;
+        sendPing('blur', type, details);
         
-        // Phase 5: Sound and Notification Counter
-        const bell = document.getElementById('alertBell');
-        if (bell) bell.play().catch(e => console.warn("Audio play blocked", e));
+        const ov = document.getElementById('violationOverlay');
+        if (ov) ov.style.display = 'flex';
         
-        notificationCount++;
-        const badge = document.getElementById('notificationBadge');
-        if (badge) {
-            badge.textContent = notificationCount;
-            badge.classList.remove('d-none');
-        }
-      }
-    }
-
-    let isResumingFlag = false;
-    function handleViolation(type = "Unknown", details = "") {
-      if (isLocked || isReviewMode || isResumingFlag || (!isWebcamReady && pWebcam)) return;
-
-      proctorStatus = 'blur';
-      sendPing('blur', type, details);
-
-      // After ping, check if strike limit reached
-      setTimeout(() => {
-        if (violationCount >= maxStrikes) {
-          // Phase 4: LOCK the exam — DO NOT auto-submit
-          isLocked = true;
-          window.onbeforeunload = null;
-          const lockOverlay = document.getElementById('examLockedOverlay');
-          const vcDisplay = document.getElementById('lockViolationCount');
-          if (vcDisplay) vcDisplay.textContent = `${violationCount} / ${maxStrikes}`;
-          if (lockOverlay) lockOverlay.style.display = 'flex';
-          // Log to server
-          const fd = new FormData();
-          fd.append('exam_id', examId);
-          fd.append('attempt_no', currentAttemptNo);
-          fd.append('status', 'locked');
-          fetch('proctor_ping', { method: 'POST', body: fd });
-          return;
-        }
-      }, 500);
-
-      const overlay = document.getElementById('violationOverlay');
-      const timerDisplay = document.getElementById('violationTimer');
-      if (overlay) overlay.style.display = 'flex';
-      if (violationTimerInterval) clearInterval(violationTimerInterval);
-      let secondsLeft = 60;
-      if (timerDisplay) timerDisplay.textContent = secondsLeft;
-      violationTimerInterval = setInterval(() => {
-        secondsLeft--;
-        if (timerDisplay) timerDisplay.textContent = secondsLeft;
-        if (secondsLeft <= 0) { clearInterval(violationTimerInterval); resumeExam(); } // Dismiss overlay, don't submit
-      }, 1000);
+        let s = 60;
+        if (violationTimerInterval) clearInterval(violationTimerInterval);
+        violationTimerInterval = setInterval(() => {
+            s--;
+            const vt = document.getElementById('violationTimer');
+            if (vt) vt.textContent = s;
+            if (s <= 0) resumeExam();
+        }, 1000);
     }
 
     function resumeExam() {
-      if (isLocked || isResumingFlag) return;
-      isResumingFlag = true;
-
-      // Request Fullscreen - User gesture provided via button click or Modal OK click
-      if (pFS) {
-        document.documentElement.requestFullscreen().catch((e) => {
-          console.warn("Fullscreen request failed:", e);
-        });
-      }
-
-      const overlay = document.getElementById('violationOverlay');
-      if (overlay) overlay.style.display = 'none';
-      if (violationTimerInterval) clearInterval(violationTimerInterval);
-
-      proctorStatus = 'active';
-      sendPing('active');
-
-      // Allow state to settle before accepting new violations (e.g. exit fullscreen transitions)
-      setTimeout(() => {
-        isResumingFlag = false;
-      }, 1500);
+        if (window.isLocked || isResumingFlag) return;
+        isResumingFlag = true;
+        if (pFS) document.documentElement.requestFullscreen().catch(() => {});
+        const ov = document.getElementById('violationOverlay');
+        if(ov) ov.style.display = 'none';
+        clearInterval(violationTimerInterval);
+        sendPing('active');
+        setTimeout(() => isResumingFlag = false, 1500);
     }
 
-    // Event Listeners for Proctoring
-    if (!isReviewMode) {
-      window.addEventListener('blur', () => { if (pTab) handleViolation("WINDOW_BLUR", "Lost focus"); });
-      document.addEventListener('visibilitychange', () => { if (document.hidden && pTab) handleViolation("TAB_SWITCH", "Switched tab"); });
-      document.addEventListener('fullscreenchange', () => {
-        if (!document.fullscreenElement && pFS && !isLocked) handleViolation("EXIT_FULLSCREEN", "Left fullscreen");
-      });
+    // --- 4. LIVE OVERSIGHT (WEBRTC) ---
 
-      if (pKB) {
-        document.oncontextmenu = (e) => { e.preventDefault(); return false; };
-        document.oncopy = (e) => e.preventDefault();
-        document.oncut = (e) => e.preventDefault();
-        document.onpaste = (e) => e.preventDefault();
-        document.addEventListener('keydown', (e) => {
-          if (e.key === 'F12' || (e.ctrlKey && e.shiftKey) || (e.ctrlKey && 'uupPcC'.includes(e.key)) || e.key === 'PrintScreen') {
-            e.preventDefault();
-            handleViolation("KEYBOARD_LOCK", `Key: ${e.key}`);
-          }
-        });
-      }
-    }
-
-    // Refactored flow: Initialization helpers
-    function startExamFlow() {
-      // Show questions and start clock
-      if (questions.length > 0) renderQuestion(currentIndex);
-      startTimer();
-      // Only show Strict Mode alert if needed (needs user gesture for FS)
-      if (pFS && !isReviewMode) {
-        showGlobalAlert("Strict Mode", "Fullscreen is required to continue. Click OK to establish a secure workspace.", "info", resumeExam);
-      }
-    }
-
-    window.onload = function () {
-      // 1. HIGH-PRIORITY: Security Initialization Watchdog
-      let initWatchdog = null;
-
-      const sGateBtn = document.getElementById('startProctorBtn');
-      if (sGateBtn) {
-        sGateBtn.addEventListener('click', function() {
-          console.log("Initializer triggered. Establishing secure context...");
-          
-          // Instant UI Feedback
-          const iUI = document.getElementById('proctorInitUI');
-          const lUI = document.getElementById('proctorLoadingUI');
-          if (iUI) iUI.classList.add('d-none');
-          if (lUI) lUI.classList.remove('d-none');
-          
-          // Watchdog: If nothing happens in 10s, show a fallback or retry
-          initWatchdog = setTimeout(() => {
-              const msg = document.getElementById('proctorBlockerMsg');
-              if (msg) msg.innerHTML = '<span class="text-warning fw-bold">HANDSHAKE DELAY</span><br><br>The system is waiting for your hardware. If you have already allowed the camera, please wait or <a href="javascript:location.reload()" class="text-accent fw-bold">REFRESH HERE</a>.';
-          }, 10000);
-
-          // Priority 1: Initialize Camera (Triggers browser prompt immediately)
-          if (typeof initWebcam === 'function') {
-            initWebcam();
-          }
-
-          // Priority 2: Request Fullscreen (Polyfill logic)
-          try {
-            const el = document.documentElement;
-            const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
-            if (rfs) rfs.call(el);
-          } catch(e) { 
-            console.warn("Fullscreen deferred: ", e); 
-          }
-        });
-      }
-
-      if (!isReviewMode) {
-        if (pBrowser) {
-          const ua = navigator.userAgent;
-          if (!/Chrome/.test(ua) && !/Edg/.test(ua)) {
-            showGlobalAlert("Browser Compatibility", "Google Chrome or Microsoft Edge is highly recommended for this session.", "warning");
-          }
-        }
-
-        // Auto-start for non-proctored sessions
-        if (!pWebcam && !pLive) {
-           startExamFlow();
-        }
-      } else {
-        // Review mode setup
-        if (questions && questions.length > 0) renderQuestion(0);
-        startTimer();
-      }
-
-      setInterval(() => sendPing(proctorStatus), 15000);
-
-      // Phase 4: System Health Monitors — battery + network
-      if (navigator.getBattery) {
-        navigator.getBattery().then(battery => {
-          const updateBattery = () => {
-            const pct = Math.round(battery.level * 100);
-            const el = document.getElementById('batteryPct');
-            const badge = document.getElementById('batteryStatus');
-            if (el) el.textContent = pct;
-            if (badge) {
-              badge.className = `badge rounded-pill px-2 ${pct < 20 ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis'}`;
+    async function startSignaling() {
+        if (signalingInterval) return;
+        console.log("Live stream oversight requested. Initializing WebRTC handshake...");
+        signalingInterval = setInterval(async () => {
+            const resp = await fetch(`webrtc_api?action=get&attempt_id=${currentAttemptId}&last_id=${lastSignalId}`);
+            const data = await resp.json();
+            if (data.signals) {
+                for (const s of data.signals) {
+                    lastSignalId = s.id;
+                    handleAdminSignal(s).catch(e => console.error("WebRTC Handshake Fail:", e));
+                }
             }
-          };
-          updateBattery();
-          battery.addEventListener('levelchange', updateBattery);
-        });
-      }
+        }, 1500);
+    }
 
-      if (navigator.connection) {
-        const updateNetwork = () => {
-          const conn = navigator.connection;
-          const el = document.getElementById('networkType');
-          if (el) el.textContent = conn.effectiveType || conn.type || '?';
+    async function handleAdminSignal(s) {
+        const payload = JSON.parse(s.payload);
+        if (s.type === 'offer') {
+            if (peerConnection) peerConnection.close();
+            peerConnection = new RTCPeerConnection(rtcConfig);
+            
+            // Get local stream from global media device if possible
+            const stream = (window.webcamStream) ? window.webcamStream : null;
+            if (stream) stream.getTracks().forEach(t => peerConnection.addTrack(t, stream));
+            
+            peerConnection.onicecandidate = e => { if (e.candidate) sendSignal('ice', JSON.stringify(e.candidate)); };
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(payload));
+            const ans = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(ans);
+            sendSignal('answer', JSON.stringify(ans));
+        } else if (s.type === 'ice' && peerConnection) {
+            try { await peerConnection.addIceCandidate(new RTCIceCandidate(payload)); } catch(e) {}
+        }
+    }
+
+    function sendSignal(type, payload) {
+        const fd = new FormData();
+        fd.append('attempt_id', currentAttemptId); fd.append('type', type); fd.append('payload', payload);
+        fetch('webrtc_api?action=send', { method: 'POST', body: fd });
+    }
+
+    // --- 5. SYSTEM HEALTH MONITOR ---
+
+    function initSystemMonitors() {
+        // Battery Monitor
+        if (navigator.getBattery) {
+            navigator.getBattery().then(battery => {
+                const update = () => {
+                    const pct = Math.round(battery.level * 100);
+                    const el = document.getElementById('batteryPct');
+                    if (el) el.textContent = pct;
+                    const b = document.getElementById('batteryStatus');
+                    if (b) b.className = `badge rounded-pill px-2 ${pct < 20 ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis'}`;
+                };
+                update();
+                battery.addEventListener('levelchange', update);
+            });
+        }
+        // Network Monitor
+        const updateNet = () => {
+            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            const el = document.getElementById('networkType');
+            if (el) el.textContent = (conn && conn.effectiveType) ? conn.effectiveType : (navigator.onLine ? 'Online' : 'Offline');
         };
-        updateNetwork();
-        navigator.connection.addEventListener('change', updateNetwork);
-      }
+        updateNet();
+        if (navigator.connection) navigator.connection.addEventListener('change', updateNet);
+        window.addEventListener('online', updateNet);
+        window.addEventListener('offline', updateNet);
+    }
+
+    // --- 6. INITIALIZATION & LIFECYCLE ---
+
+    window.onload = () => {
+        initSystemMonitors();
+        
+        if (questions && questions.length > 0) renderQuestion(currentIndex);
+        startTimer();
+
+        if (!isReviewMode) {
+            // Background Pings (Pulse)
+            setInterval(() => sendPing(proctorStatus), 15000);
+            
+            // Interaction Security
+            window.addEventListener('blur', () => { if (pTab) handleViolation("WINDOW_BLUR", "Focus lost"); });
+            document.addEventListener('visibilitychange', () => { if (document.hidden && pTab) handleViolation("TAB_SWITCH", "Tab change"); });
+            document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && pFS && !window.isLocked) handleViolation("EXIT_FS", "Security mode escape"); });
+            
+            if (pKB) {
+                document.oncontextmenu = e => e.preventDefault();
+                document.addEventListener('keydown', e => {
+                    if (['F12', 'PrintScreen'].includes(e.key) || (e.ctrlKey && 'uupPcC'.includes(e.key))) {
+                        e.preventDefault();
+                        handleViolation("KEYBOARD", `Forbidden Key: ${e.key}`);
+                    }
+                });
+            }
+        }
+        
+        // Self-Healing Logic (Anti-Hang)
+        setInterval(() => {
+            if (questionArea && questionArea.innerHTML.includes('Preparing') && questions && questions.length > 0 && !window.isLocked) {
+                console.warn("Self-Healing: Restoring rendering engine state.");
+                renderQuestion(currentIndex);
+            }
+        }, 2000);
     };
 
-    // Attach Recovery Button
-    const resBtn = document.getElementById('resumeExamBtn');
-    if (resBtn) {
-      resBtn.onclick = resumeExam;
+    // --- 7. GLOBAL INTERFACE HELPERS ---
+
+    window.startExamFlow = () => { if(questions && questions.length > 0) renderQuestion(currentIndex); };
+    window.confirmLeave = url => { Swal.fire({ title: 'Leave Exam?', text: 'Your progress is saved, but time continues.', icon: 'warning', showCancelButton: true, confirmButtonText: 'Yes, Leave' }).then(r => { if(r.isConfirmed) location.href = url; }); };
+    window.confirmLogout = () => { Swal.fire({ title: 'Logout Session?', text: 'Ensure you have submitted or saved your work.', icon: 'error', showCancelButton: true, confirmButtonText: 'Logout Now' }).then(r => { if(r.isConfirmed) location.href = 'student_logout.php'; }); };
+    window.togglePowerMenu = () => { window.confirmLogout(); };
+    
+    // NAVIGATION LISTENERS
+    document.getElementById('prevBtn')?.addEventListener('click', () => { if(currentIndex > 0) renderQuestion(currentIndex - 1); });
+    document.getElementById('nextBtn')?.addEventListener('click', () => { if(currentIndex < total - 1) renderQuestion(currentIndex + 1); });
+
+    function showAdminWarning(msg) {
+        const toastEl = document.getElementById('adminWarningToast');
+        if (toastEl) {
+            document.getElementById('adminWarningMsg').textContent = msg;
+            new bootstrap.Toast(toastEl).show();
+            const bell = document.getElementById('alertBell');
+            if (bell) bell.play().catch(() => {});
+        }
     }
   </script>
 

@@ -19,7 +19,7 @@ if (!$selected_session) {
 }
 
 // Fetch exams in the session
-$exam_sql = "SELECT id, name, type FROM exams WHERE session_id = ?";
+$exam_sql = "SELECT id, name, type, grading_method FROM exams WHERE session_id = ?";
 $exam_params = [$selected_session];
 if ($exam_type_filter !== 'all') {
     $exam_sql .= " AND type = ?";
@@ -39,9 +39,12 @@ if (empty($exam_ids)) {
     $placeholders = implode(',', array_fill(0, count($exam_ids), '?'));
     $student_sql = "SELECT DISTINCT s.id, s.name, s.matric_no 
                     FROM students s 
-                    JOIN objective_attempts oa ON s.id = oa.student_id 
-                    WHERE oa.exam_id IN ($placeholders)";
-    $student_params = $exam_ids;
+                    WHERE s.id IN (
+                        SELECT student_id FROM objective_attempts WHERE exam_id IN ($placeholders)
+                        UNION
+                        SELECT student_id FROM exam_students WHERE exam_id IN ($placeholders)
+                    )";
+    $student_params = array_merge($exam_ids, $exam_ids);
     if ($search) {
         $student_sql .= " AND (s.name LIKE ? OR s.matric_no LIKE ?)";
         $student_params[] = "%$search%";
@@ -66,12 +69,17 @@ if (empty($exam_ids)) {
         foreach ($session_exams as $exam) {
             // Best finished attempt score
             if ($exam['type'] === 'objective') {
-                $score_stmt = $db->prepare("SELECT MAX(score) FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND finished_at IS NOT NULL");
+                $method = $exam['grading_method'] ?? 'highest';
+                if ($method === 'average') {
+                    $score_stmt = $db->prepare("SELECT AVG(score) FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND finished_at IS NOT NULL");
+                } else {
+                    $score_stmt = $db->prepare("SELECT MAX(score) FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND finished_at IS NOT NULL");
+                }
                 $score_stmt->execute([$exam['id'], $student['id']]);
                 $score = $score_stmt->fetchColumn();
             } else {
-                // Practical exam score from assess table
-                $score_stmt = $db->prepare("SELECT score FROM assessments WHERE exam_id = ? AND student_id = ? ORDER BY created_at DESC LIMIT 1");
+                // Practical exam score from answers table (sum of all question scores)
+                $score_stmt = $db->prepare("SELECT SUM(score) FROM answers WHERE exam_id = ? AND student_id = ?");
                 $score_stmt->execute([$exam['id'], $student['id']]);
                 $score = $score_stmt->fetchColumn();
             }
@@ -168,10 +176,9 @@ if ($export_csv && !empty($students_data)) {
           <label class="form-label small fw-bold text-muted">Search Student</label>
           <input type="text" name="search" class="form-control rounded-3 border-0 bg-light" placeholder="Name or Matric No" value="<?= htmlspecialchars($search) ?>">
         </div>
-        <div class="col-md-2">
+        <div class="col-md-2 text-end">
           <button type="submit" class="btn btn-primary w-100 rounded-3">Filter</button>
         </div>
-        <input type="hidden" name="session_id" value="<?= $selected_session ?>">
       </form>
     </div>
 

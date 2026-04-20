@@ -68,6 +68,9 @@
       </div>
       <div class="collapse show" id="navExams">
         <ul class="nav flex-column ps-2">
+          <li><a href="admin_sessions"
+              class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_sessions.php' ? ' active' : '' ?>">
+              <i class="bx bx-calendar me-2"></i><span>Manage Sessions</span></a></li>
           <li><a href="admin_exams"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_exams.php' ? ' active' : '' ?>">
               <i class="bx bx-cog me-2"></i><span>Manage Practical</span></a></li>

@@ -1,0 +1,79 @@
+==========================================================================
+              EXAM PORTAL - UBUNTU MIGRATION & LAN SETUP GUIDE
+==========================================================================
+
+This guide explains how to move your Exam Portal from Windows XAMPP to Ubuntu 
+and run it alongside Moodle using a dedicated LAN IP (10.10.0.107).
+
+--------------------------------------------------------------------------
+STEP 1: PREPARE YOUR DATA ON WINDOWS
+--------------------------------------------------------------------------
+1. Export Database: Open phpMyAdmin -> Select your DB -> Export (SQL).
+2. Prepare Files: Copy the entire 'exam_portal' folder from 'c:\xampp\htdocs\'
+   to a ZIP file or a USB drive.
+
+--------------------------------------------------------------------------
+STEP 2: CONFIGURE THE SECOND IP ADDRESS ON UBUNTU (10.10.0.107)
+--------------------------------------------------------------------------
+To make the system respond to 10.10.0.107 while Moodle stays on 10.10.0.105:
+
+1. Open Netplan Terminal:
+   sudo nano /etc/netplan/01-netcfg.yaml
+
+2. Update your interface (usually eth0 or enp0s3) to include both IPs:
+   
+   addresses:
+     - 10.10.0.105/24
+     - 10.10.0.107/24
+
+3. Apply changes:
+   sudo netplan apply
+
+--------------------------------------------------------------------------
+STEP 3: CONFIGURE APACHE FOR EXAM PORTAL
+--------------------------------------------------------------------------
+1. Create a new Site Configuration:
+   sudo nano /etc/apache2/sites-available/exam_portal.conf
+
+2. Paste this content:
+
+   <VirtualHost 10.10.0.107:80>
+       DocumentRoot /var/www/exam_portal
+       
+       <Directory /var/www/exam_portal>
+           Options Indexes FollowSymLinks
+           AllowOverride All
+           Require all granted
+       </Directory>
+
+       ErrorLog ${APACHE_LOG_DIR}/exam_portal_error.log
+       CustomLog ${APACHE_LOG_DIR}/exam_portal_access.log combined
+   </VirtualHost>
+
+3. Enable the site and mod_rewrite:
+   sudo a2ensite exam_portal.conf
+   sudo a2enmod rewrite
+   sudo systemctl restart apache2
+
+--------------------------------------------------------------------------
+STEP 4: PERMISSIONS & DATABASE
+--------------------------------------------------------------------------
+1. Set Ownership:
+   sudo chown -R www-data:www-data /var/www/exam_portal
+   sudo chmod -R 755 /var/www/exam_portal
+
+2. Set High Permissions for Uploads (Important for Snapshots):
+   sudo chmod -R 777 /var/www/exam_portal/uploads
+
+3. Import Database:
+   Create a new DB in Ubuntu MySQL/phpMyAdmin and import your SQL file.
+
+4. Database Connection:
+   Update '/var/www/exam_portal/db.php' with your Ubuntu DB username/password.
+
+--------------------------------------------------------------------------
+WIFI TIP:
+If you want the system to work on ANY Wi-Fi IP the server gets automatically,
+you can change <VirtualHost 10.10.0.107:80> to <VirtualHost *:8080>.
+Access it via: http://[CURRENT_WIFI_IP]:8080
+--------------------------------------------------------------------------

@@ -71,6 +71,59 @@ if (isset($_GET['action'])) {
         echo json_encode(['success' => true]);
         exit;
     }
+
+    if ($_GET['action'] === 'force_submit_all') {
+        $exam_id = intval($_POST['exam_id']);
+        if ($exam_id <= 0) {
+            echo json_encode(['success' => false, 'error' => 'No exam selected']);
+            exit;
+        }
+
+        // Fetch all active attempts for this exam
+        $stmt = $db->prepare("SELECT id FROM objective_attempts WHERE exam_id = ? AND finished_at IS NULL");
+        $stmt->execute([$exam_id]);
+        $active_ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        $count = 0;
+        foreach ($active_ids as $att_id) {
+            // Re-use logic for each
+            $st = $db->prepare("SELECT * FROM objective_attempts WHERE id = ?");
+            $st->execute([$att_id]);
+            $attempt = $st->fetch();
+
+            if ($attempt) {
+                $e_id = $attempt['exam_id'];
+                $s_id = $attempt['student_id'];
+                $a_no = $attempt['attempt_no'];
+
+                // Calculate current score
+                $qs_check = $db->prepare("SELECT id, correct_option, mark FROM objective_questions WHERE exam_id=? ORDER BY id");
+                $qs_check->execute([$e_id]);
+                $questions_check = $qs_check->fetchAll(PDO::FETCH_ASSOC);
+
+                $ans_check = $db->prepare("SELECT question_id, selected_option FROM objective_answers WHERE exam_id=? AND student_id=? AND attempt_no=?");
+                $ans_check->execute([$e_id, $s_id, $a_no]);
+                $answers_check = $ans_check->fetchAll(PDO::FETCH_KEY_PAIR);
+
+                $calculated_score = 0;
+                foreach ($questions_check as $q) {
+                    if (isset($answers_check[$q['id']])) {
+                        if (strtoupper($answers_check[$q['id']]) === strtoupper($q['correct_option'])) {
+                            $calculated_score += (isset($q['mark']) ? floatval($q['mark']) : 1);
+                        }
+                    }
+                }
+
+                // Finalize attempt
+                $finish_stmt = $db->prepare("UPDATE objective_attempts SET finished_at=NOW(), time_taken = TIMESTAMPDIFF(SECOND, started_at, NOW()), score=?, proctor_status='submitted' WHERE id=?");
+                $finish_stmt->execute([$calculated_score, $att_id]);
+                $count++;
+            }
+        }
+
+        echo json_encode(['success' => true, 'count' => $count]);
+        exit;
+    }
 }
 
 // Filter Logic
@@ -343,8 +396,13 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                             <option value="history" <?= $status_filter === 'history' ? 'selected' : '' ?>>History</option>
                         </select>
                     </div>
-                    <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary w-100 rounded-3 mb-0">Apply</button>
+                    <div class="col-md-2 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary flex-grow-1 rounded-3 mb-0">Apply</button>
+                        <?php if ($selected_exam > 0 && $status_filter === 'active'): ?>
+                            <button type="button" onclick="forceSubmitAll(<?= $selected_exam ?>)" class="btn btn-danger rounded-3 mb-0" title="Submit all for this exam">
+                                <i class="bi bi-box-arrow-right"></i>
+                            </button>
+                        <?php endif; ?>
                     </div>
                 </form>
             </div>
@@ -754,6 +812,37 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                         .then(d => {
                             if (d.success) {
                                 Swal.fire('Command Sent', 'The security shield will be removed on the next student ping (approx. 1-15s).', 'success');
+                            }
+                        });
+                }
+            });
+        }
+
+        function forceSubmitAll(examId) {
+            Swal.fire({
+                title: 'Force Submit ALL?',
+                text: "CRITICAL: This will immediately end and finalize EVERY active attempt for this exam. Students will be logged out. Continue?",
+                icon: 'error',
+                showCancelButton: true,
+                confirmButtonColor: '#e3342f',
+                confirmButtonText: 'Yes, Submit All'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Processing...',
+                        text: 'Grading and finalizing all active sessions.',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
+                    });
+                    const fd = new FormData();
+                    fd.append('exam_id', examId);
+                    fetch('admin_live_proctor?action=force_submit_all', { method: 'POST', body: fd })
+                        .then(r => r.json())
+                        .then(d => {
+                            if (d.success) {
+                                Swal.fire('Success', `Finished ${d.count} active attempts.`, 'success').then(() => location.reload());
+                            } else {
+                                Swal.fire('Error', d.error, 'error');
                             }
                         });
                 }

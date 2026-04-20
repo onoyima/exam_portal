@@ -219,40 +219,7 @@ $practical_exams = array_filter($all_exams, fn($e) => $e['type'] !== 'objective'
         <?php endif; ?>
       </div>
 
-      <!-- Practical Examinations Section -->
-      <?php if (!empty($practical_exams)): ?>
-        <div class="row align-items-center mb-4 mt-5">
-          <div class="col-md-12">
-            <h2 class="fw-bold mb-1">Practical & Clinical Assessments</h2>
-            <p class="text-muted">These assessments are scored directly by examiners at the clinical stations.</p>
-          </div>
-        </div>
-
-        <div class="row g-4">
-          <?php foreach ($practical_exams as $exam): ?>
-            <div class="col-12 col-md-6 col-lg-4">
-              <div class="exam-card-student position-relative">
-                <div class="exam-status-overlay">
-                  <span class="badge bg-primary rounded-pill shadow">PRACTICAL</span>
-                </div>
-                <div class="card-exam-header" style="background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%);">
-                  <h4 class="fw-bold mb-1 text-white text-truncate"><?= htmlspecialchars($exam['name']) ?></h4>
-                  <div class="small opacity-75"><i class="bi bi-geo-alt me-1"></i> Clinical Station</div>
-                </div>
-                <div class="card-exam-body">
-                  <p class="text-muted small mb-4" style="min-height: 48px;">
-                    <?= htmlspecialchars($exam['description'] ?: 'Assigned practical station assessment.') ?>
-                  </p>
-                  <div class="alert bg-light border-0 small mb-0">
-                    <i class="bi bi-info-circle-fill text-primary me-2"></i>
-                    No student login required here. Present yourself to the examiner.
-                  </div>
-                </div>
-              </div>
-            </div>
-          <?php endforeach; ?>
-        </div>
-      <?php endif; ?>
+      <!-- Practical Examinations Section hidden from student view -->
       </div>
     </div>
   </div>

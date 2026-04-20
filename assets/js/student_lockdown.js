@@ -87,63 +87,32 @@
         });
     }
 
-    // 4. Aggressive Kiosk Enforcement
+    // 4. Silent Kiosk Enforcement (No intrusive modals)
     function enforceKiosk() {
         if (!document.fullscreenElement && !window.isReviewMode) {
-            
-            // Silent Attempt on any student page (Requires user gesture)
             const docEl = document.documentElement;
-            const tryFullscreen = () => {
-                if (!document.fullscreenElement) {
-                    docEl.requestFullscreen().catch(() => {
-                        // If silent fails, show the modal only on focus or if not login page
-                        if (!isLoginPage) showLockModal();
-                    });
-                }
-            };
-
-            // Register silent triggers (Skip for Exam Page as it has its own Start button)
-            if (!isExamPage) {
-                document.addEventListener('click', tryFullscreen, { once: true });
-                document.addEventListener('keydown', tryFullscreen, { once: true });
-            }
-
-            // If not login or exam page, be more vocal about it
-            // Exam page has its own specialized 'Security Environment' blocker that handles gesture
-            if (!isLoginPage && !isExamPage) showLockModal();
+            // Silent Attempt
+            docEl.requestFullscreen().catch(() => {
+                // If it fails (no gesture yet), we just wait for the next interaction
+            });
         }
     }
 
-    function showLockModal() {
-        if (typeof Swal !== 'undefined' && Swal.isVisible()) return;
-        
-        const msg = 'SECURE KIOSK MODE REQUIRED. You are in a monitored session. Fullscreen is mandatory.';
-        if (typeof Swal === 'undefined') {
-            const docEl = document.documentElement;
-            if (docEl.requestFullscreen) docEl.requestFullscreen().catch(e => {});
-            return;
+    // High-Integrity Multi-Gesture Trigger
+    function activateKiosk() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(e => console.log("Awaiting user gesture for Kiosk..."));
         }
-
-        Swal.fire({
-            title: 'SECURE MODE REQUIRED',
-            text: msg,
-            icon: 'info',
-            confirmButtonText: 'ACTIVATE SECURE KIOSK',
-            allowOutsideClick: false,
-            confirmButtonColor: '#198754',
-            background: '#0a0a0a',
-            color: '#fff'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                const docEl = document.documentElement;
-                if (docEl.requestFullscreen) docEl.requestFullscreen().catch(e => {});
-            }
-        });
     }
 
-    // Integrity Loop (Skip for Exam Page as it manages its own security gate)
+    // Attach to ALL possible interaction points for 'Automatic' feel
+    ['click', 'mousedown', 'keydown', 'touchstart'].forEach(evt => {
+        document.addEventListener(evt, activateKiosk, { passive: true });
+    });
+
+    // Integrity Loop
     if (!isExamPage) {
-        setInterval(enforceKiosk, 3000);
+        setInterval(enforceKiosk, 2000);
         document.addEventListener('fullscreenchange', enforceKiosk);
         window.addEventListener('blur', enforceKiosk);
     }
