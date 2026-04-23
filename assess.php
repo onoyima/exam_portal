@@ -17,8 +17,15 @@ try {
         throw new Exception("Examiner profile not found.");
     }
 
-    // Get only active exams assigned to this examiner
-    $all_exams_stmt = $db->prepare("SELECT e.* FROM exams e JOIN exam_examiners ee ON e.id=ee.exam_id WHERE ee.examiner_id=? AND e.is_active=1 ORDER BY e.created_at DESC");
+    // Get exams: Assigned Practical/Objective + ALL Active VIVA exams
+    $all_exams_stmt = $db->prepare("
+      SELECT DISTINCT e.* 
+      FROM exams e 
+      LEFT JOIN exam_examiners ee ON e.id = ee.exam_id AND ee.examiner_id = ?
+      WHERE (ee.examiner_id IS NOT NULL OR e.type = 'viva') 
+      AND e.is_active = 1 
+      ORDER BY e.type = 'viva' DESC, e.created_at DESC
+    ");
     $all_exams_stmt->execute([$examiner_id]);
     $all_exams = $all_exams_stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -101,13 +108,14 @@ try {
 
         if (isset($_POST['q']) && is_array($_POST['q'])) {
             foreach ($_POST['q'] as $qid => $score) {
+                // If it's VIVA, we might want to log who updated it
                 $stmt = $db->prepare("SELECT id FROM answers WHERE exam_id=? AND question_id=? AND student_id=?");
                 $stmt->execute([$selected_exam, $qid, $student_id]);
                 $answer_id = $stmt->fetchColumn();
                 
                 if ($answer_id) {
-                    $db->prepare("UPDATE answers SET score=?, examiner_id=? WHERE id=?")
-                      ->execute([floatval($score), $examiner_id, $answer_id]);
+                    $db->prepare("UPDATE answers SET score=?, examiner_id=?, updated_by=? WHERE id=?")
+                      ->execute([floatval($score), $examiner_id, $examiner_id, $answer_id]);
                 } else {
                     $db->prepare("INSERT INTO answers(exam_id, question_id, student_id, examiner_id, score, created_at) VALUES (?,?,?,?,?, NOW())")
                       ->execute([$selected_exam, $qid, $student_id, $examiner_id, floatval($score)]);
@@ -339,10 +347,14 @@ function decimalToFractionLabel($decimal) {
         <?php 
           $is_active = false;
           $current_exam_name = '';
+          $current_exam_type = 'practical';
+          $current_exam_total_mark = 0;
           foreach($all_exams as $ex) {
             if ($ex['id'] == $selected_exam) {
               $is_active = $ex['is_active'];
               $current_exam_name = $ex['name'];
+              $current_exam_type = $ex['type'] ?? 'practical';
+              $current_exam_total_mark = $ex['total_mark'] ?? 0;
               break;
             }
           }
@@ -415,7 +427,21 @@ function decimalToFractionLabel($decimal) {
                         $qs = $db->prepare("SELECT q.* FROM exam_questions eq JOIN questions q ON eq.question_id=q.id WHERE eq.exam_id=?");
                         $qs->execute([$selected_exam]);
                         while ($q = $qs->fetch()):
-                          $values = array_map('trim', explode(',', $q['score_values']));
+                          if ($current_exam_type === 'viva') {
+                            // VIVA scoring starting from 1 up to total_mark
+                            $v_max = intval($current_exam_total_mark);
+                            $values = [];
+                            if ($v_max > 0) {
+                                // For VIVA, we show every point from 1 to max to allow precise scoring
+                                for ($i = 1; $i <= $v_max; $i++) {
+                                    $values[] = $i;
+                                }
+                            } else {
+                                $values = [0];
+                            }
+                          } else {
+                            $values = array_map('trim', explode(',', $q['score_values']));
+                          }
                           $current_val = isset($existing_answers[$q['id']]) ? $existing_answers[$q['id']] : null;
                         ?>
                           <tr>
@@ -425,7 +451,7 @@ function decimalToFractionLabel($decimal) {
                               <div class="assessment-radio-group">
                                 <?php foreach ($values as $col_score):
                                   $input_id = "q{$q['id']}_" . str_replace('.', '_', $col_score);
-                                  $label_display = decimalToFractionLabel($col_score);
+                                  $label_display = ($current_exam_type === 'viva') ? $col_score : decimalToFractionLabel($col_score);
                                   $checked = ($current_val !== null && abs($current_val - $col_score) < 0.001) ? 'checked' : '';
                                 ?>
                                   <div class="form-check">
@@ -465,11 +491,39 @@ function decimalToFractionLabel($decimal) {
             <a href="?exam_id=<?= $selected_exam ?>" class="btn btn-outline-primary btn-sm">Clear Search</a>
           </div>
         <?php else: ?>
-          <div class="empty-state">
-            <i class="bi bi-search text-primary" style="font-size: 3rem;"></i>
-            <h5 class="mt-3">Ready for Assessment</h5>
-            <p class="text-muted">Please search for a student using their Name or Matric Number to start grading.</p>
-          </div>
+          <?php if ($current_exam_type === 'viva' && !empty($students)): ?>
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0 text-primary"><i class="bi bi-people-fill me-2"></i>Examinee Quick List</h5>
+                    <p class="text-muted small mb-0">Select a student from the list below to begin their VIVA assessment.</p>
+                </div>
+                <div class="card-body">
+                    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+                        <?php foreach ($students as $s): ?>
+                            <div class="col">
+                                <a href="?exam_id=<?= $selected_exam ?>&search=<?= urlencode($s['matric_no']) ?>" class="card h-100 text-decoration-none border hover-shadow transition">
+                                    <div class="card-body p-3 d-flex align-items-center">
+                                        <div class="rounded-circle bg-primary bg-opacity-10 p-2 me-3">
+                                            <i class="bi bi-person text-primary"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold text-dark small"><?= htmlspecialchars($s['name']) ?></div>
+                                            <div class="text-muted" style="font-size: 0.75rem;"><?= htmlspecialchars($s['matric_no']) ?></div>
+                                        </div>
+                                    </div>
+                                </a>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+          <?php else: ?>
+            <div class="empty-state">
+              <i class="bi bi-search text-primary" style="font-size: 3rem;"></i>
+              <h5 class="mt-3">Ready for Assessment</h5>
+              <p class="text-muted">Please search for a student using their Name or Matric Number to start grading.</p>
+            </div>
+          <?php endif; ?>
         <?php endif; ?>
 
       <?php else: ?>

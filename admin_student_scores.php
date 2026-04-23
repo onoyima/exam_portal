@@ -6,7 +6,17 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] != 'admin') {
 }
 
 $name = $_SESSION['user'] ?? 'Admin';
-$exams = $db->query("SELECT * FROM exams ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+$type_filter = $_GET['type'] ?? '';
+
+$sql = "SELECT * FROM exams";
+if ($type_filter === 'viva') {
+    $sql .= " WHERE type='viva'";
+} else {
+    $sql .= " WHERE type='practical' OR type IS NULL";
+}
+$sql .= " ORDER BY created_at DESC";
+
+$exams = $db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 $selected_exam = isset($_GET['exam_id']) ? intval($_GET['exam_id']) : 0;
 
 $students = [];
@@ -104,9 +114,16 @@ $exam_name = ($exam_index !== false && isset($exams[$exam_index]['name'])) ? $ex
             <select name="exam_id" id="exam_id" class="form-select" required onchange="this.form.submit()">
               <option value="">-- Select Exam --</option>
               <?php foreach ($exams as $exam): ?>
-                <option value="<?= $exam['id'] ?>" <?= $selected_exam==$exam['id']?'selected':'' ?>><?= htmlspecialchars($exam['name']) ?> <?= $exam['is_active'] ? '(Active)' : '' ?></option>
+                <option value="<?= $exam['id'] ?>" <?= $selected_exam==$exam['id']?'selected':'' ?>>
+                    <?= htmlspecialchars($exam['name']) ?> 
+                    [<?= strtoupper($exam['type'] ?? 'practical') ?>]
+                    <?= $exam['is_active'] ? '(Active)' : '' ?>
+                </option>
               <?php endforeach; ?>
             </select>
+            <?php if ($type_filter): ?>
+                <input type="hidden" name="type" value="<?= htmlspecialchars($type_filter) ?>">
+            <?php endif; ?>
           </div>
         </div>
       </form>

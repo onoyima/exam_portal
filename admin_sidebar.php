@@ -77,6 +77,10 @@
           <li><a href="admin_objective_exams"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_objective_exams.php' ? ' active' : '' ?>">
               <i class="bx bx-list-check me-2"></i><span>Manage Objective</span></a></li>
+          <li><a href="admin_viva_exams"
+              class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_viva_exams.php' ? ' active' : '' ?>">
+              <i class="bx bx-microphone me-2"></i><span>Manage Viva</span>
+              <span class="badge bg-primary-subtle text-primary ms-auto" style="font-size:0.6rem;">NEW</span></a></li>
         </ul>
       </div>
     </li>
@@ -117,6 +121,9 @@
           <li><a href="examiner_objective_results"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'examiner_objective_results.php' ? ' active' : '' ?>">
               <i class="bx bx-check-circle me-2"></i><span>Objective Results</span></a></li>
+          <li><a href="admin_student_scores?type=viva"
+              class="nav-link<?= (basename($_SERVER['PHP_SELF']) == 'admin_student_scores.php' && ($_GET['type'] ?? '') == 'viva') ? ' active' : '' ?>">
+              <i class="bx bx-microphone me-2"></i><span>Viva Results</span></a></li>
           <li><a href="all_students_score"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'all_students_score.php' ? ' active' : '' ?>">
               <i class="bx bx-calculator me-2"></i><span>Score Summary (All)</span></a></li>

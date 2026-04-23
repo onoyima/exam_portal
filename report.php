@@ -212,6 +212,12 @@ $exams = $db->query("SELECT * FROM exams ORDER BY created_at DESC")->fetchAll(PD
       color: #0d9488;
       border: 1px solid #99f6e4;
     }
+
+    .badge-viva {
+      background: #fff7ed;
+      color: #ea580c;
+      border: 1px solid #ffedd5;
+    }
   </style>
   <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
@@ -255,10 +261,20 @@ $exams = $db->query("SELECT * FROM exams ORDER BY created_at DESC")->fetchAll(PD
                       <div class="small text-muted"><?= date('M d, Y', strtotime($ex['created_at'])) ?></div>
                     </td>
                     <td>
-                      <span
-                        class="badge rounded-pill <?= $ex['type'] === 'objective' ? 'badge-objective' : 'badge-practical' ?>">
-                        <i class="bi <?= $ex['type'] === 'objective' ? 'bi-list-check' : 'bi-laptop' ?> me-1"></i>
-                        <?= ucfirst($ex['type']) ?>
+                      <?php
+                        $badge_class = 'badge-practical';
+                        $icon_class = 'bi-laptop';
+                        if ($ex['type'] === 'objective') {
+                            $badge_class = 'badge-objective';
+                            $icon_class = 'bi-list-check';
+                        } elseif ($ex['type'] === 'viva') {
+                            $badge_class = 'badge-viva';
+                            $icon_class = 'bi-mic';
+                        }
+                      ?>
+                      <span class="badge rounded-pill <?= $badge_class ?>">
+                        <i class="bi <?= $icon_class ?> me-1"></i>
+                        <?= ucfirst($ex['type'] ?? 'practical') ?>
                       </span>
                     </td>
                     <td>
