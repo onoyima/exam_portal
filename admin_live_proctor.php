@@ -427,8 +427,7 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                                     ?>
                                     <img src="<?= $snap_src ?>" class="placeholder-snap zoom-img" id="snap-<?= $att['id'] ?>"
                                         onclick="zoomImage(this.src, '<?= addslashes($att['student_name']) ?>')">
-                                    <video id="video-<?= $att['id'] ?>" class="student-video" autoplay playsinline
-                                        muted></video>
+                                    <video id="video-<?= $att['id'] ?>" class="student-video" autoplay playsinline controls></video>
 
                                     <div class="video-status-overlay">
                                         <span id="live-tag-<?= $att['id'] ?>" class="live-tag">LIVE VIDEO</span>
@@ -610,7 +609,8 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                 const stopBtn = document.getElementById(`btn-stop-${attemptId}`);
 
                 video.srcObject = event.streams[0];
-                video.muted = true;
+                video.muted = false;
+                video.volume = 1.0;
                 video.style.display = 'block';
                 video.play().catch(e => console.error("Autoplay prevented:", e));
                 if (snap) snap.style.display = 'none';
