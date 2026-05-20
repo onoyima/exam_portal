@@ -287,21 +287,10 @@
         setInterval(runDetectionCycle, DETECTION_INTERVAL_MS);
     };
 
-    // ─── Auto-hook into exam finalisation ─────────────────────────────────────
-    // We wrap window.finalizeEnrollment so the AI proctor starts automatically
-    // once the student passes the webcam gate and the exam begins.
-    const _origFinalise = window.finalizeEnrollment;
-    if (typeof _origFinalise === 'function') {
-        window.finalizeEnrollment = function () {
-            _origFinalise.apply(this, arguments);
-            setTimeout(window.startAIProctor, STARTUP_DELAY_MS);
-        };
-    } else {
-        // Fallback: wait for DOM ready + delay
-        window.addEventListener('load', () => {
-            setTimeout(window.startAIProctor, STARTUP_DELAY_MS + 2000);
-        });
-    }
+    // ─── Auto-start on DOM ready (no student action required) ─────────────────
+    window.addEventListener('load', () => {
+        setTimeout(window.startAIProctor, STARTUP_DELAY_MS + 2000);
+    });
 
     // ─── Expose playAlarm globally for the main exam script ──────────────────
     window.playAIAlarm = playAlarm;

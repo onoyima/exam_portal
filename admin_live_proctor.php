@@ -6,6 +6,72 @@ require 'db.php';
 $name = $_SESSION['user'] ?? 'Admin';
 
 if (isset($_GET['action'])) {
+
+    // ── Download single student's recording ──
+    if ($_GET['action'] === 'download_recording') {
+        $id = intval($_GET['attempt_id'] ?? 0);
+        $stmt = $db->prepare("SELECT oa.id, s.matric_no, s.name as student_name, e.name as exam_name FROM objective_attempts oa JOIN students s ON oa.student_id = s.id JOIN exams e ON oa.exam_id = e.id WHERE oa.id = ?");
+        $stmt->execute([$id]);
+        $row = $stmt->fetch();
+        if (!$row) { http_response_code(404); die('Attempt not found'); }
+
+        $dir = "uploads/recordings/attempt_{$id}";
+        $files = is_dir($dir) ? glob($dir . "/*.webm") : [];
+        if (empty($files)) { http_response_code(404); die('No recordings found'); }
+
+        $zip = new ZipArchive();
+        $zip_name = tempnam(sys_get_temp_dir(), 'rec_') . '.zip';
+        if ($zip->open($zip_name, ZipArchive::CREATE) !== true) { http_response_code(500); die('Failed to create ZIP'); }
+
+        $matric = preg_replace('/[^A-Za-z0-9_\-]/', '_', $row['matric_no']);
+        foreach ($files as $f) { $zip->addFile($f, "{$matric}/" . basename($f)); }
+        $zip->close();
+
+        $exam_name = preg_replace('/[^A-Za-z0-9_\-]/', '_', $row['exam_name']);
+        header('Content-Type: application/zip');
+        header('Content-Disposition: attachment; filename="recording_' . $matric . '_' . $exam_name . '.zip"');
+        header('Content-Length: ' . filesize($zip_name));
+        readfile($zip_name);
+        @unlink($zip_name);
+        exit;
+    }
+
+    // ── Download all recordings for a specific exam/date ──
+    if ($_GET['action'] === 'download_all_recordings') {
+        $exam_id = intval($_GET['exam_id'] ?? $_POST['exam_id'] ?? 0);
+        $date = $_GET['date'] ?? $_POST['date'] ?? '';
+
+        $attempts = $db->prepare("SELECT oa.id, s.matric_no, s.name, e.name as exam_name FROM objective_attempts oa JOIN students s ON oa.student_id = s.id JOIN exams e ON oa.exam_id = e.id WHERE oa.exam_id = ? AND (DATE(oa.started_at) = ? OR ? = '')");
+        $attempts->execute([$exam_id, $date, $date]);
+        $rows = $attempts->fetchAll(PDO::FETCH_ASSOC);
+        if (empty($rows)) { http_response_code(404); die('No recordings found for the selected criteria'); }
+
+        $zip = new ZipArchive();
+        $zip_name = tempnam(sys_get_temp_dir(), 'recordings_') . '.zip';
+        if ($zip->open($zip_name, ZipArchive::CREATE) !== true) { http_response_code(500); die('Failed to create ZIP'); }
+
+        $added = 0;
+        foreach ($rows as $r) {
+            $dir = "uploads/recordings/attempt_{$r['id']}";
+            if (!is_dir($dir)) continue;
+            $files = glob($dir . "/*.webm");
+            if (empty($files)) continue;
+            $matric = preg_replace('/[^A-Za-z0-9_\-]/', '_', $r['matric_no']);
+            foreach ($files as $f) { $zip->addFile($f, "{$matric}/" . basename($f)); $added++; }
+        }
+        $zip->close();
+
+        if ($added === 0) { @unlink($zip_name); http_response_code(404); die('No video files found'); }
+
+        $exam_name = preg_replace('/[^A-Za-z0-9_\-]/', '_', $rows[0]['exam_name']);
+        header('Content-Type: application/zip');
+        header('Content-Disposition: attachment; filename="all_recordings_' . $exam_name . '_' . ($date ?: 'all') . '.zip"');
+        header('Content-Length: ' . filesize($zip_name));
+        readfile($zip_name);
+        @unlink($zip_name);
+        exit;
+    }
+
     header('Content-Type: application/json');
     $id = $_POST['attempt_id'] ?? 0;
 
@@ -65,8 +131,8 @@ if (isset($_GET['action'])) {
         exit;
     }
 
-    if ($_GET['action'] === 'remote_bypass') {
-        $stmt = $db->prepare("UPDATE objective_attempts SET remote_command = 'SECURITY_BYPASS' WHERE id = ?");
+    if ($_GET['action'] === 'unlock') {
+        $stmt = $db->prepare("UPDATE objective_attempts SET is_locked = 0, violation_count = 0 WHERE id = ?");
         $stmt->execute([$id]);
         echo json_encode(['success' => true]);
         exit;
@@ -197,10 +263,46 @@ $stmt = $db->prepare("
 $stmt->execute($params);
 $live_attempts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Add has_recordings flag to each attempt and collect dates for bulk download
+$recording_dates = [];
+foreach ($live_attempts as &$att) {
+    $rec_dir = "uploads/recordings/attempt_{$att['id']}";
+    $att['has_recordings'] = is_dir($rec_dir) && count(glob($rec_dir . "/*.webm")) > 0;
+    if ($att['started_at']) {
+        $d = date('Y-m-d', strtotime($att['started_at']));
+        $recording_dates[$d] = $d;
+    }
+}
+unset($att);
+krsort($recording_dates);
+
 // Fetch exams for filter
 $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
 
+function svg_icon($name, $extra = '') {
+    $paths = [
+        'shield' => '<path d="M10 2 3 5.5v5.5c0 5 3.5 8.5 7 10 3.5-1.5 7-5 7-10V5.5L10 2Z"/><path d="m7.5 10.5 2 2 4-4"/>',
+        'camera' => '<path d="M11 5H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z"/><path d="M13 8l3-2v8l-3-2"/>',
+        'rec' => '<circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="3" fill="currentColor"/>',
+        'exit' => '<path d="M12 3H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7"/><path d="M17 10H9"/><path d="M13 6l4 4-4 4"/>',
+        'download' => '<path d="M10 2v11"/><path d="m5 9 5 5 5-5"/><path d="M3 17h14"/>',
+        'play' => '<path d="m6 3 10 7-10 7V3Z"/>',
+        'stop' => '<rect x="5" y="5" width="10" height="10" rx="2"/>',
+        'lock' => '<rect x="6" y="9" width="8" height="7" rx="1.5"/><path d="M7 9V6a3 3 0 0 1 6 0v3"/>',
+        'unlock' => '<rect x="6" y="9" width="8" height="7" rx="1.5"/><path d="M7 9V6a3 3 0 0 1 5.5-1.5"/><circle cx="10" cy="13" r="1" fill="currentColor"/>',
+        'mic' => '<rect x="7.5" y="2" width="5" height="9" rx="2.5"/><path d="M5 10a5 5 0 0 0 10 0"/><path d="M10 15v3"/><path d="M7 18h6"/>',
+        'mic-mute' => '<rect x="7.5" y="2" width="5" height="9" rx="2.5"/><path d="M5 10a5 5 0 0 0 10 0"/><path d="M10 15v3"/><path d="M7 18h6"/><path d="m2 2 16 16"/>',
+        'megaphone' => '<path d="M3 9a3 3 0 0 1 3-3h1l7-4v14l-7-4H6a3 3 0 0 1-3-3Z"/><path d="M14 8.5a3 3 0 0 1 0 3"/>',
+        'cam-off' => '<path d="M11 5H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z"/><path d="M13 8l3-2v8l-3-2"/><path d="m1 1 18 18"/>',
+    ];
+    $svg = '<svg class="icon '.$extra.'" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'.($paths[$name] ?? '').'</svg>';
+    return $svg;
+}
 ?>
+<style>
+.icon { width: 1em; height: 1em; display: inline-block; vertical-align: -0.125em; }
+.icon.display-1 { width: 4rem; height: 4rem; }
+</style>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -211,133 +313,6 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="style_enhanced.css" rel="stylesheet">
     <meta http-equiv="refresh" content="60">
-    <style>
-        .proctor-card {
-            border-radius: 1rem;
-            border: 1px solid rgba(0, 0, 0, 0.08) !important;
-            overflow: hidden;
-            background: #fff;
-        }
-
-        .video-wrapper {
-            width: 100%;
-            height: 200px;
-            background: #111;
-            position: relative;
-        }
-
-        .student-video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: none;
-        }
-
-        .placeholder-snap {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            opacity: 0.6;
-        }
-
-        .video-status-overlay {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            z-index: 10;
-        }
-
-        .live-tag {
-            background: #ef4444;
-            color: #fff;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.65rem;
-            font-weight: 800;
-            display: none;
-            animation: pulse-red 2s infinite;
-        }
-
-        @keyframes pulse-red {
-            0% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0.5;
-            }
-
-            100% {
-                opacity: 1;
-            }
-        }
-
-        .btn-live {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 20;
-        }
-
-        .filter-bar {
-            background: #fff;
-            padding: 1.5rem;
-            border-radius: 1rem;
-            margin-bottom: 2rem;
-            border: 1px solid rgba(0, 0, 0, 0.05);
-            box-shadow: var(--shadow);
-        }
-
-        .zoom-img {
-            cursor: zoom-in;
-            transition: transform 0.3s ease;
-        }
-
-        .zoom-img:hover {
-            opacity: 0.9;
-        }
-
-        .stat-dot {
-            height: 10px;
-            width: 10px;
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 5px;
-        }
-
-        .dot-active {
-            background-color: #22c55e;
-            box-shadow: 0 0 10px #22c55e;
-            animation: pulse 2s infinite;
-        }
-
-        .dot-idle {
-            background-color: #f59e0b;
-        }
-
-        .dot-offline {
-            background-color: #94a3b8;
-        }
-
-        @keyframes pulse {
-            0% {
-                transform: scale(0.95);
-                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
-            }
-
-            70% {
-                transform: scale(1);
-                box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
-            }
-
-            100% {
-                transform: scale(0.95);
-                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
-            }
-        }
-    </style>
-    <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body class="bg-light">
@@ -345,11 +320,19 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
     <div class="main-content">
         <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm mb-4">
             <div class="container-fluid">
-                <span class="navbar-brand fw-bold text-success"><i class="bi bi-shield-lock-fill me-2"></i>Live
+                <span class="navbar-brand fw-bold text-success"><?= svg_icon('shield', 'me-2') ?>Live
                     Proctoring Control</span>
                 <div class="ms-auto d-flex align-items-center gap-3">
-                    <span class="badge bg-danger-light text-danger pulse fw-bold py-2"><i
-                            class="bi bi-record-circle me-1"></i> VIDEO SERVER ACTIVE</span>
+                    <?php
+                    $total_rec = 0;
+                    foreach ($live_attempts as $att) { if ($att['has_recordings']) $total_rec++; }
+                    ?>
+                    <?php if ($total_rec > 0): ?>
+                    <span class="badge bg-dark fw-bold py-2" style="font-size:0.7rem;">
+                        <?= svg_icon('camera', 'me-1') ?> <?= $total_rec ?> with recordings
+                    </span>
+                    <?php endif; ?>
+                    <span class="badge bg-danger-light text-danger pulse fw-bold py-2"><?= svg_icon('rec', 'me-1') ?> VIDEO SERVER ACTIVE</span>
                 </div>
             </div>
         </nav>
@@ -400,16 +383,34 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                         <button type="submit" class="btn btn-primary flex-grow-1 rounded-3 mb-0">Apply</button>
                         <?php if ($selected_exam > 0 && $status_filter === 'active'): ?>
                             <button type="button" onclick="forceSubmitAll(<?= $selected_exam ?>)" class="btn btn-danger rounded-3 mb-0" title="Submit all for this exam">
-                                <i class="bi bi-box-arrow-right"></i>
+                                <?= svg_icon('exit') ?>
                             </button>
                         <?php endif; ?>
                     </div>
                 </form>
+                <?php if ($selected_exam > 0 && !empty($recording_dates)): ?>
+                <div class="mt-3 pt-3 border-top d-flex align-items-center gap-3 flex-wrap">
+                    <span class="small fw-bold text-muted"><?= svg_icon('camera', 'me-1') ?>Recordings:</span>
+                    <form method="get" action="admin_live_proctor" class="d-flex gap-2 align-items-center">
+                        <input type="hidden" name="action" value="download_all_recordings">
+                        <input type="hidden" name="exam_id" value="<?= $selected_exam ?>">
+                        <select name="date" class="form-select form-select-sm border-0 bg-light rounded-3" style="width:auto;">
+                            <option value="">All dates</option>
+                            <?php foreach ($recording_dates as $d): ?>
+                                <option value="<?= $d ?>"><?= htmlspecialchars($d) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-outline-dark fw-bold rounded-3">
+                            <?= svg_icon('download', 'me-1') ?> Download ZIP
+                        </button>
+                    </form>
+                </div>
+                <?php endif; ?>
             </div>
             <div class="row g-4">
                 <?php if (empty($live_attempts)): ?>
                     <div class="col-12 text-center py-5">
-                        <i class="bi bi-camera-video-off text-muted display-1"></i>
+                        <?= svg_icon('cam-off', 'text-muted display-1') ?>
                         <p class="text-muted mt-3 fs-5">No active sessions.</p>
                     </div>
                 <?php else: ?>
@@ -429,9 +430,18 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                                         onclick="zoomImage(this.src, '<?= addslashes($att['student_name']) ?>')">
                                     <video id="video-<?= $att['id'] ?>" class="student-video" autoplay playsinline controls></video>
 
-                                    <div class="video-status-overlay">
+                                    <div class="video-status-overlay d-flex flex-column align-items-end gap-1">
                                         <span id="live-tag-<?= $att['id'] ?>" class="live-tag">LIVE VIDEO</span>
-                                        <?php if (!$att['finished_at']): ?>
+                                        <?php if ($att['has_recordings']): ?>
+                                            <span class="badge bg-dark rounded-pill shadow-sm" style="font-size:0.55rem;">
+                                                <?= svg_icon('rec', 'me-1') ?> REC
+                                            </span>
+                                        <?php endif; ?>
+                                        <?php if ($att['is_locked']): ?>
+                                            <span class="badge bg-dark rounded-pill shadow-sm">
+                                                <?= svg_icon('lock', 'me-1') ?> LOCKED
+                                            </span>
+                                        <?php elseif (!$att['finished_at']): ?>
                                             <span class="badge bg-success rounded-pill shadow-sm">
                                                 <span class="stat-dot dot-active"></span> ACTIVE
                                             </span>
@@ -460,6 +470,12 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                                             <small class="text-muted fw-bold"><?= htmlspecialchars($att['matric_no']) ?></small>
                                         </div>
                                         <div class="text-end">
+                                            <?php if ($att['is_locked']): ?>
+                                            <span class="badge bg-dark rounded-pill mb-1"
+                                                style="font-size: 0.6rem;">
+                                                <i class="bi bi-lock-fill"></i> LOCKED
+                                            </span>
+                                            <?php endif; ?>
                                             <span
                                                 class="badge <?= $att['violation_count'] > 0 ? 'bg-danger' : 'bg-success' ?> rounded-pill mb-1"
                                                 style="font-size: 0.6rem;">
@@ -476,18 +492,27 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                                     </div>
 
                                     <?php if (!$att['finished_at']): ?>
+                                        <?php if ($att['is_locked']): ?>
+                                        <div class="d-grid gap-2">
+                                            <button
+                                                onclick="unlockAttempt(<?= $att['id'] ?>, '<?= addslashes($att['student_name']) ?>')"
+                                                class="btn btn-success fw-bold py-2" style="font-size: 0.75rem;">
+                                                <i class="bi bi-unlock-fill me-1"></i> Unlock Student
+                                            </button>
+                                            <?php if ($att['has_recordings']): ?>
+                                            <a href="admin_live_proctor?action=download_recording&attempt_id=<?= $att['id'] ?>"
+                                               class="btn btn-sm btn-outline-dark fw-bold" style="font-size: 0.7rem;">
+                                                <i class="bi bi-download me-1"></i> Download Recording
+                                            </a>
+                                            <?php endif; ?>
+                                        </div>
+                                        <?php else: ?>
                                         <div class="d-flex flex-wrap gap-2">
                                             <button
                                                 onclick="warnStudent(<?= $att['id'] ?>, '<?= addslashes($att['student_name']) ?>')"
                                                 class="btn btn-sm btn-outline-warning flex-grow-1 fw-bold"
                                                 style="font-size: 0.7rem;">
                                                 Warn
-                                            </button>
-                                            <button
-                                                onclick="remoteBypass(<?= $att['id'] ?>, '<?= addslashes($att['student_name']) ?>')"
-                                                class="btn btn-sm btn-outline-success flex-grow-1 fw-bold"
-                                                style="font-size: 0.7rem;">
-                                                Bypass
                                             </button>
                                             <button
                                                 onclick="tagViolation(<?= $att['id'] ?>, '<?= addslashes($att['student_name']) ?>')"
@@ -506,13 +531,26 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                                                 class="btn btn-sm btn-danger flex-grow-1 fw-bold" style="font-size: 0.7rem;">
                                                 Submit
                                             </button>
+                                            <?php if ($att['has_recordings']): ?>
+                                            <a href="admin_live_proctor?action=download_recording&attempt_id=<?= $att['id'] ?>"
+                                               class="btn btn-sm btn-outline-dark fw-bold" style="font-size: 0.7rem;">
+                                                <i class="bi bi-download me-1"></i> Recording
+                                            </a>
+                                            <?php endif; ?>
                                         </div>
+                                        <?php endif; ?>
                                     <?php else: ?>
-                                        <div class="d-grid">
+                                        <div class="d-grid gap-2">
                                             <div class="alert alert-success py-1 px-2 mb-0 text-center fw-bold"
                                                 style="font-size: 0.7rem;">
                                                 Score: <?= $att['score'] ?> | Completed
                                             </div>
+                                            <?php if ($att['has_recordings']): ?>
+                                            <a href="admin_live_proctor?action=download_recording&attempt_id=<?= $att['id'] ?>"
+                                               class="btn btn-sm btn-outline-dark fw-bold" style="font-size: 0.7rem;">
+                                                <i class="bi bi-download me-1"></i> Download Recording
+                                            </a>
+                                            <?php endif; ?>
                                         </div>
                                     <?php endif; ?>
                                 </div>
@@ -575,38 +613,51 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
 
     <script src="assets/js/bootstrap.bundle.min.js"></script>
     <script>
+        const CSRF_TOKEN = '<?= generate_csrf_token() ?>';
         const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
         const activeConnections = {};
         const lastSignalIds = {};
 
         async function startLiveVideo(attemptId) {
             const btn = document.querySelector(`#card-${attemptId} .btn-live`);
+            const stopBtn = document.getElementById(`btn-stop-${attemptId}`);
             if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Syncing...';
 
-            // PHASE 3: SCALE OPTIMIZATION
-            // First, trigger the student to start their signaling loop
-            await fetch(`webrtc_api?action=request_live&attempt_id=${attemptId}`);
+            // Reset button state if something goes wrong
+            function resetButton(msg) {
+                if (btn) { btn.innerHTML = '<i class="bi bi-play-fill"></i> Stream'; btn.disabled = false; btn.style.display = 'block'; }
+                if (stopBtn) stopBtn.style.display = 'none';
+                if (msg) Swal.fire('Stream Error', msg, 'error');
+            }
 
-            // We don't clear signals anymore to avoid race conditions
-            // signals are attempt-specific anyway.
+            // Trigger the student to start their signaling loop
+            try {
+                const reqResp = await fetch(`webrtc_api?action=request_live&attempt_id=${attemptId}`);
+                if (!reqResp.ok) { resetButton('Failed to request live feed from student.'); return; }
+            } catch (e) {
+                resetButton('Network error while requesting live feed.');
+                return;
+            }
 
             const pc = new RTCPeerConnection(rtcConfig);
             activeConnections[attemptId] = pc;
+            let connected = false;
 
-            // CRITICAL: Since the admin/proctor is only RECEIVING video, we must explicitly 
-            // add a transceiver to the connection to tell the browser to negotiate a video track.
-            // Without this, createOffer() will produce an SDP with no media sections.
             pc.addTransceiver('video', { direction: 'recvonly' });
+            pc.addTransceiver('audio', { direction: 'recvonly' });
 
             pc.oniceconnectionstatechange = () => {
                 console.log(`ICE Connection [${attemptId}]:`, pc.iceConnectionState);
+                if (['connected', 'completed'].includes(pc.iceConnectionState)) connected = true;
+                if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+                    if (!connected) resetButton('Could not establish connection to student.');
+                }
             };
 
             pc.ontrack = (event) => {
                 const video = document.getElementById(`video-${attemptId}`);
                 const snap = document.getElementById(`snap-${attemptId}`);
                 const liveTag = document.getElementById(`live-tag-${attemptId}`);
-                const stopBtn = document.getElementById(`btn-stop-${attemptId}`);
 
                 video.srcObject = event.streams[0];
                 video.muted = false;
@@ -618,41 +669,52 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                 if (btn) btn.style.display = 'none';
                 if (stopBtn) stopBtn.style.display = 'block';
 
-                // Phase 5: Auto-start recording
                 startRecording(attemptId, event.streams[0]);
+                connected = true;
+                if (checkInterval) clearInterval(checkInterval);
             };
 
             pc.onicecandidate = (event) => {
                 if (event.candidate) {
-                    sendSignal(attemptId, 'ice', JSON.stringify(event.candidate));
+                    sendSignal(attemptId, 'ice', JSON.stringify(event.candidate)).catch(() => {});
                 }
             };
 
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            sendSignal(attemptId, 'offer', JSON.stringify(offer));
+            try {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                await sendSignal(attemptId, 'offer', JSON.stringify(offer));
+            } catch (e) {
+                resetButton('Failed to create or send connection offer.');
+                return;
+            }
 
-            // Start Monitoring Answer
+            // Monitor for answer with timeout
             lastSignalIds[attemptId] = 0;
-            const checkSignals = setInterval(async () => {
-                const resp = await fetch(`webrtc_api?action=get&attempt_id=${attemptId}&last_id=${lastSignalIds[attemptId]}`);
-                const data = await resp.json();
-                if (data.signals) {
-                    for (const signal of data.signals) {
-                        lastSignalIds[attemptId] = signal.id;
-                        const payload = JSON.parse(signal.payload);
-                        if (signal.type === 'answer') {
-                            console.log("Received answer for", attemptId);
-                            await pc.setRemoteDescription(new RTCSessionDescription(payload));
-                        } else if (signal.type === 'ice') {
-                            console.log("Received ICE candidate for", attemptId);
-                            try {
-                                await pc.addIceCandidate(new RTCIceCandidate(payload));
-                            } catch (e) { console.error("ICE error:", e); }
+            let pollCount = 0;
+            const checkInterval = setInterval(async () => {
+                pollCount++;
+                if (pollCount > 30) { // 30 second timeout
+                    clearInterval(checkInterval);
+                    if (!connected) resetButton('Connection timed out. Student may not be online.');
+                    return;
+                }
+                try {
+                    const resp = await fetch(`webrtc_api?action=get&attempt_id=${attemptId}&last_id=${lastSignalIds[attemptId]}`);
+                    const data = await resp.json();
+                    if (data.signals) {
+                        for (const signal of data.signals) {
+                            lastSignalIds[attemptId] = signal.id;
+                            const payload = JSON.parse(signal.payload);
+                            if (signal.type === 'answer') {
+                                await pc.setRemoteDescription(new RTCSessionDescription(payload));
+                            } else if (signal.type === 'ice') {
+                                try { await pc.addIceCandidate(new RTCIceCandidate(payload)); } catch (e) {}
+                            }
                         }
                     }
-                }
-            }, 1000); // Poll faster (1s) for handshake
+                } catch (e) {}
+            }, 1000);
         }
 
         function sendSignal(attemptId, type, payload) {
@@ -660,7 +722,9 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
             fd.append('attempt_id', attemptId);
             fd.append('type', type);
             fd.append('payload', payload);
-            fetch('webrtc_api?action=send', { method: 'POST', body: fd });
+            fd.append('csrf_token', CSRF_TOKEN);
+            return fetch('webrtc_api?action=send', { method: 'POST', body: fd })
+                .then(r => { if (!r.ok) throw new Error('Signal send failed: ' + r.status); return r.json(); });
         }
 
         async function stopLiveVideo(attemptId) {
@@ -732,11 +796,17 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
             }
             try {
                 const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                activeMicStreams[attemptId] = micStream;
                 const pc = activeConnections[attemptId];
-                if (pc) {
-                    micStream.getAudioTracks().forEach(track => pc.addTrack(track, micStream));
+                if (!pc) {
+                    micStream.getTracks().forEach(t => t.stop());
+                    Swal.fire('No Stream', 'Start video streaming first before speaking.', 'warning');
+                    return;
                 }
+                activeMicStreams[attemptId] = micStream;
+                micStream.getAudioTracks().forEach(track => pc.addTrack(track, micStream));
+                // Trigger renegotiation so student receives the audio track
+                await pc.setLocalDescription(await pc.createOffer());
+                sendSignal(attemptId, 'offer', JSON.stringify(pc.localDescription));
                 document.getElementById(`btn-speak-${attemptId}`).innerHTML = '<i class="bi bi-mic-mute-fill me-1 text-danger"></i>Stop';
             } catch (e) {
                 alert('Microphone access denied.');
@@ -773,6 +843,29 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
             });
         }
 
+        function unlockAttempt(id, name) {
+            Swal.fire({
+                title: 'Unlock Attempt?',
+                text: `Remove the lock on ${name}'s exam? They will be able to resume.`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#198754'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const fd = new FormData();
+                    fd.append('attempt_id', id);
+                    fetch('admin_live_proctor?action=unlock', { method: 'POST', body: fd })
+                        .then(r => r.json())
+                        .then(d => {
+                            if (d.success) {
+                                Swal.fire('Unlocked', `${name}'s exam has been unlocked. Violations cleared.`, 'success');
+                                location.reload();
+                            }
+                        });
+                }
+            });
+        }
+
         function forceSubmit(id, name) {
             Swal.fire({
                 title: 'Force Submit?',
@@ -792,28 +885,6 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                             alert('Error: ' + d.error);
                         }
                     });
-                }
-            });
-        }
-
-        function remoteBypass(id, name) {
-            Swal.fire({
-                title: 'Remote Bypass?',
-                text: `Force unlock the security gate for ${name}? Use this if they are stuck on initialization.`,
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#198754'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    const fd = new FormData();
-                    fd.append('attempt_id', id);
-                    fetch('admin_live_proctor?action=remote_bypass', { method: 'POST', body: fd })
-                        .then(r => r.json())
-                        .then(d => {
-                            if (d.success) {
-                                Swal.fire('Command Sent', 'The security shield will be removed on the next student ping (approx. 1-15s).', 'success');
-                            }
-                        });
                 }
             });
         }

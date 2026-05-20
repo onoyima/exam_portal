@@ -14,16 +14,24 @@ auto_finalize_expired_attempts($db, null, $student_id);
 // Fetch all active exams (Objective and Practical) assigned to this student
 $stmt = $db->prepare("SELECT e.*, 
     (SELECT COUNT(*) FROM objective_attempts oa WHERE oa.exam_id = e.id AND oa.student_id = ? AND oa.finished_at IS NOT NULL) as finished_attempts,
-    (SELECT COUNT(*) FROM objective_attempts oa WHERE oa.exam_id = e.id AND oa.student_id = ?) as total_attempts
+    (SELECT COUNT(*) FROM objective_attempts oa WHERE oa.exam_id = e.id AND oa.student_id = ?) as total_attempts,
+    (SELECT COUNT(*) FROM objective_attempts oa WHERE oa.exam_id = e.id AND oa.student_id = ? AND oa.is_locked = 1) as locked_attempts
     FROM exams e JOIN exam_students es ON e.id=es.exam_id 
     WHERE es.student_id=? AND e.is_active=1 ORDER BY e.created_at DESC");
-$stmt->execute([$student_id, $student_id, $student_id]);
+$stmt->execute([$student_id, $student_id, $student_id, $student_id]);
 $all_exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Separate exams by type
 $active_exams = array_filter($all_exams, fn($e) => $e['type'] === 'objective');
 $practical_exams = array_filter($all_exams, fn($e) => $e['type'] !== 'objective');
 
+$requires_media = false;
+foreach($active_exams as $e) {
+    if (!empty($e['proctor_webcam']) || !empty($e['proctor_live_video']) || !empty($e['is_strict'])) {
+        $requires_media = true;
+        break;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -159,6 +167,7 @@ $practical_exams = array_filter($all_exams, fn($e) => $e['type'] !== 'objective'
             $has_finished = $exam['finished_attempts'] > 0;
             $can_recompute = $exam['finished_attempts'] < ($exam['max_attempts'] ?? 1);
             $is_active = $exam['total_attempts'] > $exam['finished_attempts'];
+            $is_locked = ($exam['locked_attempts'] ?? 0) > 0;
 
             // Scheduling Logic
             $now = time();
@@ -167,11 +176,23 @@ $practical_exams = array_filter($all_exams, fn($e) => $e['type'] !== 'objective'
 
             $is_started = !$start_ts || ($now >= $start_ts);
             $is_ended = $end_ts && ($now > $end_ts);
+
+            // Security features for this exam
+            $sec_features = [];
+            if (($exam['proctor_fullscreen'] ?? 0) || ($exam['is_strict'] ?? 0)) $sec_features[] = ['icon' => 'bi-arrows-fullscreen', 'label' => 'Fullscreen'];
+            if (($exam['proctor_tab_lock'] ?? 0) || ($exam['is_strict'] ?? 0)) $sec_features[] = ['icon' => 'bi-window-stack', 'label' => 'Tab Lock'];
+            if (($exam['proctor_kb_lock'] ?? 0) || ($exam['is_strict'] ?? 0)) $sec_features[] = ['icon' => 'bi-keyboard', 'label' => 'KB Lock'];
+            if (($exam['proctor_webcam'] ?? 0) || ($exam['is_strict'] ?? 0)) $sec_features[] = ['icon' => 'bi-camera-video', 'label' => 'Webcam'];
+            if (($exam['proctor_live_video'] ?? 0) || ($exam['is_strict'] ?? 0)) $sec_features[] = ['icon' => 'bi-broadcast', 'label' => 'Live Monitor'];
+            if ($exam['proctor_auto_submit'] ?? 0) $sec_features[] = ['icon' => 'bi-send-clock', 'label' => 'Auto Submit'];
+            if ($exam['proctor_browser_check'] ?? 0) $sec_features[] = ['icon' => 'bi-browser-chrome', 'label' => 'Browser Check'];
             ?>
             <div class="col-12 col-md-6 col-lg-4" id="exam-<?= $exam['id'] ?>">
               <div class="exam-card-student position-relative">
                 <div class="exam-status-overlay">
-                  <?php if ($has_finished): ?>
+                  <?php if ($is_locked): ?>
+                    <span class="badge bg-dark rounded-pill shadow"><i class="bi bi-lock-fill me-1"></i> LOCKED</span>
+                  <?php elseif ($has_finished): ?>
                     <span class="badge bg-success rounded-pill shadow">Attempted (<?= $exam['finished_attempts'] ?>)</span>
                   <?php elseif (!$is_started): ?>
                     <span class="badge bg-secondary rounded-pill shadow">NOT YET AVAILABLE</span>
@@ -191,6 +212,18 @@ $practical_exams = array_filter($all_exams, fn($e) => $e['type'] !== 'objective'
                     <?= htmlspecialchars($exam['description'] ?: 'No description provided.') ?>
                   </p>
 
+                  <?php if (!empty($sec_features)): ?>
+                  <div class="mb-3">
+                    <div class="d-flex flex-wrap gap-1">
+                      <?php foreach ($sec_features as $sf): ?>
+                      <span class="badge bg-light text-dark fw-normal px-2 py-1 small" style="font-size: 0.6rem; border: 1px solid #dee2e6;">
+                        <i class="bi <?= $sf['icon'] ?> me-1 text-primary"></i><?= $sf['label'] ?>
+                      </span>
+                      <?php endforeach; ?>
+                    </div>
+                  </div>
+                  <?php endif; ?>
+
                   <div class="vstack gap-3 mb-4">
                     <div class="d-flex justify-content-between align-items-center">
                       <span class="small text-muted fw-semibold">Max Attempts:</span>
@@ -199,7 +232,9 @@ $practical_exams = array_filter($all_exams, fn($e) => $e['type'] !== 'objective'
                   </div>
 
                   <div class="d-grid gap-2">
-                    <?php if ($is_active): ?>
+                    <?php if ($is_locked): ?>
+                      <button class="btn btn-secondary py-3 rounded-4 fw-bold" disabled><i class="bi bi-lock-fill me-1"></i> LOCKED — CONTACT ADMIN</button>
+                    <?php elseif ($is_active): ?>
                       <a href="student_objective_exam?exam_id=<?= $exam['id'] ?>&resume=1" class="btn btn-warning py-3 rounded-4 shadow-sm fw-bold">RESUME EXAM</a>
                     <?php elseif ($can_recompute): ?>
                       <?php if (!$is_started || $is_ended): ?>
@@ -288,6 +323,7 @@ $practical_exams = array_filter($all_exams, fn($e) => $e['type'] !== 'objective'
     }
     window.addEventListener('hashchange', checkHash);
     window.addEventListener('load', checkHash);
+
   </script>
   <!-- sweetalert_custom_injected_v1 -->
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -377,6 +413,51 @@ $practical_exams = array_filter($all_exams, fn($e) => $e['type'] !== 'objective'
       });
     });
   </script>
+
+<?php if ($requires_media): ?>
+  <script>
+    /* ── Silent full security pre-authorization ─────────────────────────────────
+       All security setup happens HERE on the dashboard, before the student ever
+       clicks START. This means when they open the exam:
+       - Webcam/mic permission is already granted (no dialog)
+       - Fullscreen permission is primed (user gesture on START click)
+       - AI proctor models can pre-load
+       No student action is required — everything runs in the background.
+    ── */
+    (function () {
+        if (sessionStorage.getItem('_portalSecurityReady')) return;
+
+        // 1. Pre-authorize webcam + microphone
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            setTimeout(function () {
+                navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                    .then(function (stream) {
+                        stream.getTracks().forEach(function (t) { t.stop(); });
+                        sessionStorage.setItem('_portalSecurityReady', '1');
+                        console.log('[Portal] Webcam & mic pre-authorized. Exam access is ready.');
+                    })
+                    .catch(function (err) {
+                        console.warn('[Portal] Camera/mic pre-authorization declined:', err.name);
+                    });
+            }, 1200);
+        }
+
+        // 2. Pre-request fullscreen pointer lock by listening for the first user gesture
+        //    on the dashboard. This primes the browser so fullscreen works instantly
+        //    when the exam page loads.
+        document.addEventListener('click', function fsPrimer() {
+            document.removeEventListener('click', fsPrimer);
+            // Request and immediately exit fullscreen to prime permission
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen()
+                    .then(function () { document.exitFullscreen(); })
+                    .catch(function () {});
+            }
+        }, { once: true });
+    })();
+  </script>
+<?php endif; ?>
+
 </body>
 
 
