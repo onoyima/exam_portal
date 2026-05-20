@@ -235,8 +235,13 @@ $questions = $questions->fetchAll(PDO::FETCH_ASSOC);
         <div class="col-md-7">
           <div class="card p-4 shadow-sm border-0 rounded-4 h-100">
             <h5 class="fw-bold mb-3"><i class="bi bi-cloud-arrow-up me-2"></i>Bulk Question Upload</h5>
-            <p class="text-muted small">Upload <strong>.csv</strong> or <strong>.txt (Aiken)</strong> files. Formulas
-              ($...$) and chemical symbols are supported.</p>
+            <p class="text-muted small">Upload <strong>.csv</strong> or <strong>.txt (Aiken)</strong> files. Formulas ($...$) and chemical symbols are supported.</p>
+            <div class="mb-3 small">
+              <span class="text-muted fw-bold me-2">Templates:</span>
+              <a href="download_template.php?type=objective_csv_simple" class="btn btn-sm btn-link p-0 text-success fw-bold me-3"><i class="bi bi-download me-1"></i>Simple CSV</a>
+              <a href="download_template.php?type=objective_csv_extended" class="btn btn-sm btn-link p-0 text-success fw-bold me-3"><i class="bi bi-download me-1"></i>Extended CSV</a>
+              <a href="download_template.php?type=objective_aiken" class="btn btn-sm btn-link p-0 text-success fw-bold"><i class="bi bi-download me-1"></i>Aiken TXT</a>
+            </div>
             <form method="post" enctype="multipart/form-data" class="row g-2">
               <div class="col">
                 <input type="file" name="file" accept=".csv,.txt" class="form-control rounded-pill" required>
@@ -259,6 +264,9 @@ $questions = $questions->fetchAll(PDO::FETCH_ASSOC);
           <div class="card p-4 shadow-sm border-0 rounded-4 h-100 text-white bg-primary">
             <h5 class="fw-bold mb-3"><i class="bi bi-images me-2"></i>Image Library (.zip)</h5>
             <p class="small opacity-75">Upload a ZIP of diagrams. Reference filenames in your CSV/TXT.</p>
+            <div class="mb-3 small">
+              <a href="download_template.php?type=objective_images_zip" class="btn btn-sm btn-link p-0 text-white fw-bold opacity-90"><i class="bi bi-download me-1"></i>Download Sample Image ZIP</a>
+            </div>
             <form method="post" enctype="multipart/form-data" class="row g-2">
               <div class="col">
                 <input type="file" name="zip" accept=".zip" class="form-control form-control-sm rounded-pill" required>

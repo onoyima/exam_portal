@@ -364,6 +364,8 @@ foreach ($exams as $exam) {
             <input type="file" name="students_file" id="students_file" class="form-control" accept=".csv,.txt" required>
             <small class="text-muted">Format: <code>Name,Matric No,Username</code> (e.g.
               <code>John Doe,MAT1001,johndoe</code>)</small>
+            <br>
+            <a href="download_template.php?type=student_assign" class="btn btn-sm btn-link p-0 text-info fw-bold"><i class="bi bi-download me-1"></i>Download CSV Template</a>
           </div>
           <div class="col-md-2">
             <label class="form-label">&nbsp;</label>
@@ -452,6 +454,8 @@ foreach ($exams as $exam) {
               required>
             <small class="text-muted">Format: <code>Question Text,Score Values</code> (e.g.
               <code>How are you?,0.5,1,2</code>)</small>
+            <br>
+            <a href="download_template.php?type=practical_steps" class="btn btn-sm btn-link p-0 text-info fw-bold"><i class="bi bi-download me-1"></i>Download CSV Template</a>
           </div>
           <div class="col-md-3">
             <label class="form-label">&nbsp;</label>

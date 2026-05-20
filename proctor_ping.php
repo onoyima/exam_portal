@@ -3,6 +3,10 @@ require 'auth.php';
 check_auth('student');
 require 'db.php';
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    validate_csrf();
+}
+
 $student_id = $_SESSION['student_id'];
 $exam_id = isset($_POST['exam_id']) ? intval($_POST['exam_id']) : 0;
 $status = isset($_POST['status']) ? $_POST['status'] : 'active';
@@ -14,6 +18,11 @@ $attempt_no = isset($_POST['attempt_no']) ? intval($_POST['attempt_no']) : 1;
 if (!in_array($status, ['active', 'blur', 'disconnected', 'submitted'])) {
     $status = 'active';
 }
+
+// BUG FIX: $stored_session was previously undefined — fetch from DB now
+$session_stmt = $db->prepare("SELECT current_session_id FROM students WHERE id = ?");
+$session_stmt->execute([$student_id]);
+$stored_session = $session_stmt->fetchColumn() ?: null;
 
 if ($stored_session !== session_id() && $stored_session !== null) {
     echo json_encode(['status' => 'FORCED_LOGOUT', 'message' => 'This account has been logged in on another device.']);

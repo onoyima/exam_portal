@@ -15,21 +15,38 @@ require 'db.php';
 // Fetch dynamic settings
 $settings = $db->query("SELECT setting_key, setting_value FROM system_settings")->fetchAll(PDO::FETCH_KEY_PAIR);
 $portal_title = $settings['portal_title'] ?? 'Veritas Exam Portal';
+$portal_logo = $settings['portal_logo'] ?? '';
+$portal_favicon = $settings['portal_favicon'] ?? 'assets/favicon.ico';
 $portal_image = $settings['portal_image'] ?? 'assets/img/login_bg.jpg';
 $staff_content = $settings['staff_login_content'] ?? 'Authorized Staff only. Enter your administrative credentials to manage sessions and grades.';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = $_POST['username'];
-    $password = $_POST['password'];
+    validate_csrf();
+    $username = trim($_POST['username'] ?? '');
+    $password = $_POST['password'] ?? '';
 
-    $stmt = $db->prepare("SELECT * FROM examiners WHERE username = ? AND password = ?");
-    $stmt->execute([$username, $password]);
+    // Fetch by username only — never pass password to SQL
+    $stmt = $db->prepare("SELECT * FROM examiners WHERE username = ?");
+    $stmt->execute([$username]);
     $user = $stmt->fetch();
 
+    $authenticated = false;
     if ($user) {
+        if (password_verify($password, $user['password'])) {
+            // Modern bcrypt password — valid
+            $authenticated = true;
+        } elseif ($user['password'] === $password) {
+            // Legacy plaintext match — auto-upgrade to bcrypt on this login
+            $newHash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
+            $db->prepare("UPDATE examiners SET password = ? WHERE id = ?")->execute([$newHash, $user['id']]);
+            $authenticated = true;
+        }
+    }
+
+    if ($authenticated) {
         $_SESSION['user'] = $user['username'];
         $_SESSION['role'] = $user['role'];
-        
+
         $db->prepare("INSERT INTO login_history (username, user_type, ip_address, user_agent, status) VALUES (?, ?, ?, ?, 'success')")
            ->execute([$username, $user['role'], $_SERVER['REMOTE_ADDR'], $_SERVER['HTTP_USER_AGENT'] ?? '']);
 
@@ -44,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <title>Staff Login - <?= htmlspecialchars($portal_title) ?></title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="<?= htmlspecialchars($portal_favicon) ?>" type="image/x-icon">
     <link href="assets/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
@@ -139,7 +156,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             <div class="form-container">
                 <div class="brand-logo">
-                    <img src="assets/favicon.ico" alt="Logo">
+                    <?php if (!empty($portal_logo) && file_exists($portal_logo)): ?>
+                        <img src="<?= htmlspecialchars($portal_logo) ?>" alt="Logo" style="max-height: 45px; width: auto; border-radius: 4px;">
+                    <?php else: ?>
+                        <img src="assets/favicon.ico" alt="Logo">
+                    <?php endif; ?>
                     <span>STAFF PORTAL</span>
                 </div>
                 
@@ -154,6 +175,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php endif; ?>
                     
                     <form method="post">
+                        <?php csrf_field(); ?>
                         <div class="mb-3">
                             <label class="form-label">Username</label>
                             <input type="text" name="username" class="form-control" placeholder="staff_id" required autofocus>

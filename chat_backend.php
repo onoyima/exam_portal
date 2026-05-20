@@ -92,6 +92,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Mark messages as read
+    if (isset($_GET['action']) && $_GET['action'] === 'mark_read') {
+        $where = 'receiver_id=? AND (is_read IS NULL OR is_read=0)';
+        $params = [$sender_id];
+        if (isset($_POST['sender_id'])) {
+            $where .= ' AND sender_id=?';
+            $params[] = intval($_POST['sender_id']);
+        }
+        $stmt = $db->prepare("UPDATE chat_messages SET is_read=1 WHERE $where");
+        $stmt->execute($params);
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
     // Clear chats (admin only)
     if (isset($_GET['action']) && $_GET['action'] === 'clear_chats') {
         if ($sender_role === 'admin') {
@@ -116,18 +130,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->execute([$sender_id, $receiver_id, $group_id, $message, $media_type, $media_blob]);
     echo json_encode(['success' => true]);
     exit;
-
-    // Mark messages as read
-    if (isset($_GET['action']) && $_GET['action'] === 'mark_read') {
-        $where = 'receiver_id=? AND (is_read IS NULL OR is_read=0)';
-        $params = [$sender_id];
-        if (isset($_POST['sender_id'])) {
-            $where .= ' AND sender_id=?';
-            $params[] = intval($_POST['sender_id']);
-        }
-        $stmt = $db->prepare("UPDATE chat_messages SET is_read=1 WHERE $where");
-        $stmt->execute($params);
-        echo json_encode(['success' => true]);
-        exit;
-    }
 } 

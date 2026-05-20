@@ -39,6 +39,7 @@ if (!$is_view_mode) {
 
 // Handle Final Submission POST - Moved score calculation here to store it for analytics
 if (isset($_POST['confirm_final_submit'])) {
+  validate_csrf();
   $attempt_no = intval($_POST['current_attempt_no'] ?? 1);
 
   // Calculate score logic (duplicated here for immediate storage)
@@ -247,6 +248,13 @@ if ($view_result) {
         WHERE es.student_id=? AND e.type='objective' AND e.is_active=1 ORDER BY e.created_at DESC");
     $stmt_sb->execute([$student_id, $student_id, $student_id]);
     $active_exams = $stmt_sb->fetchAll(PDO::FETCH_ASSOC);
+
+    // Populate $practical_exams as expected by student_sidebar.php
+    $stmt_prac = $db->prepare("SELECT e.* FROM exams e JOIN exam_students es ON e.id=es.exam_id 
+        WHERE es.student_id=? AND e.type != 'objective' AND e.is_active=1 ORDER BY e.created_at DESC");
+    $stmt_prac->execute([$student_id]);
+    $practical_exams = $stmt_prac->fetchAll(PDO::FETCH_ASSOC);
+
     include 'student_sidebar.php';
     ?>
 
@@ -610,13 +618,32 @@ $current_index = 0;
         const lUI = document.getElementById('proctorLoadingUI');
         if (iUI) iUI.classList.add('d-none');
         if (lUI) lUI.classList.remove('d-none');
-        
+
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            .then(() => { 
-                window.isWebcamReady = true; 
-                window.finalizeEnrollment(); 
+            .then(stream => {
+                window.isWebcamReady = true;
+                window.webcamStream  = stream;
+                // FIX: Create a persistent hidden <video> bound to the stream.
+                // sendPing uses document.querySelector('video') for canvas snapshots.
+                let lv = document.getElementById('_webcamLiveCapture');
+                if (!lv) {
+                    lv = document.createElement('video');
+                    lv.id          = '_webcamLiveCapture';
+                    lv.muted       = true;
+                    lv.autoplay    = true;
+                    lv.playsInline = true;
+                    lv.style.cssText = 'position:fixed;top:-2px;left:-2px;width:1px;height:1px;opacity:0;pointer-events:none;';
+                    document.body.appendChild(lv);
+                }
+                lv.srcObject = stream;
+                lv.play().catch(e => console.warn('[Webcam] Autoplay blocked:', e));
+                window.finalizeEnrollment();
             })
-            .catch(() => window.finalizeEnrollment());
+            .catch(e => {
+                console.warn('[Webcam] Camera/mic access denied:', e);
+                window.isWebcamReady = false;
+                window.finalizeEnrollment();
+            });
     };
 
     // System Monitor Hooks
@@ -1021,6 +1048,10 @@ $current_index = 0;
     const canViewScore = <?= $exam['student_can_view_score'] ? 'true' : 'false' ?>;
     const shuffleOptions = <?= ($exam['shuffle_options'] ?? 0) ? 'true' : 'false' ?>;
 
+    // Expose key exam config globally for external modules (AI proctor module, etc.)
+    window.pWebcam      = pWebcam;
+    window.isReviewMode = isReviewMode;
+
     // Runtime State
     let currentIndex = window.currentIndex || 0;
     let remainingSeconds = <?= (int) ($remaining_seconds ?? 0) ?>;
@@ -1162,6 +1193,7 @@ $current_index = 0;
         const fd = new FormData();
         fd.append('exam_id', examId); fd.append('attempt_no', currentAttemptNo);
         fd.append('question_id', qid); fd.append('option', opt);
+        fd.append('csrf_token', '<?= generate_csrf_token() ?>');
         fetch('objective_exam_api?action=save_answer', { method: 'POST', body: fd });
     }
 
@@ -1211,6 +1243,7 @@ $current_index = 0;
         // Meta markers for finalization
         const h1 = document.createElement('input'); h1.type='hidden'; h1.name='confirm_final_submit'; h1.value='1'; form.appendChild(h1);
         const h2 = document.createElement('input'); h2.type='hidden'; h2.name='current_attempt_no'; h2.value=currentAttemptNo; form.appendChild(h2);
+        const h3 = document.createElement('input'); h3.type='hidden'; h3.name='csrf_token'; h3.value='<?= generate_csrf_token() ?>'; form.appendChild(h3);
         
         Swal.fire({ 
             title: 'Submitting Assessment...', 
@@ -1226,6 +1259,7 @@ $current_index = 0;
         if (isReviewMode || window.isLocked) return;
         const fd = new FormData();
         fd.append('exam_id', examId); fd.append('attempt_no', currentAttemptNo); fd.append('status', status);
+        fd.append('csrf_token', '<?= generate_csrf_token() ?>');
         if (violation) { fd.append('violation_type', violation); fd.append('details', details); }
         
         // Thumbnail snapshot backup
@@ -1273,13 +1307,42 @@ $current_index = 0;
             });
     }
 
+    // Expose sendPing globally so the AI proctoring module can report violations
+    window.sendPing = sendPing;
+
+    // ─── Strike / Violation Alarm (Web Audio API — works 100% offline) ──────────
+    function playStrikeAlarm() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            [
+                { freq: 880,  t: 0.00, dur: 0.12 },
+                { freq: 880,  t: 0.18, dur: 0.12 },
+                { freq: 1200, t: 0.36, dur: 0.30 }
+            ].forEach(({ freq, t, dur }) => {
+                const osc  = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(freq, ctx.currentTime + t);
+                gain.gain.setValueAtTime(0.45, ctx.currentTime + t);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + dur);
+                osc.start(ctx.currentTime + t);
+                osc.stop(ctx.currentTime  + t + dur + 0.05);
+            });
+        } catch (e) { /* silent — audio context may not be available */ }
+        // Also ring the HTML audio bell element as a fallback
+        const bell = document.getElementById('alertBell');
+        if (bell) bell.play().catch(() => {});
+    }
+
     function handleViolation(type, details = "") {
         if (window.isLocked || isReviewMode || isResumingFlag) return;
         sendPing('blur', type, details);
-        
+        playStrikeAlarm(); // 🔔 Sound alarm on every security strike/violation
         const ov = document.getElementById('violationOverlay');
         if (ov) ov.style.display = 'flex';
-        
+
         let s = 60;
         if (violationTimerInterval) clearInterval(violationTimerInterval);
         violationTimerInterval = setInterval(() => {
@@ -1323,12 +1386,30 @@ $current_index = 0;
         if (s.type === 'offer') {
             if (peerConnection) peerConnection.close();
             peerConnection = new RTCPeerConnection(rtcConfig);
-            
-            // Get local stream from global media device if possible
+
+            // Attach local camera/mic so admin can see and hear student
             const stream = (window.webcamStream) ? window.webcamStream : null;
             if (stream) stream.getTracks().forEach(t => peerConnection.addTrack(t, stream));
-            
+
             peerConnection.onicecandidate = e => { if (e.candidate) sendSignal('ice', JSON.stringify(e.candidate)); };
+
+            // FIX: Receive incoming audio from admin (admin speaking to student).
+            // Without this handler the student's browser silently discards admin audio.
+            peerConnection.ontrack = (event) => {
+                if (event.track.kind === 'audio') {
+                    let adminAudio = document.getElementById('adminAudioPlayer');
+                    if (!adminAudio) {
+                        adminAudio            = document.createElement('audio');
+                        adminAudio.id         = 'adminAudioPlayer';
+                        adminAudio.autoplay   = true;
+                        adminAudio.style.display = 'none';
+                        document.body.appendChild(adminAudio);
+                    }
+                    adminAudio.srcObject = event.streams[0] || new MediaStream([event.track]);
+                    console.log('[WebRTC] Proctor audio connected — admin is speaking.');
+                }
+            };
+
             await peerConnection.setRemoteDescription(new RTCSessionDescription(payload));
             const ans = await peerConnection.createAnswer();
             await peerConnection.setLocalDescription(ans);
@@ -1341,6 +1422,7 @@ $current_index = 0;
     function sendSignal(type, payload) {
         const fd = new FormData();
         fd.append('attempt_id', currentAttemptId); fd.append('type', type); fd.append('payload', payload);
+        fd.append('csrf_token', '<?= generate_csrf_token() ?>');
         fetch('webrtc_api?action=send', { method: 'POST', body: fd });
     }
 
@@ -1475,6 +1557,12 @@ $current_index = 0;
       </div>
     </div>
   </div>
+  <?php if ($exam['proctor_webcam'] || $exam['is_strict']): ?>
+  <!-- AI Proctoring: TensorFlow.js BlazeFace — runs 100% client-side, no GPU server needed -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.1.0/dist/blazeface.min.js"></script>
+  <script src="assets/js/ai_proctor.js"></script>
+  <?php endif; ?>
   <!-- sweetalert_custom_injected_v1 -->
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script>

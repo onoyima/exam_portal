@@ -8,6 +8,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'student') {
 }
 require 'db.php';
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  validate_csrf();
+}
+
 // -------------------------------------------------------
 // AJAX STEP 1: Matric lookup — returns student info for identity confirmation modal
 // -------------------------------------------------------
@@ -85,6 +89,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 // Fetch dynamic settings
 $settings = $db->query("SELECT setting_key, setting_value FROM system_settings")->fetchAll(PDO::FETCH_KEY_PAIR);
 $portal_title = $settings['portal_title'] ?? 'Veritas Exam Portal';
+$portal_logo = $settings['portal_logo'] ?? '';
+$portal_favicon = $settings['portal_favicon'] ?? 'assets/favicon.ico';
 $portal_image = $settings['portal_image'] ?? 'assets/img/login_bg.jpg';
 $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure Assessment Portal. Please enter your credentials to begin your session.';
 ?>
@@ -94,7 +100,7 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
   <title>Student Login - <?= htmlspecialchars($portal_title) ?></title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Secure student examination login portal">
-  <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
+  <link rel="icon" href="<?= htmlspecialchars($portal_favicon) ?>" type="image/x-icon">
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -543,7 +549,11 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
   <!-- Secure Header -->
   <header class="secure-header">
     <div class="brand">
-      <div class="shield-icon"><i class="bi bi-shield-lock-fill"></i></div>
+      <?php if (!empty($portal_logo) && file_exists($portal_logo)): ?>
+        <img src="<?= htmlspecialchars($portal_logo) ?>" alt="Logo" style="max-height: 35px; width: auto; border-radius: 4px;">
+      <?php else: ?>
+        <div class="shield-icon"><i class="bi bi-shield-lock-fill"></i></div>
+      <?php endif; ?>
       <span><?= htmlspecialchars($portal_title) ?></span>
     </div>
     <span class="secure-badge">🔒 SECURE ENVIRONMENT</span>
@@ -597,7 +607,7 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
             type="text"
             id="matricInput"
             class="secure-input"
-            placeholder="e.g. VUG/CSC/16/1336 or VUGCSC161336"
+            placeholder="e.g. vug/csc/11/1313 or vugcsc111313"
             autocomplete="off"
             autocorrect="off"
             autocapitalize="characters"
@@ -670,6 +680,7 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
         const fd = new FormData();
         fd.append('action', 'lookup');
         fd.append('matric_no', matric);
+        fd.append('csrf_token', '<?= generate_csrf_token() ?>');
         const res = await fetch('student_login', { method: 'POST', body: fd });
         const data = await res.json();
 
@@ -697,6 +708,7 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
       const fd = new FormData();
       fd.append('action', 'confirm_login');
       fd.append('matric_no', pendingMatric);
+      fd.append('csrf_token', '<?= generate_csrf_token() ?>');
 
       try {
         const res = await fetch('student_login', { method: 'POST', body: fd });
@@ -732,6 +744,7 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
     async function executePowerOff() {
       const fd = new FormData();
       fd.append('action', 'power_off');
+      fd.append('csrf_token', '<?= generate_csrf_token() ?>');
       await fetch('student_login', { method: 'POST', body: fd });
       document.exitFullscreen?.();
       window.close();

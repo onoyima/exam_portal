@@ -1,8 +1,12 @@
 <?php
+require 'auth.php';
 require 'db.php';
-session_start();
 
 header('Content-Type: application/json');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    validate_csrf();
+}
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'student' || !isset($_SESSION['student_id'])) {
     echo json_encode(['success' => false, 'error' => 'Unauthorized']);

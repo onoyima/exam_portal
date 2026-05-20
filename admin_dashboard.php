@@ -7,13 +7,14 @@ $name = $_SESSION['user'] ?? 'Admin';
 
 $success_msg = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_settings'])) {
-  $instruction = trim($_POST['login_instruction']);
-  $stmt = $db->prepare("INSERT INTO system_settings (setting_key, setting_value) VALUES ('login_instruction', ?) ON DUPLICATE KEY UPDATE setting_value = ?");
+  validate_csrf();
+  $instruction = trim($_POST['student_login_content']);
+  $stmt = $db->prepare("INSERT INTO system_settings (setting_key, setting_value) VALUES ('student_login_content', ?) ON DUPLICATE KEY UPDATE setting_value = ?");
   $stmt->execute([$instruction, $instruction]);
   $success_msg = "Settings updated successfully!";
 }
 
-$login_instruction = $db->query("SELECT setting_value FROM system_settings WHERE setting_key = 'login_instruction'")->fetchColumn() ?: "Welcome to the Assessment Portal. Use your Matric Number to login.";
+$student_login_content = $db->query("SELECT setting_value FROM system_settings WHERE setting_key = 'student_login_content'")->fetchColumn() ?: "1. LOGIN WITH YOUR MATRIC NUMBER\n2. Only your Matric Number is needed.\n3. Make sure you submit before you leave.";
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -129,10 +130,11 @@ $login_instruction = $db->query("SELECT setting_value FROM system_settings WHERE
               </div>
             <?php endif; ?>
             <form method="post">
+              <?php csrf_field(); ?>
               <div class="mb-3">
                 <label class="form-label fw-bold small">Student Login Instructions</label>
-                <textarea name="login_instruction" class="form-control border-light-subtle bg-light rounded-3" rows="4"
-                  required><?= htmlspecialchars($login_instruction) ?></textarea>
+                <textarea name="student_login_content" class="form-control border-light-subtle bg-light rounded-3" rows="4"
+                  required><?= htmlspecialchars($student_login_content) ?></textarea>
                 <div class="form-text mt-1 small">This text appears next to the student login form. Use it for help or
                   reminders.</div>
               </div>

@@ -1,14 +1,29 @@
 <?php
-$host = 'localhost';
-$dbname = 'backup_db_pre_implementation';
-$user = 'root';      // Change to your DB username
-$pass = '';          // Change to your DB password
+/**
+ * db.php — Primary Database Connection
+ * Credentials loaded from config.php (single source of truth).
+ */
+require_once __DIR__ . '/config.php';
+
+// Runtime error configuration: never expose errors to users
+ini_set('display_errors', '0');
+ini_set('log_errors',     '1');
+if (!is_dir(__DIR__ . '/logs')) {
+    @mkdir(__DIR__ . '/logs', 0755, true);
+}
+ini_set('error_log', __DIR__ . '/logs/php_errors.log');
 
 try {
-    $db = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass);
+    $db = new PDO(
+        "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET,
+        DB_USER,
+        DB_PASS
+    );
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {
-    die("Database connection failed: " . $e->getMessage());
+    error_log("Database connection failed: " . $e->getMessage());
+    http_response_code(503);
+    die('Service temporarily unavailable. Please try again later.');
 }
 require_once 'exam_logic.php';
 ?>

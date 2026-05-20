@@ -1,8 +1,24 @@
+<?php
+// Fetch branding details for admin layout if $db is active
+$admin_logo = 'assets/favicon.ico';
+$admin_title = 'Admin';
+if (isset($db)) {
+    try {
+        $sidebar_settings = $db->query("SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('portal_logo', 'portal_title')")->fetchAll(PDO::FETCH_KEY_PAIR);
+        if (!empty($sidebar_settings['portal_logo']) && file_exists($sidebar_settings['portal_logo'])) {
+            $admin_logo = $sidebar_settings['portal_logo'];
+        }
+        if (!empty($sidebar_settings['portal_title'])) {
+            $admin_title = $sidebar_settings['portal_title'];
+        }
+    } catch (Exception $e) {}
+}
+?>
 <div class="sidebar d-flex flex-column p-3" id="sidebarMenu">
   <div class="d-flex align-items-center justify-content-between mb-4 sidebar-header-container">
-    <div class="text-center sidebar-logo-section">
-      <img src="assets/favicon.ico" alt="Logo" width="40" height="40" class="mb-1">
-      <h4 class="fw-bold mb-0 small text-dark">Admin</h4>
+    <div class="text-center sidebar-logo-section w-100">
+      <img src="<?= htmlspecialchars($admin_logo) ?>" alt="Logo" width="40" style="max-height: 40px; width: auto; object-fit: contain;" class="mb-1 rounded-1">
+      <h4 class="fw-bold mb-0 small text-dark mt-1 text-truncate" style="max-width: 150px;" title="<?= htmlspecialchars($admin_title) ?>"><?= htmlspecialchars($admin_title) ?></h4>
     </div>
     <div class="d-flex gap-2">
       <!-- Desktop Toggle -->

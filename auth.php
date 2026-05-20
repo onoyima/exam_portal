@@ -3,6 +3,31 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// ─── Session Inactivity Timeout (Component 1.4) ───────────────────────
+if (isset($_SESSION['role'])) {
+    if (!defined('SESSION_LIFETIME')) {
+        require_once __DIR__ . '/config.php';
+    }
+    $lifetime = defined('SESSION_LIFETIME') ? (int)SESSION_LIFETIME : 1800;
+
+    if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > $lifetime)) {
+        $role = $_SESSION['role'];
+        session_unset();
+        session_destroy();
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $_SESSION['auth_error'] = "Your session has expired due to inactivity.";
+        if ($role === 'student') {
+            header("Location: student_login");
+        } else {
+            header("Location: login");
+        }
+        exit;
+    }
+    $_SESSION['last_activity'] = time();
+}
+
 /**
  * Device Authorization Gate — runs for student-facing pages only.
  * Auto-registers unknown IPs as 'pending', blocks 'rejected' devices.
@@ -13,9 +38,13 @@ function check_device_auth() {
     $ua = substr($_SERVER['HTTP_USER_AGENT'] ?? 'Unknown', 0, 500);
 
     try {
-        // We need a db connection but auth.php may load before db.php
-        // Use a lightweight direct connection with same credentials as db.php
-        $db_dev = new PDO("mysql:host=localhost;dbname=backup_db_pre_implementation;charset=utf8mb4", 'root', '');
+        // Use shared config constants instead of hardcoded credentials
+        if (!defined('DB_HOST')) { require_once __DIR__ . '/config.php'; }
+        $db_dev = new PDO(
+            "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET,
+            DB_USER,
+            DB_PASS
+        );
         $db_dev->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         // Upsert: register device if new, update last_seen if known
@@ -128,6 +157,37 @@ function display_auth_errors()
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
               </div>';
         unset($_SESSION['auth_error']);
+    }
+}
+
+/**
+ * Generate CSRF token if not set (Component 1.3)
+ */
+function generate_csrf_token() {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+/**
+ * Output a hidden input element containing the CSRF token
+ */
+function csrf_field() {
+    $token = generate_csrf_token();
+    echo '<input type="hidden" name="csrf_token" value="' . htmlspecialchars($token) . '">';
+}
+
+/**
+ * Validate CSRF token in post request
+ */
+function validate_csrf() {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $token = $_POST['csrf_token'] ?? '';
+        if (empty($token) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
+            http_response_code(403);
+            die("CSRF token validation failed. Unauthorized request.");
+        }
     }
 }
 ?>

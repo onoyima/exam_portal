@@ -190,8 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['questions'])) {
                   <div class="mt-2 small text-muted">Format:
                     <code>Firstname, Middlename, Lastname, Email, Matric No, Password</code>
                     <br>
-                    <a href="student_upload_template.csv" class="btn btn-sm btn-link p-0 text-primary fw-bold"
-                      download><i class="bi bi-download me-1"></i>Download CSV Template</a>
+                    <a href="download_template.php?type=student_bulk" class="btn btn-sm btn-link p-0 text-primary fw-bold"><i class="bi bi-download me-1"></i>Download CSV Template</a>
                   </div>
                 </div>
 
@@ -256,7 +255,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['questions'])) {
                 <div class="mb-4">
                   <label class="form-label fw-bold">2. Select CSV/TXT File</label>
                   <input type="file" name="questions" class="form-control rounded-3" accept=".csv,.txt" required>
-                  <div class="mt-2 small text-muted">Format: <code>Step Text, Score Values (0,1,2...)</code></div>
+                  <div class="mt-2 small text-muted">Format: <code>Step Text, Score Values (0,1,2...)</code>
+                    <br>
+                    <a href="download_template.php?type=practical_steps" class="btn btn-sm btn-link p-0 text-success fw-bold"><i class="bi bi-download me-1"></i>Download CSV Template</a>
+                  </div>
                 </div>
 
                 <div class="alert bg-success-light text-success border-0 mb-4 p-3 rounded-4 small">
