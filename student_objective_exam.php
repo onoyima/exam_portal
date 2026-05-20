@@ -619,6 +619,11 @@ $current_index = 0;
         if (iUI) iUI.classList.add('d-none');
         if (lUI) lUI.classList.remove('d-none');
 
+        // Request Fullscreen explicitly on user gesture
+        if (pFS && !document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(e => console.warn('[Fullscreen]', e));
+        }
+
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then(stream => {
                 window.isWebcamReady = true;
@@ -723,12 +728,7 @@ $current_index = 0;
           <p class="text-muted mt-3" style="font-size: 0.75rem;">By proceeding, you acknowledge the proctoring protocols.</p>
         </div>
 
-        <!-- RESTORED RED POWER BUTTON (Z-MAX) -->
-        <div id="lockdownPowerBtn" onclick="try { togglePowerMenu(); } catch(e) { alert('Power Error: ' + e.message); }"
-          class="position-fixed d-flex align-items-center justify-content-center shadow-lg"
-          style="bottom: 30px; right: 30px; width: 60px; height: 60px; background: #dc3545; color: white; border-radius: 50%; cursor: pointer; z-index: 2147483647; border: 3px solid white; box-shadow: 0 0 20px rgba(220,53,69,0.5);">
-          <i class="bi bi-power" style="font-size: 1.8rem;"></i>
-        </div>
+
 
         <div id="proctorLoadingUI" class="d-none p-5 text-center">
           <div class="mb-4">
@@ -770,6 +770,14 @@ $current_index = 0;
       </div>
     </div>
   <?php endif; ?>
+
+  <!-- RESTORED RED POWER BUTTON (Z-MAX) OUTSIDE SHIELD -->
+  <div id="lockdownPowerBtn" onclick="try { togglePowerMenu(); } catch(e) { alert('Power Error: ' + e.message); }"
+    class="position-fixed d-flex align-items-center justify-content-center shadow-lg"
+    style="bottom: 30px; right: 30px; width: 60px; height: 60px; background: #dc3545; color: white; border-radius: 50%; cursor: pointer; z-index: 2147483647; border: 3px solid white; box-shadow: 0 0 20px rgba(220,53,69,0.5); transition: transform 0.2s;">
+    <i class="bi bi-power" style="font-size: 1.8rem;"></i>
+  </div>
+
   <!-- Exam Navbar -->
   <nav class="navbar navbar-light bg-white shadow-sm sticky-top exam-navbar">
     <div class="container-fluid px-lg-5 py-2">
@@ -1007,7 +1015,7 @@ $current_index = 0;
   </div>
 
   <!-- Admin Warning Toast -->
-  <div class="toast-container position-fixed top-0 start-50 translate-middle-x p-3" style="z-index: 9999;">
+  <div class="toast-container position-fixed top-0 start-50 translate-middle-x p-3" style="z-index: 2147483647 !important;">
     <div id="adminWarningToast" class="toast align-items-center text-white bg-danger border-0 h-100" role="alert"
       aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
       <div class="d-flex p-3">
@@ -1504,12 +1512,38 @@ $current_index = 0;
     document.getElementById('nextBtn')?.addEventListener('click', () => { if(currentIndex < total - 1) renderQuestion(currentIndex + 1); });
 
     function showAdminWarning(msg) {
-        const toastEl = document.getElementById('adminWarningToast');
-        if (toastEl) {
-            document.getElementById('adminWarningMsg').textContent = msg;
-            new bootstrap.Toast(toastEl).show();
-            const bell = document.getElementById('alertBell');
-            if (bell) bell.play().catch(() => {});
+        // Play the proctor warning strike sound immediately
+        playStrikeAlarm();
+
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: '⚠️ ADMINISTRATIVE WARNING',
+                text: msg,
+                icon: 'warning',
+                confirmButtonColor: '#dc3545',
+                confirmButtonText: 'I Acknowledge & Understand',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                allowEnterKey: true,
+                backdrop: 'rgba(10, 10, 10, 0.85)',
+                customClass: {
+                    container: 'admin-warning-swal-container'
+                },
+                didOpen: () => {
+                    // Ensure SweetAlert overlay floats absolutely on top of all lockdowns and overlays
+                    const swalContainer = document.querySelector('.admin-warning-swal-container');
+                    if (swalContainer) {
+                        swalContainer.style.setProperty('z-index', '2147483647', 'important');
+                    }
+                }
+            });
+        } else {
+            // Elegant fallback to elevated Bootstrap Toast
+            const toastEl = document.getElementById('adminWarningToast');
+            if (toastEl) {
+                document.getElementById('adminWarningMsg').textContent = msg;
+                new bootstrap.Toast(toastEl).show();
+            }
         }
     }
   </script>

@@ -85,8 +85,9 @@ $warning = $warn_stmt->fetch(PDO::FETCH_ASSOC);
 $warning_to_send = null;
 if ($warning && !empty($warning['warning_message'])) {
     $warning_to_send = $warning['warning_message'];
-    // Clear warning after retrieval so it doesn't pop up again unless set again (optional, depending on UX choice)
-    // For now, keep it showing for the 30s interval or until admin changes it.
+    // Clear warning after retrieval so it doesn't pop up again unless set again by examiner
+    $clear_stmt = $db->prepare("UPDATE objective_attempts SET warning_message = NULL, last_warning_at = NULL WHERE exam_id = ? AND student_id = ? AND attempt_no = ?");
+    $clear_stmt->execute([$exam_id, $student_id, $attempt_no]);
 }
 
 // 3. Log Violation if sent
