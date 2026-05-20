@@ -143,15 +143,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       foreach ($lines as $line) {
         $line = trim($line);
-        if (preg_match('/^[A-D]\. /i', $line)) {
-          $options[strtoupper($line[0])] = trim(substr($line, 2));
-        } elseif (preg_match('/^ANSWER: /i', $line)) {
-          $correct = strtoupper(trim(substr($line, 7)));
+        if ($line === '') continue;
+
+        if (preg_match('/^[A-D][\.\)]\s+/i', $line)) {
+          $opt_letter = strtoupper($line[0]);
+          $opt_text = trim(preg_replace('/^[A-D][\.\)]\s+/i', '', $line));
+          $options[$opt_letter] = $opt_text;
+        } elseif (preg_match('/^ANSWER:\s*([A-D])/i', $line, $ans_matches)) {
+          $correct = strtoupper($ans_matches[1]);
           if ($q && !empty($options) && $correct) {
             $stmt = $db->prepare("INSERT INTO objective_questions (exam_id, question_text, option_a, option_b, option_c, option_d, correct_option, mark) VALUES (?,?,?,?,?,?,?,?)");
             $stmt->execute([
               $exam_id,
-              $q,
+              trim($q),
               $options['A'] ?? '',
               $options['B'] ?? '',
               $options['C'] ?? '',
@@ -164,10 +168,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           $options = [];
           $correct = null;
         } else {
-          if ($q === null)
+          if ($q === null) {
             $q = $line;
-          else
+          } else {
             $q .= "\n" . $line;
+          }
         }
       }
     }
