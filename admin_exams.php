@@ -18,8 +18,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $start_time = !empty($_POST['start_time']) ? $_POST['start_time'] : null;
     $end_time = !empty($_POST['end_time']) ? $_POST['end_time'] : null;
 
-    $stmt = $db->prepare("INSERT INTO exams(name, is_active, is_strict, proctor_fullscreen, proctor_tab_lock, proctor_kb_lock, proctor_auto_submit, proctor_browser_check, proctor_webcam, proctor_live_video, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$_POST['exam_name'], $_POST['is_active'] ? 1 : 0, $_POST['is_strict'] ? 1 : 0, $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time]);
+    $stmt = $db->prepare("INSERT INTO exams(name, is_active, is_strict, session_id, proctor_fullscreen, proctor_tab_lock, proctor_kb_lock, proctor_auto_submit, proctor_browser_check, proctor_webcam, proctor_live_video, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$_POST['exam_name'], $_POST['is_active'] ? 1 : 0, $_POST['is_strict'] ? 1 : 0, $_POST['session_id'], $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time]);
     $success = "Exam '" . htmlspecialchars($_POST['exam_name']) . "' created successfully! You can now add students and questions to this exam.";
   } elseif (isset($_POST['edit_exam'])) {
     // Edit existing exam
@@ -33,8 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $start_time = !empty($_POST['start_time']) ? $_POST['start_time'] : null;
     $end_time = !empty($_POST['end_time']) ? $_POST['end_time'] : null;
 
-    $stmt = $db->prepare("UPDATE exams SET name = ?, is_active = ?, is_strict = ?, proctor_fullscreen = ?, proctor_tab_lock = ?, proctor_kb_lock = ?, proctor_auto_submit = ?, proctor_browser_check = ?, proctor_webcam = ?, proctor_live_video = ?, start_time = ?, end_time = ? WHERE id = ?");
-    $stmt->execute([$_POST['exam_name'], $_POST['is_active'] ? 1 : 0, $_POST['is_strict'] ? 1 : 0, $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time, $_POST['exam_id']]);
+    $stmt = $db->prepare("UPDATE exams SET name = ?, is_active = ?, is_strict = ?, session_id = ?, proctor_fullscreen = ?, proctor_tab_lock = ?, proctor_kb_lock = ?, proctor_auto_submit = ?, proctor_browser_check = ?, proctor_webcam = ?, proctor_live_video = ?, start_time = ?, end_time = ? WHERE id = ?");
+    $stmt->execute([$_POST['exam_name'], $_POST['is_active'] ? 1 : 0, $_POST['is_strict'] ? 1 : 0, $_POST['session_id'], $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time, $_POST['exam_id']]);
     $success = "Exam updated successfully!";
   } elseif (isset($_POST['activate'])) {
     $db->prepare("UPDATE exams SET is_active=1 WHERE id=?")->execute([$_POST['exam_id']]);
@@ -167,6 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
 }
 
+$sessions = $db->query("SELECT * FROM academic_sessions ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
 $exams = $db->query("SELECT * FROM exams ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 $students = $db->query("SELECT * FROM students ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 $questions = $db->query("SELECT * FROM questions ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
@@ -237,7 +238,16 @@ foreach ($exams as $exam) {
         <p class="text-muted mb-3">First, create a new exam. You can add students and questions to it after creation.
         </p>
         <form method="post" class="row g-3">
-          <div class="col-md-6">
+          <div class="col-md-3">
+            <label for="session_id" class="form-label">Academic Session</label>
+            <select name="session_id" id="session_id" class="form-select" required>
+              <option value="">-- Select --</option>
+              <?php foreach ($sessions as $s): ?>
+                <option value="<?= $s['id'] ?>" <?= $s['is_active'] ? 'selected' : '' ?>><?= htmlspecialchars($s['session_name']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-md-3">
             <label for="exam_name" class="form-label">Exam Name</label>
             <input type="text" name="exam_name" id="exam_name" class="form-control" placeholder="Enter exam name"
               required>
@@ -354,6 +364,8 @@ foreach ($exams as $exam) {
             <input type="file" name="students_file" id="students_file" class="form-control" accept=".csv,.txt" required>
             <small class="text-muted">Format: <code>Name,Matric No,Username</code> (e.g.
               <code>John Doe,MAT1001,johndoe</code>)</small>
+            <br>
+            <a href="download_template.php?type=student_assign" class="btn btn-sm btn-link p-0 text-info fw-bold"><i class="bi bi-download me-1"></i>Download CSV Template</a>
           </div>
           <div class="col-md-2">
             <label class="form-label">&nbsp;</label>
@@ -442,6 +454,8 @@ foreach ($exams as $exam) {
               required>
             <small class="text-muted">Format: <code>Question Text,Score Values</code> (e.g.
               <code>How are you?,0.5,1,2</code>)</small>
+            <br>
+            <a href="download_template.php?type=practical_steps" class="btn btn-sm btn-link p-0 text-info fw-bold"><i class="bi bi-download me-1"></i>Download CSV Template</a>
           </div>
           <div class="col-md-3">
             <label class="form-label">&nbsp;</label>
@@ -559,7 +573,7 @@ foreach ($exams as $exam) {
                           <?php endif; ?>
                         </form>
                         <button class="btn btn-info btn-sm"
-                          onclick="editExam(<?= $exam['id'] ?>, '<?= addslashes($exam['name']) ?>', <?= $exam['is_active'] ?>, <?= $exam['is_strict'] ?>, <?= $exam['proctor_fullscreen'] ?>, <?= $exam['proctor_tab_lock'] ?>, <?= $exam['proctor_kb_lock'] ?>, <?= $exam['proctor_auto_submit'] ?>, <?= $exam['proctor_browser_check'] ?>, <?= $exam['proctor_webcam'] ?>, <?= $exam['proctor_live_video'] ?? 0 ?>, '<?= $exam['start_time'] ? date('Y-m-d\TH:i', strtotime($exam['start_time'])) : '' ?>', '<?= $exam['end_time'] ? date('Y-m-d\TH:i', strtotime($exam['end_time'])) : '' ?>')">Edit</button>
+                          onclick="editExam(<?= $exam['id'] ?>, '<?= addslashes($exam['name']) ?>', <?= $exam['is_active'] ?>, <?= $exam['is_strict'] ?>, <?= $exam['proctor_fullscreen'] ?>, <?= $exam['proctor_tab_lock'] ?>, <?= $exam['proctor_kb_lock'] ?>, <?= $exam['proctor_auto_submit'] ?>, <?= $exam['proctor_browser_check'] ?>, <?= $exam['proctor_webcam'] ?>, <?= $exam['proctor_live_video'] ?? 0 ?>, '<?= $exam['start_time'] ? date('Y-m-d\TH:i', strtotime($exam['start_time'])) : '' ?>', '<?= $exam['end_time'] ? date('Y-m-d\TH:i', strtotime($exam['end_time'])) : '' ?>', <?= $exam['session_id'] ?? 0 ?>)">Edit</button>
                         <form method="post" class="d-inline"
                           onsubmit="return confirm('Are you sure you want to delete this exam? This will remove all associated data.')">
                           <input type="hidden" name="exam_id" value="<?= $exam['id'] ?>">
@@ -588,6 +602,14 @@ foreach ($exams as $exam) {
         <form method="post">
           <div class="modal-body">
             <input type="hidden" name="exam_id" id="edit_exam_id">
+            <div class="mb-3">
+              <label for="edit_session_id" class="form-label">Academic Session</label>
+              <select name="session_id" id="edit_session_id" class="form-select" required>
+                <?php foreach ($sessions as $s): ?>
+                  <option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['session_name']) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
             <div class="mb-3">
               <label for="edit_exam_name" class="form-label">Exam Name</label>
               <input type="text" class="form-control" id="edit_exam_name" name="exam_name" required>
@@ -733,11 +755,12 @@ foreach ($exams as $exam) {
     }
 
     // Edit exam function
-    function editExam(examId, examName, isActive, isStrict, pfs, ptab, pkb, pauto, pbc, pwc, plive, startTime, endTime) {
+    function editExam(examId, examName, isActive, isStrict, pfs, ptab, pkb, pauto, pbc, pwc, plive, startTime, endTime, sessionId) {
       document.getElementById('edit_exam_id').value = examId;
       document.getElementById('edit_exam_name').value = examName;
       document.getElementById('edit_is_active').value = isActive ? '1' : '0';
       document.getElementById('edit_is_strict').value = isStrict ? '1' : '0';
+      document.getElementById('edit_session_id').value = sessionId;
 
       document.getElementById('edit_pfs').checked = pfs == 1;
       document.getElementById('edit_ptab').checked = ptab == 1;

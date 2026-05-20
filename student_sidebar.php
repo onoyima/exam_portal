@@ -1,12 +1,25 @@
 <?php
-// This sidebar expects $active_exams to be populated from the main page
+// This sidebar expects $active_exams and $practical_exams to be populated from the main page
+$student_logo = 'assets/favicon.ico';
+$student_title = 'Student';
+if (isset($db)) {
+    try {
+        $sidebar_settings = $db->query("SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('portal_logo', 'portal_title')")->fetchAll(PDO::FETCH_KEY_PAIR);
+        if (!empty($sidebar_settings['portal_logo']) && file_exists($sidebar_settings['portal_logo'])) {
+            $student_logo = $sidebar_settings['portal_logo'];
+        }
+        if (!empty($sidebar_settings['portal_title'])) {
+            $student_title = $sidebar_settings['portal_title'];
+        }
+    } catch (Exception $e) {}
+}
 ?>
 <div class="sidebar d-flex flex-column p-3" id="studentSidebar">
     <div class="d-flex align-items-center justify-content-between mb-4 sidebar-header-container">
-        <div class="text-center sidebar-logo-section">
+        <div class="text-center sidebar-logo-section w-100">
             <a href="student_dashboard" class="text-decoration-none">
-                <img src="assets/favicon.ico" alt="Logo" width="40" height="40" class="mb-1">
-                <h4 class="fw-bold mb-0 small text-dark">Student</h4>
+                <img src="<?= htmlspecialchars($student_logo) ?>" alt="Logo" width="40" style="max-height: 40px; width: auto; object-fit: contain;" class="mb-1 rounded-1">
+                <h4 class="fw-bold mb-0 small text-dark mt-1 text-truncate" style="max-width: 150px;" title="<?= htmlspecialchars($student_title) ?>"><?= htmlspecialchars($student_title) ?></h4>
             </a>
         </div>
         <div class="d-flex gap-2">
@@ -66,6 +79,8 @@
                 </li>
             <?php endforeach; ?>
         <?php endif; ?>
+
+        <!-- Practical Exams section removed from student view -->
 
         <li class="mt-4">
             <hr>
@@ -154,3 +169,7 @@
         }
     });
 </script>
+<!-- Dependencies for Secure Mode -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<!-- Phase 5: Global Student Lockdown -->
+<script src="assets/js/student_lockdown.js"></script>

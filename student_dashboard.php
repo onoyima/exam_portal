@@ -11,14 +11,18 @@ $matric = $_SESSION['matric_no'];
 // Auto-finalize any expired attempts before loading the dashboard
 auto_finalize_expired_attempts($db, null, $student_id);
 
-// Fetch all active objective exams assigned to this student
+// Fetch all active exams (Objective and Practical) assigned to this student
 $stmt = $db->prepare("SELECT e.*, 
     (SELECT COUNT(*) FROM objective_attempts oa WHERE oa.exam_id = e.id AND oa.student_id = ? AND oa.finished_at IS NOT NULL) as finished_attempts,
     (SELECT COUNT(*) FROM objective_attempts oa WHERE oa.exam_id = e.id AND oa.student_id = ?) as total_attempts
     FROM exams e JOIN exam_students es ON e.id=es.exam_id 
-    WHERE es.student_id=? AND e.type='objective' AND e.is_active=1 ORDER BY e.created_at DESC");
+    WHERE es.student_id=? AND e.is_active=1 ORDER BY e.created_at DESC");
 $stmt->execute([$student_id, $student_id, $student_id]);
-$active_exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$all_exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Separate exams by type
+$active_exams = array_filter($all_exams, fn($e) => $e['type'] === 'objective');
+$practical_exams = array_filter($all_exams, fn($e) => $e['type'] !== 'objective');
 
 ?>
 <!DOCTYPE html>
@@ -131,7 +135,8 @@ $active_exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <div class="col-md-4 text-md-end">
           <div class="stat-badge shadow-sm">
             <i class="bi bi-award text-warning"></i>
-            <span>Active Exams: <?= count($active_exams) ?></span>
+            <span>Active Objective: <?= count($active_exams) ?></span>
+            <span class="ms-2">Practical: <?= count($practical_exams) ?></span>
           </div>
         </div>
       </div>
@@ -145,122 +150,76 @@ $active_exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
               <i class="bi bi-journal-x text-muted mb-3" style="font-size: 4rem;"></i>
               <h3 class="fw-bold">No Active Exams</h3>
               <p class="text-muted mx-auto" style="max-width: 400px;">
-                You don't have any active objective exams assigned to you at the moment. Please check back later or
-                contact your instructor.
+                You don't have any active objective exams assigned to you at the moment. Please check back later.
               </p>
             </div>
           </div>
-        <?php endif; ?>
+        <?php else: ?>
+          <?php foreach ($active_exams as $exam):
+            $has_finished = $exam['finished_attempts'] > 0;
+            $can_recompute = $exam['finished_attempts'] < ($exam['max_attempts'] ?? 1);
+            $is_active = $exam['total_attempts'] > $exam['finished_attempts'];
 
-        <?php foreach ($active_exams as $exam):
-          $has_finished = $exam['finished_attempts'] > 0;
-          $can_recompute = $exam['finished_attempts'] < ($exam['max_attempts'] ?? 1);
-          $is_active = $exam['total_attempts'] > $exam['finished_attempts'];
+            // Scheduling Logic
+            $now = time();
+            $start_ts = $exam['start_time'] ? strtotime($exam['start_time']) : null;
+            $end_ts = $exam['end_time'] ? strtotime($exam['end_time']) : null;
 
-          // Scheduling Logic
-          $now = time();
-          $start_ts = $exam['start_time'] ? strtotime($exam['start_time']) : null;
-          $end_ts = $exam['end_time'] ? strtotime($exam['end_time']) : null;
-
-          $is_started = !$start_ts || ($now >= $start_ts);
-          $is_ended = $end_ts && ($now > $end_ts);
-          $is_available = $is_started && !$is_ended;
-          ?>
-          <div class="col-12 col-md-6 col-lg-4" id="exam-<?= $exam['id'] ?>">
-            <div class="exam-card-student position-relative">
-              <div class="exam-status-overlay">
-                <?php if ($has_finished): ?>
-                  <span class="badge bg-success rounded-pill shadow">Attempted (<?= $exam['finished_attempts'] ?>)</span>
-                <?php elseif (!$is_started): ?>
-                  <span class="badge bg-secondary rounded-pill shadow">NOT YET AVAILABLE</span>
-                <?php elseif ($is_ended): ?>
-                  <span class="badge bg-danger rounded-pill shadow">EXAM CLOSED</span>
-                <?php endif; ?>
-              </div>
-
-              <div class="card-exam-header">
-                <h4 class="fw-bold mb-1 text-white text-truncate"><?= htmlspecialchars($exam['name']) ?></h4>
-                <div class="small opacity-75"><i class="bi bi-clock me-1"></i> <?= $exam['duration_minutes'] ?> Minutes
+            $is_started = !$start_ts || ($now >= $start_ts);
+            $is_ended = $end_ts && ($now > $end_ts);
+            ?>
+            <div class="col-12 col-md-6 col-lg-4" id="exam-<?= $exam['id'] ?>">
+              <div class="exam-card-student position-relative">
+                <div class="exam-status-overlay">
+                  <?php if ($has_finished): ?>
+                    <span class="badge bg-success rounded-pill shadow">Attempted (<?= $exam['finished_attempts'] ?>)</span>
+                  <?php elseif (!$is_started): ?>
+                    <span class="badge bg-secondary rounded-pill shadow">NOT YET AVAILABLE</span>
+                  <?php elseif ($is_ended): ?>
+                    <span class="badge bg-danger rounded-pill shadow">EXAM CLOSED</span>
+                  <?php endif; ?>
                 </div>
-              </div>
 
-              <div class="card-exam-body">
-                <p class="text-muted small mb-4"
-                  style="min-height: 48px; border-bottom: 1px dashed #eee; padding-bottom: 15px;">
-                  <?= htmlspecialchars($exam['description'] ?: 'No description provided for this examination.') ?>
-                </p>
-
-                <div class="vstack gap-3 mb-4">
-                  <div class="d-flex justify-content-between align-items-center">
-                    <span class="small text-muted fw-semibold">Max Attempts:</span>
-                    <span class="badge bg-light text-dark fw-bold"><?= $exam['max_attempts'] ?? 1 ?></span>
+                <div class="card-exam-header">
+                  <h4 class="fw-bold mb-1 text-white text-truncate"><?= htmlspecialchars($exam['name']) ?></h4>
+                  <div class="small opacity-75"><i class="bi bi-clock me-1"></i> <?= $exam['duration_minutes'] ?> Minutes
                   </div>
-                  <?php if ($start_ts || $end_ts): ?>
-                    <div class="p-2 bg-light rounded-3 border-start border-primary border-4 small">
-                      <div class="text-muted fw-bold mb-1" style="font-size: 0.65rem;">SCHEDULED PERIOD</div>
-                      <?php if ($start_ts): ?>
-                        <div class="d-flex align-items-center gap-2 mb-1">
-                          <i class="bi bi-calendar-check text-success"></i>
-                          <span>Starts: <?= date('M j, Y - H:i', $start_ts) ?></span>
-                        </div>
-                      <?php endif; ?>
-                      <?php if ($end_ts): ?>
-                        <div class="d-flex align-items-center gap-2">
-                          <i class="bi bi-calendar-x text-danger"></i>
-                          <span>Ends: <?= date('M j, Y - H:i', $end_ts) ?></span>
-                        </div>
-                      <?php endif; ?>
-                    </div>
-                  <?php endif; ?>
-                  <?php if ($has_finished): ?>
-                    <div class="d-flex justify-content-between align-items-center">
-                      <span class="small text-muted fw-semibold">Grading Method:</span>
-                      <span class="badge bg-info-subtle text-info text-uppercase fw-bold" style="font-size: 0.65rem;">
-                        <?= ($exam['grading_method'] ?? 'highest') === 'highest' ? 'Highest Score' : 'Average Score' ?>
-                      </span>
-                    </div>
-                  <?php endif; ?>
                 </div>
 
-                <div class="d-grid gap-2">
-                  <?php if ($is_active): ?>
-                    <a href="student_objective_exam?exam_id=<?= $exam['id'] ?>&resume=1"
-                      class="btn btn-warning py-3 rounded-4 shadow-sm fw-bold">
-                      <i class="bi bi-play-circle-fill me-2"></i> RESUME EXAM
-                    </a>
-                  <?php elseif ($can_recompute): ?>
-                    <?php if (!$is_started): ?>
-                      <button class="btn btn-light py-3 rounded-4 disabled opacity-75 fw-bold text-muted border">
-                        <i class="bi bi-clock-fill me-2"></i> WAITING FOR START
-                      </button>
-                    <?php elseif ($is_ended): ?>
-                      <button class="btn btn-outline-danger py-3 rounded-4 disabled opacity-75 fw-bold">
-                        <i class="bi bi-x-circle-fill me-2"></i> EXAM CLOSED
-                      </button>
-                    <?php else: ?>
-                      <button type="button" class="btn btn-primary py-3 rounded-4 shadow-sm fw-bold"
-                        onclick="confirmExamStart('<?= $exam['name'] ?>', 'student_objective_exam.php?exam_id=<?= $exam['id'] ?><?= $has_finished ? '&start_new=1' : '&start=1' ?>')">
-                        <i class="bi bi-plus-circle me-2"></i>
-                        <?= $has_finished ? 'START NEW ATTEMPT' : 'START EXAMINATION' ?>
-                      </button>
-                    <?php endif; ?>
-                  <?php else: ?>
-                    <button class="btn btn-dark py-3 rounded-4 disabled opacity-50 fw-bold">
-                      <i class="bi bi-lock-fill me-2"></i> ATTEMPTS FINALIZED
-                    </button>
-                  <?php endif; ?>
+                <div class="card-exam-body">
+                  <p class="text-muted small mb-4" style="min-height: 48px; border-bottom: 1px dashed #eee; padding-bottom: 15px;">
+                    <?= htmlspecialchars($exam['description'] ?: 'No description provided.') ?>
+                  </p>
 
-                  <?php if ($has_finished): ?>
-                    <a href="student_objective_exam?exam_id=<?= $exam['id'] ?>&view_result=1"
-                      class="btn btn-outline-info py-2 rounded-4 fw-bold">
-                      <i class="bi bi-eye me-2"></i> VIEW RESULTS
-                    </a>
-                  <?php endif; ?>
+                  <div class="vstack gap-3 mb-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                      <span class="small text-muted fw-semibold">Max Attempts:</span>
+                      <span class="badge bg-light text-dark fw-bold"><?= $exam['max_attempts'] ?? 1 ?></span>
+                    </div>
+                  </div>
+
+                  <div class="d-grid gap-2">
+                    <?php if ($is_active): ?>
+                      <a href="student_objective_exam?exam_id=<?= $exam['id'] ?>&resume=1" class="btn btn-warning py-3 rounded-4 shadow-sm fw-bold">RESUME EXAM</a>
+                    <?php elseif ($can_recompute): ?>
+                      <?php if (!$is_started || $is_ended): ?>
+                        <button class="btn btn-light py-3 rounded-4 disabled opacity-75 fw-bold border">UNAVAILABLE</button>
+                      <?php else: ?>
+                        <button type="button" class="btn btn-primary py-3 rounded-4 shadow-sm fw-bold" onclick="confirmExamStart('<?= $exam['name'] ?>', 'student_objective_exam.php?exam_id=<?= $exam['id'] ?><?= $has_finished ? '&start_new=1' : '&start=1' ?>')">START</button>
+                      <?php endif; ?>
+                    <?php endif; ?>
+                    <?php if ($has_finished): ?>
+                      <a href="student_objective_exam?exam_id=<?= $exam['id'] ?>&view_result=1" class="btn btn-outline-info py-2 rounded-4 fw-bold">VIEW RESULTS</a>
+                    <?php endif; ?>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        <?php endforeach; ?>
+          <?php endforeach; ?>
+        <?php endif; ?>
+      </div>
+
+      <!-- Practical Examinations Section hidden from student view -->
       </div>
     </div>
   </div>

@@ -1,6 +1,7 @@
 <?php
 require 'auth.php';
 check_auth('student');
+check_device_auth(); // Phase 3 — device authorization gate
 require 'db.php';
 
 $student_id = $_SESSION['student_id'];
@@ -38,6 +39,7 @@ if (!$is_view_mode) {
 
 // Handle Final Submission POST - Moved score calculation here to store it for analytics
 if (isset($_POST['confirm_final_submit'])) {
+  validate_csrf();
   $attempt_no = intval($_POST['current_attempt_no'] ?? 1);
 
   // Calculate score logic (duplicated here for immediate storage)
@@ -64,7 +66,10 @@ if (isset($_POST['confirm_final_submit'])) {
   $finish_stmt = $db->prepare("UPDATE objective_attempts SET finished_at=NOW(), time_taken = TIMESTAMPDIFF(SECOND, started_at, NOW()), score=? WHERE exam_id=? AND student_id=? AND attempt_no=? AND finished_at IS NULL");
   $finish_stmt->execute([$calculated_score, $exam_id, $student_id, $attempt_no]);
 
-  header("Location: student_objective_exam?exam_id=$exam_id&view_result=1&submitted=true");
+  // Phase 4: Unified submit — destroy session, redirect to login
+  $db->prepare("UPDATE students SET current_session_id = NULL WHERE id = ?")->execute([$student_id]);
+  session_destroy();
+  header("Location: student_login?submitted=1");
   exit;
 }
 
@@ -243,6 +248,13 @@ if ($view_result) {
         WHERE es.student_id=? AND e.type='objective' AND e.is_active=1 ORDER BY e.created_at DESC");
     $stmt_sb->execute([$student_id, $student_id, $student_id]);
     $active_exams = $stmt_sb->fetchAll(PDO::FETCH_ASSOC);
+
+    // Populate $practical_exams as expected by student_sidebar.php
+    $stmt_prac = $db->prepare("SELECT e.* FROM exams e JOIN exam_students es ON e.id=es.exam_id 
+        WHERE es.student_id=? AND e.type != 'objective' AND e.is_active=1 ORDER BY e.created_at DESC");
+    $stmt_prac->execute([$student_id]);
+    $practical_exams = $stmt_prac->fetchAll(PDO::FETCH_ASSOC);
+
     include 'student_sidebar.php';
     ?>
 
@@ -571,29 +583,189 @@ $current_index = 0;
       padding: 6px 15px !important;
       font-size: 1rem !important;
     }
+    
+    /* Ensure Bootstrap Modals are ALWAYS on top of the blocker */
+    .modal { z-index: 20000000 !important; }
+    .modal-backdrop { z-index: 19999999 !important; }
   </style>
   <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body class="bg-light">
+  <!-- DATA BRIDGE (PEAK PRIORITY) -->
+  <script>
+    window.examId = <?= $exam_id ?>;
+    window.questions = <?= json_encode($questions) ?>;
+    window.total = <?= $total ?>;
+    window.currentIndex = 0;
+    window.isLocked = false;
+    window.isWebcamReady = false;
+
+    // Unified Proctoring & System Logic
+    window.finalizeEnrollment = function() {
+        console.log("Proctoring Shield Cleared.");
+        window.isLocked = false;
+        const blocker = document.getElementById('proctorBlocker');
+        if (blocker) {
+            blocker.style.display = 'none';
+            blocker.remove();
+        }
+        if (typeof window.startExamFlow === 'function') window.startExamFlow();
+    };
+
+    window.initWebcam = function() {
+        const iUI = document.getElementById('proctorInitUI');
+        const lUI = document.getElementById('proctorLoadingUI');
+        if (iUI) iUI.classList.add('d-none');
+        if (lUI) lUI.classList.remove('d-none');
+
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(stream => {
+                window.isWebcamReady = true;
+                window.webcamStream  = stream;
+                // FIX: Create a persistent hidden <video> bound to the stream.
+                // sendPing uses document.querySelector('video') for canvas snapshots.
+                let lv = document.getElementById('_webcamLiveCapture');
+                if (!lv) {
+                    lv = document.createElement('video');
+                    lv.id          = '_webcamLiveCapture';
+                    lv.muted       = true;
+                    lv.autoplay    = true;
+                    lv.playsInline = true;
+                    lv.style.cssText = 'position:fixed;top:-2px;left:-2px;width:1px;height:1px;opacity:0;pointer-events:none;';
+                    document.body.appendChild(lv);
+                }
+                lv.srcObject = stream;
+                lv.play().catch(e => console.warn('[Webcam] Autoplay blocked:', e));
+                window.finalizeEnrollment();
+            })
+            .catch(e => {
+                console.warn('[Webcam] Camera/mic access denied:', e);
+                window.isWebcamReady = false;
+                window.finalizeEnrollment();
+            });
+    };
+
+    // System Monitor Hooks
+    window.addEventListener('load', () => {
+        if (navigator.getBattery) {
+            navigator.getBattery().then(battery => {
+                const updateBattery = () => {
+                    document.getElementById('batteryPct').innerText = Math.round(battery.level * 100);
+                };
+                battery.addEventListener('levelchange', updateBattery);
+                updateBattery();
+            });
+        }
+        const updateNetwork = () => {
+            document.getElementById('networkType').innerText = navigator.onLine ? 'Online' : 'Offline';
+        };
+        window.addEventListener('online', updateNetwork);
+        window.addEventListener('offline', updateNetwork);
+        updateNetwork();
+    });
+  </script>
+
   <!-- Proctoring Blocker Overlay -->
   <?php if (($exam['proctor_webcam'] || $exam['proctor_live_video']) && !$is_review_mode): ?>
     <div id="proctorBlocker"
       class="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-white"
-      style="z-index: 9999;">
-      <div class="text-center p-5 rounded-5 shadow-lg border" style="max-width: 500px;">
-        <div class="mb-4">
-          <div class="spinner-grow text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
-        </div>
-        <h4 class="fw-bold mb-3">Initializing Security...</h4>
-        <p class="text-muted mb-4" id="proctorBlockerMsg">Detecting your camera and establishing a secure connection.
-          Please stay on this page.</p>
-        <div id="proctorErrorBtn" class="d-none">
-          <button onclick="initWebcam()" class="btn btn-primary rounded-pill px-5 py-3 fw-bold shadow">
-            <i class="bi bi-camera-fill me-2"></i> GRANT CAMERA PERMISSION
+      style="z-index: 20000000;">
+      <!-- High-Integrity Reset: Kill all background modal layers -->
+      <script>document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());</script>
+      
+      <!-- Premium Zero-Trust Enrollment Shield -->
+      <div class="proctor-enrollment-card p-0 shadow-2xl border-0 overflow-hidden" style="max-width: 540px; z-index: 20000001; border-radius: 40px; background: white; border: 1px solid #eee;">
+        <div class="p-5 text-center" id="proctorInitUI">
+          <div class="mb-5 position-relative">
+            <div class="bg-dark p-4 rounded-circle d-inline-block shadow-lg border border-4 border-white">
+               <i class="bi bi-shield-check text-success" style="font-size: 3.5rem;"></i>
+            </div>
+            <div class="position-absolute translate-middle-x" style="bottom: -15px; left: 50%;">
+                <span class="badge rounded-pill bg-success px-3 py-2 shadow-sm border border-2 border-white" style="font-size: 0.65rem; letter-spacing: 1px;">ENCRYPTION ACTIVE</span>
+            </div>
+          </div>
+          
+          <h2 class="fw-bold mb-3 text-dark outfit tracking-tight">Security Environment</h2>
+          <p class="text-muted mb-5 fs-5 fw-normal">Establishing a high-integrity, zero-trust examination workspace. <br><span class="opacity-75 small">This session requires hardware-level monitoring.</span></p>
+          
+          <div class="vstack gap-3 mb-5">
+            <div class="d-flex align-items-center justify-content-between p-3 rounded-4 bg-light border border-white shadow-sm">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="bg-white p-2 rounded-3 shadow-sm"><i class="bi bi-camera-video text-primary"></i></div>
+                    <div class="text-start">
+                        <div class="fw-bold small text-dark">Camera Access</div>
+                        <div class="text-muted" style="font-size: 0.65rem;">Continuous identity verification</div>
+                    </div>
+                </div>
+                <div class="text-primary small fw-bold">REQUIRED</div>
+            </div>
+            <div class="d-flex align-items-center justify-content-between p-3 rounded-4 bg-light border border-white shadow-sm">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="bg-white p-2 rounded-3 shadow-sm"><i class="bi bi-fullscreen text-primary"></i></div>
+                    <div class="text-start">
+                        <div class="fw-bold small text-dark">Mandatory Kiosk</div>
+                        <div class="text-muted" style="font-size: 0.65rem;">Locked browser environment</div>
+                    </div>
+                </div>
+                <div class="text-primary small fw-bold">REQUIRED</div>
+            </div>
+          </div>
+
+          <button id="startProctorBtn" onclick="try { initWebcam(); } catch(e) { alert('Init Error: ' + e.message); }" class="btn btn-dark btn-lg rounded-pill px-5 py-4 fw-bold shadow-xl w-100 hover-lift outfit mb-3" style="letter-spacing: 1px; font-size: 1.1rem; border: 2px solid #198754; position: relative; z-index: 20000005;">
+            <i class="bi bi-shield-check me-2 text-success"></i> INITIALIZE SECURE PORTAL
           </button>
-          <a href="student_dashboard" class="btn btn-link text-muted mt-3 d-block text-decoration-none fw-bold">Exit to
-            Dashboard</a>
+          <div class="mt-4">
+             <a href="javascript:void(0)" onclick="try { finalizeEnrollment(); } catch(e) { alert('Bypass Error: ' + e.message); }" class="text-secondary text-decoration-none small opacity-75 fw-bold" style="position: relative; z-index: 20000005;">
+                <i class="bi bi-exclamation-triangle me-1"></i> EMERGENCY BYPASS (SKIP TO EXAM)
+             </a>
+          </div>
+          <p class="text-muted mt-3" style="font-size: 0.75rem;">By proceeding, you acknowledge the proctoring protocols.</p>
+        </div>
+
+        <!-- RESTORED RED POWER BUTTON (Z-MAX) -->
+        <div id="lockdownPowerBtn" onclick="try { togglePowerMenu(); } catch(e) { alert('Power Error: ' + e.message); }"
+          class="position-fixed d-flex align-items-center justify-content-center shadow-lg"
+          style="bottom: 30px; right: 30px; width: 60px; height: 60px; background: #dc3545; color: white; border-radius: 50%; cursor: pointer; z-index: 2147483647; border: 3px solid white; box-shadow: 0 0 20px rgba(220,53,69,0.5);">
+          <i class="bi bi-power" style="font-size: 1.8rem;"></i>
+        </div>
+
+        <div id="proctorLoadingUI" class="d-none p-5 text-center">
+          <div class="mb-4">
+            <div class="spinner-border text-success" role="status" style="width: 4rem; height: 4rem; border-width: 5px;"></div>
+          </div>
+          <h3 class="fw-bold mb-3 outfit text-dark">Enrollment in Progress</h3>
+          <p class="text-muted mb-4 fs-6" id="proctorBlockerMsg">Please respond to all browser prompts to authorize your session.</p>
+          
+          <div class="text-start mx-auto vstack gap-2 mb-4" style="max-width:300px;">
+             <div id="check-camera" class="d-flex align-items-center gap-2 text-muted fw-bold small">
+                <i class="bi bi-circle"></i> <span>VIDEO ENROLLMENT</span>
+             </div>
+             <div id="check-mic" class="d-flex align-items-center gap-2 text-muted fw-bold small">
+                <i class="bi bi-circle"></i> <span>AUDIO ENROLLMENT</span>
+             </div>
+             <div id="check-fs" class="d-flex align-items-center gap-2 text-muted fw-bold small">
+                <i class="bi bi-circle"></i> <span>KIOSK ACTIVATION</span>
+             </div>
+          </div>
+
+          <div class="progress rounded-pill bg-light border" style="height: 10px; width: 80%; margin: 0 auto;">
+            <div id="enrollmentProgress" class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 10%"></div>
+          </div>
+        </div>
+
+        <div id="proctorErrorBtn" class="d-none p-5 text-center">
+          <div class="bg-danger-subtle p-4 rounded-circle d-inline-block mb-4">
+             <i class="bi bi-camera-off text-danger" style="font-size: 3rem;"></i>
+          </div>
+          <h3 class="fw-bold mb-3 text-dark outfit">Access Blocked</h3>
+          <p class="text-muted mb-5" id="proctorErrorMsg">Camera access is mandatory for this assessment. <br>Please verify your settings and try again.</p>
+          <div class="vstack gap-2">
+            <button onclick="location.reload()" class="btn btn-danger btn-lg rounded-pill px-5 py-3 fw-bold shadow-sm w-100">
+                <i class="bi bi-arrow-clockwise me-2"></i> REFRESH & RETRY
+            </button>
+            <a href="student_dashboard" class="btn btn-link text-muted mt-3 text-decoration-none fw-bold small">Emergency Exit</a>
+          </div>
         </div>
       </div>
     </div>
@@ -617,13 +789,23 @@ $current_index = 0;
           <i class="bi bi-clock-history text-accent"></i>
           <span id="timerText" class="font-monospace">--:--:--</span>
         </div>
+        <!-- Phase 4: System Health Monitor (battery + network) -->
+        <div class="d-none d-lg-flex align-items-center gap-2" id="systemMonitor" style="font-size:0.7rem;">
+          <span id="batteryStatus" class="badge bg-success-subtle text-success-emphasis rounded-pill px-2"><i class="bi bi-battery-half me-1"></i><span id="batteryPct">--</span>%</span>
+          <span id="networkStatus" class="badge bg-primary-subtle text-primary-emphasis rounded-pill px-2"><i class="bi bi-wifi me-1"></i><span id="networkType">--</span></span>
+        </div>
 
-        <div class="d-flex align-items-center gap-3 border-start ps-4 d-none d-md-flex">
-          <div class="text-end">
-            <div class="fw-bold small text-dark"><?= htmlspecialchars($_SESSION['user']) ?></div>
-            <div class="fw-bold text-success animate-pulse" style="font-size: 0.6rem; letter-spacing: 1px;">• LIVE
-              SESSION</div>
-          </div>
+          <div class="d-flex align-items-center gap-3 border-start ps-4 d-none d-md-flex">
+            <!-- Phase 5: Notification Badge -->
+            <div class="position-relative me-2" id="notificationCenter">
+              <i class="bi bi-bell-fill fs-5 text-muted"></i>
+              <span id="notificationBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" style="font-size: 0.5rem;">0</span>
+            </div>
+            <div class="text-end">
+              <div class="fw-bold small text-dark"><?= htmlspecialchars($_SESSION['user']) ?></div>
+              <div class="fw-bold text-success animate-pulse" style="font-size: 0.6rem; letter-spacing: 1px;">• LIVE
+                SESSION</div>
+            </div>
           <div
             class="profile-avatar bg-primary shadow-sm d-flex align-items-center justify-content-center text-white fw-bold"
             style="width: 38px; height: 38px; border-radius: 12px;">
@@ -693,7 +875,7 @@ $current_index = 0;
                     class="bi bi-arrow-right"></i>
                 </button>
                 <button id="submitBtn" class="btn btn-success px-4 py-2 rounded-pill d-none fw-bold shadow-lg btn-sm"
-                  data-bs-toggle="modal" data-bs-target="#finalSubmitModal">
+                  onclick="submitFinal(true)">
                   Finish <i class="bi bi-send-fill ms-1"></i>
                 </button>
                 <?php if ($is_review_mode): ?>
@@ -799,6 +981,31 @@ $current_index = 0;
     </div>
   </div>
 
+  <!-- Phase 5: Alert Sound -->
+  <audio id="alertBell" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
+
+  <!-- Phase 4: EXAM LOCKED Overlay (5 strikes reached) -->
+  <div id="examLockedOverlay"
+    style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#0a0a0a; z-index:99999; align-items:center; justify-content:center; color:white; text-align:center; pointer-events:all;">
+    <div style="max-width:600px; padding: 60px 40px;">
+      <div style="width:100px;height:100px;background:rgba(239,68,68,0.15);border:3px solid #ef4444;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 28px;">
+        <i class="bi bi-shield-x-fill" style="font-size:3rem;color:#ef4444;"></i>
+      </div>
+      <h1 style="font-size:2rem;font-weight:800;color:#fff;margin-bottom:12px;">EXAM INTERFACE LOCKED</h1>
+      <p style="font-size:1.05rem;color:rgba(255,255,255,0.6);margin-bottom:32px;line-height:1.8;">
+        You have reached the maximum number of security violations.<br>
+        Your exam interface has been locked. No further interaction is permitted.<br>
+        <strong style="color:#fbbf24;">Please notify your exam supervisor immediately.</strong>
+      </p>
+      <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:12px;padding:20px;margin-bottom:24px;">
+        <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.4);margin-bottom:8px;">Violation Record</div>
+        <div style="font-size:2.5rem;font-weight:800;color:#ef4444;" id="lockViolationCount">5 / 5</div>
+        <div style="font-size:0.8rem;color:rgba(255,255,255,0.5);margin-top:4px;">Strikes accumulated during this session</div>
+      </div>
+      <p style="font-size:0.78rem;color:rgba(255,255,255,0.3);">This incident has been logged and reported to the examination board.<br>Your session ID and timestamps have been recorded.</p>
+    </div>
+  </div>
+
   <!-- Admin Warning Toast -->
   <div class="toast-container position-fixed top-0 start-50 translate-middle-x p-3" style="z-index: 9999;">
     <div id="adminWarningToast" class="toast align-items-center text-white bg-danger border-0 h-100" role="alert"
@@ -814,765 +1021,496 @@ $current_index = 0;
     </div>
   </div>
 
-  <!-- Final Submit Modal -->
-  <div class="modal fade" id="finalSubmitModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content border-0 rounded-5 shadow-lg overflow-hidden">
-        <form id="finalSubmitForm" method="post">
-          <div class="modal-body p-5 text-center">
-            <div class="mb-4">
-              <div class="bg-warning-light p-4 rounded-circle d-inline-block">
-                <i class="bi bi-exclamation-triangle-fill text-warning fs-1"></i>
-              </div>
-            </div>
-            <h3 class="fw-bold mb-3 text-dark">Finish Examination</h3>
-            <p class="text-muted mb-5 px-3 fs-5">You are about to submit your final responses. You have completed <b
-                id="answeredCount" class="text-primary fs-4">0</b> out of <b><?= $total ?></b> questions.</p>
-
-            <div class="vstack gap-3 px-4">
-              <button type="submit" name="final_submit" class="btn btn-success btn-lg rounded-pill py-3 fw-bold shadow">
-                Yes, Submit My Exam <i class="bi bi-check2-all ms-2"></i>
-              </button>
-              <button type="button" class="btn btn-link text-muted fw-bold text-decoration-none"
-                data-bs-dismiss="modal">
-                Return to Exam
-              </button>
-            </div>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
+  <!-- Final Submit Form (Hidden) -->
+  <form id="finalSubmitForm" method="post" style="display:none;"></form>
 
   <script src="assets/js/bootstrap.bundle.min.js"></script>
   <script>
-    const examId = <?= $exam_id ?>;
+    /**
+     * ASSESSMENT PORTAL EXECUTIVE CONTROL UNIT v3.0
+     * Optimized for Stability, Security, and Live Oversight.
+     */
+
+    // --- 1. CONFIGURATION & STATE ---
+    const examId = window.examId;
+    const questions = window.questions;
+    const total = window.total;
     const currentAttemptNo = <?= $current_attempt_no ?>;
     const currentAttemptId = <?= $current_attempt_id ?>;
-    const questions = <?= json_encode($questions) ?>;
-    const total = <?= $total ?>;
-    const isStrict = <?= $exam['is_strict'] ? 'true' : 'false' ?>;
+    
+    // Security & Feature Policy
     const pFS = <?= ($exam['proctor_fullscreen'] || $exam['is_strict']) ? 'true' : 'false' ?>;
     const pTab = <?= ($exam['proctor_tab_lock'] || $exam['is_strict']) ? 'true' : 'false' ?>;
     const pKB = <?= ($exam['proctor_kb_lock'] || $exam['is_strict']) ? 'true' : 'false' ?>;
-    const pAuto = <?= ($exam['proctor_auto_submit'] || $exam['is_strict']) ? 'true' : 'false' ?>;
-    const pBrowser = <?= ($exam['proctor_browser_check'] || $exam['is_strict']) ? 'true' : 'false' ?>;
     const pWebcam = <?= ($exam['proctor_webcam'] || $exam['is_strict']) ? 'true' : 'false' ?>;
     const pLive = <?= ($exam['proctor_live_video'] || $exam['is_strict']) ? 'true' : 'false' ?>;
-    const shuffleOptions = <?= ($exam['shuffle_options'] ?? 0) ? 'true' : 'false' ?>;
     const isReviewMode = <?= $is_review_mode ? 'true' : 'false' ?>;
     const canViewScore = <?= $exam['student_can_view_score'] ? 'true' : 'false' ?>;
-    const correctAnswers = <?= json_encode($correct_answers_map) ?>;
-    let currentAnswers = <?= json_encode($finished_answers) ?>;
-    let currentIndex = 0;
-    let durationMinutes = <?= (int) ($exam['duration_minutes'] ?? 0) ?>;
+    const shuffleOptions = <?= ($exam['shuffle_options'] ?? 0) ? 'true' : 'false' ?>;
+
+    // Expose key exam config globally for external modules (AI proctor module, etc.)
+    window.pWebcam      = pWebcam;
+    window.isReviewMode = isReviewMode;
+
+    // Runtime State
+    let currentIndex = window.currentIndex || 0;
     let remainingSeconds = <?= (int) ($remaining_seconds ?? 0) ?>;
-
-    // Debug Timer Setup
-    console.log("Timer Init - Remaining:", remainingSeconds, "Duration:", durationMinutes);
-
-    // Elements
-    const qNum = document.getElementById('qNum');
-    const markLabel = document.getElementById('markLabel');
-    const questionArea = document.getElementById('questionArea');
-    const optionsContainer = document.getElementById('optionsContainer');
-    const prevBtn = document.getElementById('prevBtn');
-    const nextBtn = document.getElementById('nextBtn');
-    const submitBtn = document.getElementById('submitBtn');
-    const navGrid = document.getElementById('navGrid');
-    const timerText = document.getElementById('timerText');
-    const sidebarTimer = document.getElementById('sidebarTimer');
-    const mobileTimer = document.getElementById('mobileTimer');
-    const timerContainer = document.getElementById('timer');
-
-    // Initialize Question
-    function renderQuestion(index) {
-      currentIndex = index;
-      const q = questions[index];
-
-      // Update Progress
-      const progress = ((index + 1) / total) * 100;
-      const progressBar = document.getElementById('examProgressBar');
-      if (progressBar) progressBar.style.width = progress + '%';
-      const answered = !!currentAnswers[q.id];
-
-      // Reset animation
-      questionArea.style.opacity = '0';
-      questionArea.style.transform = 'translateY(10px)';
-
-      setTimeout(() => {
-        qNum.textContent = index + 1;
-        markLabel.textContent = (q.mark || 1) + ' Mark' + (q.mark > 1 ? 's' : '');
-
-        let html = `<div class="badge bg-primary-light text-primary mb-3 px-3 py-2 rounded-pill fw-bold" style="font-size: 0.6rem; letter-spacing: 0.5px;">QUESTION ${index + 1} OF ${total}</div>`;
-        html += `<div class="question-text fw-bold" style="font-size: 1.25rem; color: #0f172a;">${q.question_text}</div>`;
-
-        if (q.question_image) {
-          html += `<div class="mt-4 text-center"><img src="uploads/${q.question_image}" class="img-fluid rounded-4 shadow-sm border p-1" style="max-height: 280px;" alt="question visual"></div>`;
-        }
-        questionArea.innerHTML = html;
-        questionArea.style.opacity = '1';
-        questionArea.style.transform = 'translateY(0)';
-
-        // Re-render MathJax
-        if (window.MathJax) {
-          MathJax.typesetPromise([questionArea]);
-        }
-      }, 150);
-
-      // Prepare Options to Render
-      let choices = ['a', 'b', 'c', 'd'].map(opt => {
-        return {
-          key: opt.toUpperCase(),
-          text: q['option_' + opt],
-          image: q['option_' + opt + '_image']
-        };
-      }).filter(c => c.text !== null && c.text !== '');
-
-      // In Review Mode, don't shuffle options visually if you want to be consistent with original pull
-      // OR you can still shuffle. User didn't specify. I'll keep shuffling if enabled.
-      if (shuffleOptions) {
-        // We use a seed based on student_id + attempt_no + question_id to keep it consistent 
-        // OR just random is fine since keys match. I'll keep it simple/random.
-        for (let i = choices.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [choices[i], choices[j]] = [choices[j], choices[i]];
-        }
-      }
-
-      optionsContainer.innerHTML = '';
-      choices.forEach((choice, choiceIdx) => {
-        const displayLetter = String.fromCharCode(65 + choiceIdx); // Always A, B, C, D...
-        const isSelected = currentAnswers[q.id] === choice.key;
-
-        const div = document.createElement('div');
-        div.className = `option-card ${isSelected ? 'selected' : ''}`;
-
-        if (isReviewMode) {
-          div.style.cursor = 'default';
-          div.style.pointerEvents = 'none';
-
-          if (canViewScore) {
-            const correctOpt = correctAnswers[q.id];
-            if (choice.key === correctOpt) {
-              div.classList.add('border-success', 'bg-success-light', 'review-correct');
-            } else if (isSelected && choice.key !== correctOpt) {
-              div.classList.add('border-danger', 'bg-danger-light', 'review-wrong');
-            }
-          }
-        }
-
-        let optHtml = `
-                <div class="d-flex align-items-center w-100">
-                    <div class="option-label shadow-sm">${displayLetter}</div>
-                    <div class="option-text flex-grow-1 fw-medium text-dark">
-                        ${choice.text}`;
-
-        if (choice.image) {
-          optHtml += `<div class="mt-3"><img src="uploads/${choice.image}" class="img-fluid rounded-3" style="max-height: 120px;" alt="option visual"></div>`;
-        }
-
-        optHtml += `</div>
-                  <div class="selection-indicator border rounded-2 d-flex align-items-center justify-content-center bg-white ms-3" style="width:24px; height:24px; flex-shrink:0;">
-                    <i class="bi bi-check2 text-white fs-6 ${isSelected ? '' : 'd-none'}"></i>
-                  </div>
-                </div>`;
-        div.innerHTML = optHtml;
-
-        div.onclick = (e) => {
-          // Update State using ORIGINAL key (A, B, C, D)
-          currentAnswers[q.id] = choice.key;
-          saveAnswer(q.id, choice.key, true);
-
-          const allOptionsInThisCard = optionsContainer.querySelectorAll('.option-card');
-          allOptionsInThisCard.forEach(c => {
-            c.classList.remove('selected');
-            const indicatorIcon = c.querySelector('.selection-indicator i');
-            if (indicatorIcon) indicatorIcon.classList.add('d-none');
-          });
-
-          div.classList.add('selected');
-          const currentIndicatorIcon = div.querySelector('.selection-indicator i');
-          if (currentIndicatorIcon) currentIndicatorIcon.classList.remove('d-none');
-          updateNavPalette();
-        };
-        optionsContainer.appendChild(div);
-      });
-
-      // Typeset options
-      if (window.MathJax) {
-        MathJax.typesetPromise([optionsContainer]);
-      }
-
-      // UI Controls
-      prevBtn.disabled = index === 0;
-      if (index === total - 1) {
-        nextBtn.classList.add('d-none');
-        if (!isReviewMode) submitBtn.classList.remove('d-none');
-      } else {
-        nextBtn.classList.remove('d-none');
-        submitBtn.classList.add('d-none');
-      }
-
-      updateNavPalette();
-    }
-
-    function updateNavPalette() {
-      navGrid.innerHTML = '';
-      questions.forEach((q, idx) => {
-        const btn = document.createElement('a');
-        btn.className = 'nav-dot';
-        btn.href = '#';
-        if (idx === currentIndex) {
-          btn.classList.add('active');
-          btn.title = "Current Question";
-        } else if (currentAnswers[q.id]) {
-          btn.classList.add('answered');
-          btn.title = "Answered";
-        } else {
-          btn.title = "Not Answered";
-        }
-
-        btn.textContent = idx + 1;
-        btn.onclick = (e) => {
-          e.preventDefault();
-          if (idx !== currentIndex) renderQuestion(idx);
-        };
-        navGrid.appendChild(btn);
-      });
-
-      // Update Dashboard counts
-      const count = Object.keys(currentAnswers).length;
-      const countEl = document.getElementById('answeredCount');
-      if (countEl) countEl.textContent = count;
-      const countBadge = document.getElementById('answeredCountBadge');
-      if (countBadge) countBadge.textContent = count;
-    }
-
-    function saveAnswer(questionId, selectedOption, skipRender = false) {
-      // Optimistic UI
-      currentAnswers[questionId] = selectedOption;
-      if (!skipRender) renderQuestion(currentIndex);
-
-      const formData = new FormData();
-      formData.append('exam_id', examId);
-      formData.append('attempt_no', currentAttemptNo);
-      formData.append('question_id', questionId);
-      formData.append('option', selectedOption);
-
-      fetch('objective_exam_api?action=save_answer', {
-        method: 'POST',
-        body: formData
-      }).then(r => r.json()).then(data => {
-        if (!data.success) console.error('Save failed:', data.error);
-      });
-    }
-
-    // Timer Logic
-    function startTimer() {
-      if (isReviewMode) {
-        document.getElementById('timerText').textContent = "REVIEWING";
-        document.getElementById('sidebarTimer').textContent = "REVIEWING";
-        document.getElementById('mobileTimer').textContent = "REVIEW";
-        return;
-      }
-      console.log("Timer Init - Duration:", durationMinutes, "Remaining:", remainingSeconds);
-
-      // Safety: Update display once before anything else
-      if (durationMinutes > 0) {
-        remainingSeconds = Math.max(0, remainingSeconds);
-      } else {
-        if (timerText) timerText.textContent = 'UNTRIED/UNTIMED';
-        if (sidebarTimer) sidebarTimer.textContent = 'UNTIMED';
-        return;
-      }
-
-      function updateDisplay() {
-        try {
-          const h = Math.floor(Math.max(0, remainingSeconds) / 3600);
-          const m = Math.floor((Math.max(0, remainingSeconds) % 3600) / 60);
-          const s = Math.max(0, remainingSeconds) % 60;
-
-          const timeStr = (h < 10 ? '0' : '') + h + ":" +
-            (m < 10 ? '0' : '') + m + ":" +
-            (s < 10 ? '0' : '') + s;
-
-          if (timerText) timerText.textContent = timeStr;
-          if (sidebarTimer) sidebarTimer.textContent = timeStr;
-          if (mobileTimer) mobileTimer.textContent = timeStr;
-
-          if (remainingSeconds <= 0) {
-            if (timerText) timerText.textContent = "00:00:00";
-            if (sidebarTimer) sidebarTimer.textContent = "00:00:00";
-            if (mobileTimer) mobileTimer.textContent = "00:00:00";
-            return false;
-          }
-          return true;
-        } catch (e) { console.error("Timer UI Error:", e); return false; }
-      }
-
-      // Initial update
-      updateDisplay();
-
-      const interval = setInterval(() => {
-        try {
-          if (remainingSeconds <= 0) {
-            clearInterval(interval);
-            autoSubmit();
-            return;
-          }
-
-          remainingSeconds--;
-          if (!updateDisplay()) {
-            clearInterval(interval);
-            autoSubmit();
-          }
-
-          // Critical warning
-          if (remainingSeconds < 300) { // 5 minutes left
-            timerContainer.classList.add('timer-critical');
-          }
-        } catch (e) { console.error("Timer Interval Error:", e); clearInterval(interval); }
-      }, 1000);
-    }
-
-    function autoSubmit() {
-      // Small visual delay so the student can see the timer hit zero
-      setTimeout(() => {
-        showGlobalAlert("Time is up!", "Your exam session has expired and will be submitted automatically.", "info", () => {
-          submitFinal();
-        });
-      }, 2000);
-    }
-
-    function submitFinal() {
-      const form = document.getElementById('finalSubmitForm');
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = 'confirm_final_submit';
-      input.value = '1';
-      form.appendChild(input);
-
-      const attInput = document.createElement('input');
-      attInput.type = 'hidden';
-      attInput.name = 'current_attempt_no';
-      attInput.value = currentAttemptNo;
-      form.appendChild(attInput);
-
-      form.submit();
-    }
-
-    // Interaction Listeners
-    nextBtn.onclick = () => { if (currentIndex < total - 1) renderQuestion(currentIndex + 1); };
-    prevBtn.onclick = () => { if (currentIndex > 0) renderQuestion(currentIndex - 1); };
-    document.getElementById('finalSubmitForm').onsubmit = (e) => {
-      e.preventDefault();
-      confirmGlobalAction("Final Submission", "Are you sure you want to submit your exam now? You will not be able to change your answers after submission.", "success", "Submit Now", () => {
-        submitFinal();
-      });
-    };
-
-    function confirmLeave(url) {
-      confirmGlobalAction("Leave Exam?", "Leaving the page will not submit your exam. You can resume later if time remains.", "warning", "Go to Dashboard", () => {
-        window.location.href = url;
-      });
-    }
-
-    function confirmLogout() {
-      confirmGlobalAction("Logout?", "Logging out during an exam will leave your attempt unfinished. You can return later if time remains.", "danger", "Logout", () => {
-        window.location.href = 'student_logout.php';
-      });
-    }
-
-    function confirmExamStart(name, url) {
-      // This is for the result view "Start Next Attempt"
-      confirmGlobalAction("Start Next Attempt?", `You are about to start a new attempt for <b>${name}</b>. This will consume one of your allowed attempts.`, "primary", "Start Now", () => {
-        window.location.href = url;
-      });
-    }
-
-    let globalStatusModalInstance = null;
-    function showGlobalAlert(title, message, type, callback) {
-      if (isLocked && !isReviewMode && title !== 'Final Result') return; // Don't show alerts if locked unless result
-      const modal = document.getElementById('globalStatusModal');
-      const titleEl = document.getElementById('globalModalTitle');
-      const messageEl = document.getElementById('globalModalMessage');
-      const okBtn = document.getElementById('globalModalOkBtn');
-      const iconEl = document.getElementById('globalModalIcon');
-
-      titleEl.textContent = title;
-      messageEl.innerHTML = message;
-
-      // Reset classes
-      iconEl.className = 'bi fs-1';
-      okBtn.className = 'btn btn-lg rounded-pill py-3 fw-bold shadow w-100 ';
-
-      if (type === 'info') {
-        iconEl.classList.add('bi-info-circle', 'text-info');
-        okBtn.classList.add('btn-info', 'text-white');
-      } else if (type === 'success') {
-        iconEl.classList.add('bi-check-circle', 'text-success');
-        okBtn.classList.add('btn-success');
-      } else if (type === 'warning') {
-        iconEl.classList.add('bi-exclamation-triangle', 'text-warning');
-        okBtn.classList.add('btn-warning');
-      } else if (type === 'danger') {
-        iconEl.classList.add('bi-x-circle', 'text-danger');
-        okBtn.classList.add('btn-danger');
-      }
-
-      if (!globalStatusModalInstance) {
-        globalStatusModalInstance = new bootstrap.Modal(modal);
-      }
-
-      okBtn.onclick = () => {
-        globalStatusModalInstance.hide();
-        if (callback) callback();
-      };
-      globalStatusModalInstance.show();
-    }
-
-    function confirmGlobalAction(title, message, type, confirmText, callback) {
-      const modal = document.getElementById('globalConfirmModal');
-      const titleEl = document.getElementById('globalConfirmTitle');
-      const messageEl = document.getElementById('globalConfirmMessage');
-      const actionBtn = document.getElementById('globalConfirmActionBtn');
-      const iconContainer = document.getElementById('globalConfirmIconContainer');
-      const iconEl = iconContainer.querySelector('i');
-
-      titleEl.textContent = title;
-      messageEl.innerHTML = message;
-      actionBtn.textContent = confirmText;
-
-      // Reset classes
-      iconContainer.className = 'p-4 rounded-circle d-inline-block ';
-      iconEl.className = 'bi fs-1 ';
-      actionBtn.className = 'btn btn-lg rounded-pill py-3 fw-bold shadow ';
-
-      if (type === 'primary') {
-        iconContainer.classList.add('bg-primary-light');
-        iconEl.classList.add('bi-journal-text', 'text-primary');
-        actionBtn.classList.add('btn-primary');
-      } else if (type === 'success') {
-        iconContainer.classList.add('bg-success-light');
-        iconEl.classList.add('bi-check2-circle', 'text-success');
-        actionBtn.classList.add('btn-success');
-      } else if (type === 'warning') {
-        iconContainer.classList.add('bg-warning-light');
-        iconEl.classList.add('bi-exclamation-circle', 'text-warning');
-        actionBtn.classList.add('btn-warning');
-      } else if (type === 'danger') {
-        iconContainer.classList.add('bg-danger-light');
-        iconEl.classList.add('bi-slash-circle', 'text-danger');
-        actionBtn.classList.add('btn-danger');
-      }
-
-      const bsModal = new bootstrap.Modal(modal);
-      actionBtn.onclick = () => {
-        bsModal.hide();
-        if (callback) callback();
-      };
-      bsModal.show();
-    }
-
-    // Anti-Cheating Lockdown Logic
-    let isCheatingSubmitting = false;
+    let currentAnswers = <?= json_encode($finished_answers) ?>;
+    const correctAnswers = <?= json_encode($correct_answers_map) ?>;
     let violationCount = <?= (int) ($last_attempt['violation_count'] ?? 0) ?>;
+    const maxStrikes = 5;
     const maxViolations = 3;
+
+    // Proctoring & Signaling
     let proctorStatus = 'active';
+    let isResumingFlag = false;
     let violationTimerInterval = null;
-    let isLocked = false;
-    let isWebcamReady = false; // Prevents violations during initialization
-
-    // Proctor Ping & WebRTC Live Logic
-    let webcamStream = null;
+    let webcamStream = null; // Set during handshake
     const webcamVideo = document.createElement('video');
-    const webcamCanvas = document.createElement('canvas'); // Keep for snapshots as fallback
-
-    // WebRTC State
+    const webcamCanvas = document.createElement('canvas'); // Thumbnail Buffer
+    
+    // WebRTC Live State
     let peerConnection = null;
     let signalingInterval = null;
     let lastSignalId = 0;
     const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-    function initWebcam() {
-      if (!pWebcam || isReviewMode) return;
+    // UI Handle References
+    const questionArea = document.getElementById('questionArea');
+    const optionsContainer = document.getElementById('optionsContainer');
+    const timerText = document.getElementById('timerText');
 
-      const blocker = document.getElementById('proctorBlocker');
-      const blockerMsg = document.getElementById('proctorBlockerMsg');
-      const errorBtn = document.getElementById('proctorErrorBtn');
+    // --- 2. RENDERING ENGINE ---
 
-      // Check for Secure Context (HTTPS)
-      const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-      if (!window.isSecureContext && !isLocal) {
-        if (blocker) {
-          blockerMsg.innerHTML = '<span class="text-danger fw-bold">INSECURE CONNECTION DETECTED</span><br><br>Modern browsers block camera access on non-HTTPS connections. <br><br><b>Please ask your administrator to provide an HTTPS link or use Localhost.</b>';
-          errorBtn.classList.remove('d-none');
-        }
-        showGlobalAlert("Security Protocol Failure", "Your connection (Non-HTTPS) does not support camera access. This is required for proctoring. Please use a secure connection.", "danger");
-        return;
-      }
+    function renderQuestion(index) {
+        if (!questions || index >= questions.length || index < 0) return;
+        currentIndex = index;
+        window.currentIndex = index;
+        const q = questions[index];
 
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        if (blocker) {
-          blockerMsg.innerHTML = '<span class="text-danger fw-bold">BROWSER NOT COMPATIBLE</span><br><br>Your browser does not support the required proctoring APIs. Please use Google Chrome or Microsoft Edge.';
-          errorBtn.classList.remove('d-none');
-        }
-        showGlobalAlert("Compatible Browser Required", "Your browser does not support camera access. This is required for proctoring.", "danger");
-        return;
-      }
+        // Update Progress UI
+        const pb = document.getElementById('examProgressBar');
+        if (pb) pb.style.width = ((index + 1) / total * 100) + '%';
 
-      navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } })
-        .then(stream => {
-          webcamStream = stream;
-          webcamVideo.srcObject = stream;
-          webcamVideo.play();
-          isWebcamReady = true; // Security established, now we can track violations
+        // Animate Entry
+        questionArea.style.opacity = '0';
+        setTimeout(() => {
+            const qNumEl = document.getElementById('qNum');
+            const markLabelEl = document.getElementById('markLabel');
+            if(qNumEl) qNumEl.textContent = index + 1;
+            if(markLabelEl) markLabelEl.textContent = (q.mark || 1) + ' Mark' + (q.mark > 1 ? 's' : '');
+            
+            let html = `<div class="badge bg-primary-light text-primary mb-3 px-3 py-2 rounded-pill fw-bold" style="font-size: 0.6rem;">QUESTION ${index + 1} OF ${total}</div>`;
+            html += `<div class="question-text fw-bold fs-4 text-dark mb-4">${q.question_text}</div>`;
+            if (q.question_image) html += `<div class="text-center mb-4"><img src="uploads/${q.question_image}" class="img-fluid rounded-4 shadow-sm border p-1"></div>`;
+            
+            questionArea.innerHTML = html;
+            questionArea.style.opacity = '1';
+            if (window.MathJax) MathJax.typesetPromise([questionArea]);
+        }, 100);
 
-          // Remove blocker only on success
-          if (blocker) {
-            blocker.style.pointerEvents = 'none';
-            blocker.style.opacity = '0';
-            setTimeout(() => {
-              blocker.remove();
-              startExamFlow();
-            }, 500);
-          } else {
-            startExamFlow();
-          }
+        // Options Engine
+        let opts = ['a', 'b', 'c', 'd'].map(k => ({ 
+            key: k.toUpperCase(), 
+            text: q['option_' + k], 
+            img: q['option_' + k + '_image'] 
+        })).filter(o => o.text);
+        
+        if (shuffleOptions) opts.sort(() => Math.random() - 0.5);
 
-          console.log("Webcam initialized" + (pLive ? " (Live Streaming Enabled)" : " (Snapshot Mode)"));
-          if (pLive) startSignaling();
-        })
-        .catch(err => {
-          console.error("Webcam error:", err);
-          if (blocker) {
-            blockerMsg.innerHTML = '<span class="text-danger fw-bold">CAMERA PERMISSION DENIED</span><br><br>You must allow camera access to take this exam. Please check your browser address bar and grant permission.';
-            errorBtn.classList.remove('d-none');
-          }
-          showGlobalAlert("Camera Required", "This exam requires webcam access for live proctoring. Please allow camera permissions.", "danger");
+        optionsContainer.innerHTML = '';
+        opts.forEach((o, i) => {
+            const letter = String.fromCharCode(65 + i);
+            const isSel = currentAnswers[q.id] === o.key;
+            const card = document.createElement('div');
+            card.className = `option-card ${isSel ? 'selected' : ''}`;
+            
+            if (isReviewMode && canViewScore) {
+                if (o.key === correctAnswers[q.id]) card.classList.add('border-success', 'bg-success-light', 'review-correct');
+                else if (isSel) card.classList.add('border-danger', 'bg-danger-light', 'review-wrong');
+            }
+
+            card.innerHTML = `
+                <div class="d-flex align-items-center w-100">
+                    <div class="option-label shadow-sm">${letter}</div>
+                    <div class="option-text flex-grow-1 text-dark fw-medium ms-3">
+                        ${o.text}
+                        ${o.img ? `<div class="mt-2 text-center"><img src="uploads/${o.img}" class="img-fluid rounded-3" style="max-height:100px;"></div>` : ''}
+                    </div>
+                    <div class="selection-indicator border rounded-2 ms-auto d-flex align-items-center justify-content-center bg-white" style="width:24px; height:24px; flex-shrink:0;">
+                        <i class="bi bi-check2 text-white ${isSel ? '' : 'd-none'}"></i>
+                    </div>
+                </div>`;
+            
+            if (!isReviewMode) {
+                card.onclick = () => {
+                    currentAnswers[q.id] = o.key;
+                    saveAnswer(q.id, o.key);
+                    optionsContainer.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+                    optionsContainer.querySelectorAll('i').forEach(i => i.classList.add('d-none'));
+                    card.classList.add('selected');
+                    card.querySelector('i').classList.remove('d-none');
+                    updateNav();
+                };
+            }
+            optionsContainer.appendChild(card);
         });
-    }
-
-    async function startSignaling() {
-      if (signalingInterval) return;
-      signalingInterval = setInterval(async () => {
-        const resp = await fetch(`webrtc_api?action=get&attempt_id=${currentAttemptId}&last_id=${lastSignalId}`);
-        const data = await resp.json();
-        if (data.signals) {
-          for (const signal of data.signals) {
-            lastSignalId = signal.id;
-            handleAdminSignal(signal).catch(e => console.error("Signal handle error:", e));
-          }
+        
+        // Navigation Control
+        const prev = document.getElementById('prevBtn');
+        const nxt = document.getElementById('nextBtn');
+        const sub = document.getElementById('submitBtn');
+        if(prev) prev.disabled = index === 0;
+        if(nxt) {
+            if (index === total - 1) { 
+                nxt.classList.add('d-none'); 
+                if(!isReviewMode && sub) sub.classList.remove('d-none'); 
+            } else { 
+                nxt.classList.remove('d-none'); 
+                if(sub) sub.classList.add('d-none'); 
+            }
         }
-      }, 1000); // Polling every 1 second for faster handshake
+        updateNav();
     }
 
-    async function handleAdminSignal(signal) {
-      const payload = JSON.parse(signal.payload);
-      if (signal.type === 'offer') {
-        if (peerConnection) peerConnection.close();
-        peerConnection = new RTCPeerConnection(rtcConfig);
+    function updateNav() {
+        const grid = document.getElementById('navGrid');
+        if(!grid) return;
+        grid.innerHTML = '';
+        questions.forEach((q, i) => {
+            const dot = document.createElement('div');
+            dot.className = `nav-dot ${i === currentIndex ? 'active' : (currentAnswers[q.id] ? 'answered' : '')}`;
+            dot.textContent = i + 1;
+            dot.onclick = () => renderQuestion(i);
+            grid.appendChild(dot);
+        });
+        const cnt = Object.keys(currentAnswers).length;
+        if(document.getElementById('answeredCount')) document.getElementById('answeredCount').textContent = cnt;
+        if(document.getElementById('answeredCountBadge')) document.getElementById('answeredCountBadge').textContent = cnt;
+    }
 
-        webcamStream.getTracks().forEach(track => peerConnection.addTrack(track, webcamStream));
+    function saveAnswer(qid, opt) {
+        const fd = new FormData();
+        fd.append('exam_id', examId); fd.append('attempt_no', currentAttemptNo);
+        fd.append('question_id', qid); fd.append('option', opt);
+        fd.append('csrf_token', '<?= generate_csrf_token() ?>');
+        fetch('objective_exam_api?action=save_answer', { method: 'POST', body: fd });
+    }
 
-        peerConnection.onicecandidate = (event) => {
-          if (event.candidate) {
-            sendSignal('ice', JSON.stringify(event.candidate));
-          }
-        };
+    // --- 3. PROCTORING & SECURITY SUITE ---
 
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(payload));
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        sendSignal('answer', JSON.stringify(answer));
-      } else if (signal.type === 'ice') {
-        if (peerConnection && payload) {
-          try {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(payload));
-          } catch (e) { console.error("Error adding ice candidate:", e); }
+    function startTimer() {
+        if (isReviewMode) { if(timerText) timerText.textContent = "REVIEW"; return; }
+        const interval = setInterval(() => {
+            if (window.isLocked) return;
+            remainingSeconds--;
+            if (remainingSeconds <= 0) { clearInterval(interval); submitFinal(); }
+            else {
+                const h = Math.floor(remainingSeconds/3600), m = Math.floor((remainingSeconds%3600)/60), s = remainingSeconds%60;
+                const ts = `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+                if(timerText) timerText.textContent = ts;
+                if (document.getElementById('sidebarTimer')) document.getElementById('sidebarTimer').textContent = ts;
+                if (document.getElementById('mobileTimer')) document.getElementById('mobileTimer').textContent = ts;
+            }
+        }, 1000);
+    }
+
+    function submitFinal(withConfirm = false) {
+        if (withConfirm) {
+            Swal.fire({
+                title: 'Finish Examination?',
+                text: "You are about to submit your final responses. This action cannot be undone and you will be logged out.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#198754',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, Submit & Logout'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    executeFinalSubmission();
+                }
+            });
+        } else {
+            executeFinalSubmission();
         }
-      }
     }
 
-    function sendSignal(type, payload) {
-      const fd = new FormData();
-      fd.append('attempt_id', currentAttemptId);
-      fd.append('type', type);
-      fd.append('payload', payload);
-      fetch('webrtc_api?action=send', { method: 'POST', body: fd });
-    }
-
-    function getWebcamSnapshot() {
-      if (!webcamStream) return null;
-      webcamCanvas.width = 160;
-      webcamCanvas.height = 120;
-      const ctx = webcamCanvas.getContext('2d');
-      ctx.drawImage(webcamVideo, 0, 0, 160, 120);
-      return webcamCanvas.toDataURL('image/jpeg', 0.4);
+    function executeFinalSubmission() {
+        window.isLocked = true; window.onbeforeunload = null;
+        const form = document.getElementById('finalSubmitForm');
+        if(!form) return;
+        
+        // Meta markers for finalization
+        const h1 = document.createElement('input'); h1.type='hidden'; h1.name='confirm_final_submit'; h1.value='1'; form.appendChild(h1);
+        const h2 = document.createElement('input'); h2.type='hidden'; h2.name='current_attempt_no'; h2.value=currentAttemptNo; form.appendChild(h2);
+        const h3 = document.createElement('input'); h3.type='hidden'; h3.name='csrf_token'; h3.value='<?= generate_csrf_token() ?>'; form.appendChild(h3);
+        
+        Swal.fire({ 
+            title: 'Submitting Assessment...', 
+            text: 'Please wait while we secure your responses.',
+            icon: 'info',
+            didOpen: () => Swal.showLoading(), 
+            allowOutsideClick: false 
+        });
+        form.submit();
     }
 
     function sendPing(status = 'active', violation = null, details = null) {
-      if (isReviewMode || isLocked) return;
+        if (isReviewMode || window.isLocked) return;
+        const fd = new FormData();
+        fd.append('exam_id', examId); fd.append('attempt_no', currentAttemptNo); fd.append('status', status);
+        fd.append('csrf_token', '<?= generate_csrf_token() ?>');
+        if (violation) { fd.append('violation_type', violation); fd.append('details', details); }
+        
+        // Thumbnail snapshot backup
+        if (pWebcam && window.isWebcamReady) {
+            webcamCanvas.width = 160; webcamCanvas.height = 120;
+            const ctx = webcamCanvas.getContext('2d');
+            // Try to capture from a video element if we have one globally
+            const v = document.querySelector('video') || webcamVideo;
+            if (v && v.readyState === 4) ctx.drawImage(v, 0, 0, 160, 120);
+            fd.append('webcam_snapshot', webcamCanvas.toDataURL('image/jpeg', 0.4));
+        }
 
-      const formData = new FormData();
-      formData.append('exam_id', examId);
-      formData.append('attempt_no', currentAttemptNo);
-      formData.append('status', status);
-      if (violation) {
-        formData.append('violation_type', violation);
-        formData.append('details', details);
-      }
-
-      // We still send a small low-res snapshot every ping as a backup thumbnail for the grid
-      if (pWebcam && webcamStream) {
-        const snap = getWebcamSnapshot();
-        if (snap) formData.append('webcam_snapshot', snap);
-      }
-
-      fetch('proctor_ping', { method: 'POST', body: formData })
-        .then(r => r.json())
-        .then(data => {
-          if (data.status === 'TERMINATE' || data.status === 'FORCED_LOGOUT') {
-            isLocked = true;
-            window.onbeforeunload = null;
-            const target = (data.status === 'TERMINATE') ? 'student_dashboard.php' : 'logout.php';
-            // Use window.alert (which we overrode) and handle redirect in its callback/then
-            Swal.fire({
-              title: 'Security Alert',
-              text: data.message,
-              icon: 'error',
-              confirmButtonColor: '#092c19'
-            }).then(() => {
-              location.href = target;
+        fetch('proctor_ping', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'FORCED_LOGOUT' || data.status === 'SUBMITTED') {
+                    window.isLocked = true;
+                    Swal.fire({
+                        title: data.status === 'FORCED_LOGOUT' ? 'Session Conflict' : 'Session Finished',
+                        text: data.message || 'You will be logged out now.',
+                        icon: 'error',
+                        allowOutsideClick: false,
+                        confirmButtonText: 'OK'
+                    }).then(() => {
+                        window.onbeforeunload = null;
+                        location.href = 'student_logout.php';
+                    });
+                    return;
+                }
+                if (data.status === 'LOCKED') {
+                    window.isLocked = true;
+                    const lockVc = document.getElementById('lockViolationCount');
+                    if(lockVc) lockVc.textContent = `${data.count} / ${maxStrikes}`;
+                    const lockOv = document.getElementById('examLockedOverlay');
+                    if(lockOv) lockOv.style.display = 'flex';
+                }
+                if (data.violation_count !== undefined) {
+                    violationCount = data.violation_count;
+                    const vcb = document.getElementById('violationCountBadge');
+                    if(vcb) vcb.textContent = `${violationCount} / ${maxViolations}`;
+                }
+                if (data.remote_command === 'SECURITY_BYPASS') window.finalizeEnrollment();
+                if (data.is_live_requested && pLive) startSignaling();
+                if (data.warning) showAdminWarning(data.warning);
             });
-            return;
-          }
-
-          if (data.violation_count !== undefined) {
-            violationCount = data.violation_count;
-            const countBadge = document.getElementById('violationCountBadge');
-            const progressBar = document.getElementById('violationProgressBar');
-            if (countBadge) countBadge.textContent = `${violationCount} / ${maxViolations}`;
-            if (progressBar) progressBar.style.width = (violationCount / maxViolations * 100) + '%';
-          }
-
-          if (data.warning) showAdminWarning(data.warning);
-        });
     }
 
-    function showAdminWarning(msg) {
-      const toastEl = document.getElementById('adminWarningToast');
-      if (toastEl) {
-        document.getElementById('adminWarningMsg').textContent = msg;
-        new bootstrap.Toast(toastEl).show();
-      }
+    // Expose sendPing globally so the AI proctoring module can report violations
+    window.sendPing = sendPing;
+
+    // ─── Strike / Violation Alarm (Web Audio API — works 100% offline) ──────────
+    function playStrikeAlarm() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            [
+                { freq: 880,  t: 0.00, dur: 0.12 },
+                { freq: 880,  t: 0.18, dur: 0.12 },
+                { freq: 1200, t: 0.36, dur: 0.30 }
+            ].forEach(({ freq, t, dur }) => {
+                const osc  = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(freq, ctx.currentTime + t);
+                gain.gain.setValueAtTime(0.45, ctx.currentTime + t);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + dur);
+                osc.start(ctx.currentTime + t);
+                osc.stop(ctx.currentTime  + t + dur + 0.05);
+            });
+        } catch (e) { /* silent — audio context may not be available */ }
+        // Also ring the HTML audio bell element as a fallback
+        const bell = document.getElementById('alertBell');
+        if (bell) bell.play().catch(() => {});
     }
 
-    let isResumingFlag = false;
-    function handleViolation(type = "Unknown", details = "") {
-      if (isLocked || isReviewMode || isResumingFlag || (!isWebcamReady && pWebcam)) return;
+    function handleViolation(type, details = "") {
+        if (window.isLocked || isReviewMode || isResumingFlag) return;
+        sendPing('blur', type, details);
+        playStrikeAlarm(); // 🔔 Sound alarm on every security strike/violation
+        const ov = document.getElementById('violationOverlay');
+        if (ov) ov.style.display = 'flex';
 
-      proctorStatus = 'blur';
-      const overlay = document.getElementById('violationOverlay');
-      const timerDisplay = document.getElementById('violationTimer');
-      if (overlay) overlay.style.display = 'flex';
-      sendPing('blur', type, details);
-      if (violationTimerInterval) clearInterval(violationTimerInterval);
-      let secondsLeft = 60;
-      if (timerDisplay) timerDisplay.textContent = secondsLeft;
-      violationTimerInterval = setInterval(() => {
-        secondsLeft--;
-        if (timerDisplay) timerDisplay.textContent = secondsLeft;
-        if (secondsLeft <= 0) { clearInterval(violationTimerInterval); submitFinal(); }
-      }, 1000);
+        let s = 60;
+        if (violationTimerInterval) clearInterval(violationTimerInterval);
+        violationTimerInterval = setInterval(() => {
+            s--;
+            const vt = document.getElementById('violationTimer');
+            if (vt) vt.textContent = s;
+            if (s <= 0) resumeExam();
+        }, 1000);
     }
 
     function resumeExam() {
-      if (isLocked || isResumingFlag) return;
-      isResumingFlag = true;
-
-      // Request Fullscreen - User gesture provided via button click or Modal OK click
-      if (pFS) {
-        document.documentElement.requestFullscreen().catch((e) => {
-          console.warn("Fullscreen request failed:", e);
-        });
-      }
-
-      const overlay = document.getElementById('violationOverlay');
-      if (overlay) overlay.style.display = 'none';
-      if (violationTimerInterval) clearInterval(violationTimerInterval);
-
-      proctorStatus = 'active';
-      sendPing('active');
-
-      // Allow state to settle before accepting new violations (e.g. exit fullscreen transitions)
-      setTimeout(() => {
-        isResumingFlag = false;
-      }, 1500);
+        if (window.isLocked || isResumingFlag) return;
+        isResumingFlag = true;
+        if (pFS) document.documentElement.requestFullscreen().catch(() => {});
+        const ov = document.getElementById('violationOverlay');
+        if(ov) ov.style.display = 'none';
+        clearInterval(violationTimerInterval);
+        sendPing('active');
+        setTimeout(() => isResumingFlag = false, 1500);
     }
 
-    // Event Listeners for Proctoring
-    if (!isReviewMode) {
-      window.addEventListener('blur', () => { if (pTab) handleViolation("WINDOW_BLUR", "Lost focus"); });
-      document.addEventListener('visibilitychange', () => { if (document.hidden && pTab) handleViolation("TAB_SWITCH", "Switched tab"); });
-      document.addEventListener('fullscreenchange', () => {
-        if (!document.fullscreenElement && pFS && !isLocked) handleViolation("EXIT_FULLSCREEN", "Left fullscreen");
-      });
+    // --- 4. LIVE OVERSIGHT (WEBRTC) ---
 
-      if (pKB) {
-        document.oncontextmenu = (e) => { e.preventDefault(); return false; };
-        document.oncopy = (e) => e.preventDefault();
-        document.oncut = (e) => e.preventDefault();
-        document.onpaste = (e) => e.preventDefault();
-        document.addEventListener('keydown', (e) => {
-          if (e.key === 'F12' || (e.ctrlKey && e.shiftKey) || (e.ctrlKey && 'uupPcC'.includes(e.key)) || e.key === 'PrintScreen') {
-            e.preventDefault();
-            handleViolation("KEYBOARD_LOCK", `Key: ${e.key}`);
-          }
-        });
-      }
+    async function startSignaling() {
+        if (signalingInterval) return;
+        console.log("Live stream oversight requested. Initializing WebRTC handshake...");
+        signalingInterval = setInterval(async () => {
+            const resp = await fetch(`webrtc_api?action=get&attempt_id=${currentAttemptId}&last_id=${lastSignalId}`);
+            const data = await resp.json();
+            if (data.signals) {
+                for (const s of data.signals) {
+                    lastSignalId = s.id;
+                    handleAdminSignal(s).catch(e => console.error("WebRTC Handshake Fail:", e));
+                }
+            }
+        }, 1500);
     }
 
-    // Refactored flow: Initialization helpers
-    function startExamFlow() {
-      // Show questions and start clock
-      if (questions.length > 0) renderQuestion(currentIndex);
-      startTimer();
-      // Only show Strict Mode alert if needed (needs user gesture for FS)
-      if (pFS && !isReviewMode) {
-        showGlobalAlert("Strict Mode", "Fullscreen is required to continue. Click OK to establish a secure workspace.", "info", resumeExam);
-      }
-    }
+    async function handleAdminSignal(s) {
+        const payload = JSON.parse(s.payload);
+        if (s.type === 'offer') {
+            if (peerConnection) peerConnection.close();
+            peerConnection = new RTCPeerConnection(rtcConfig);
 
-    window.onload = function () {
-      if (!isReviewMode) {
-        if (pBrowser) {
-          const ua = navigator.userAgent;
-          if (!/Chrome/.test(ua) && !/Edg/.test(ua)) {
-            showGlobalAlert("Browser Warning", "Please use Chrome or Edge for the best experience (Detected: " + ua.split(' ').pop() + ").", "warning");
-          }
+            // Attach local camera/mic so admin can see and hear student
+            const stream = (window.webcamStream) ? window.webcamStream : null;
+            if (stream) stream.getTracks().forEach(t => peerConnection.addTrack(t, stream));
+
+            peerConnection.onicecandidate = e => { if (e.candidate) sendSignal('ice', JSON.stringify(e.candidate)); };
+
+            // FIX: Receive incoming audio from admin (admin speaking to student).
+            // Without this handler the student's browser silently discards admin audio.
+            peerConnection.ontrack = (event) => {
+                if (event.track.kind === 'audio') {
+                    let adminAudio = document.getElementById('adminAudioPlayer');
+                    if (!adminAudio) {
+                        adminAudio            = document.createElement('audio');
+                        adminAudio.id         = 'adminAudioPlayer';
+                        adminAudio.autoplay   = true;
+                        adminAudio.style.display = 'none';
+                        document.body.appendChild(adminAudio);
+                    }
+                    adminAudio.srcObject = event.streams[0] || new MediaStream([event.track]);
+                    console.log('[WebRTC] Proctor audio connected — admin is speaking.');
+                }
+            };
+
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(payload));
+            const ans = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(ans);
+            sendSignal('answer', JSON.stringify(ans));
+        } else if (s.type === 'ice' && peerConnection) {
+            try { await peerConnection.addIceCandidate(new RTCIceCandidate(payload)); } catch(e) {}
         }
+    }
 
-        if (pWebcam) {
-          // initWebcam will trigger startExamFlow() on success
-          initWebcam();
-        } else {
-          startExamFlow();
+    function sendSignal(type, payload) {
+        const fd = new FormData();
+        fd.append('attempt_id', currentAttemptId); fd.append('type', type); fd.append('payload', payload);
+        fd.append('csrf_token', '<?= generate_csrf_token() ?>');
+        fetch('webrtc_api?action=send', { method: 'POST', body: fd });
+    }
+
+    // --- 5. SYSTEM HEALTH MONITOR ---
+
+    function initSystemMonitors() {
+        // Battery Monitor
+        if (navigator.getBattery) {
+            navigator.getBattery().then(battery => {
+                const update = () => {
+                    const pct = Math.round(battery.level * 100);
+                    const el = document.getElementById('batteryPct');
+                    if (el) el.textContent = pct;
+                    const b = document.getElementById('batteryStatus');
+                    if (b) b.className = `badge rounded-pill px-2 ${pct < 20 ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis'}`;
+                };
+                update();
+                battery.addEventListener('levelchange', update);
+            });
         }
-      } else {
-        // Review mode: simple setup
-        if (questions.length > 0) renderQuestion(0);
+        // Network Monitor
+        const updateNet = () => {
+            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            const el = document.getElementById('networkType');
+            if (el) el.textContent = (conn && conn.effectiveType) ? conn.effectiveType : (navigator.onLine ? 'Online' : 'Offline');
+        };
+        updateNet();
+        if (navigator.connection) navigator.connection.addEventListener('change', updateNet);
+        window.addEventListener('online', updateNet);
+        window.addEventListener('offline', updateNet);
+    }
+
+    // --- 6. INITIALIZATION & LIFECYCLE ---
+
+    window.onload = () => {
+        initSystemMonitors();
+        
+        if (questions && questions.length > 0) renderQuestion(currentIndex);
         startTimer();
-      }
 
-      setInterval(() => sendPing(proctorStatus), 15000);
+        if (!isReviewMode) {
+            // Background Pings (Pulse)
+            setInterval(() => sendPing(proctorStatus), 15000);
+            
+            // Interaction Security
+            window.addEventListener('blur', () => { if (pTab) handleViolation("WINDOW_BLUR", "Focus lost"); });
+            document.addEventListener('visibilitychange', () => { if (document.hidden && pTab) handleViolation("TAB_SWITCH", "Tab change"); });
+            document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && pFS && !window.isLocked) handleViolation("EXIT_FS", "Security mode escape"); });
+            
+            if (pKB) {
+                document.oncontextmenu = e => e.preventDefault();
+                document.addEventListener('keydown', e => {
+                    if (['F12', 'PrintScreen'].includes(e.key) || (e.ctrlKey && 'uupPcC'.includes(e.key))) {
+                        e.preventDefault();
+                        handleViolation("KEYBOARD", `Forbidden Key: ${e.key}`);
+                    }
+                });
+            }
+        }
+        
+        // Self-Healing Logic (Anti-Hang)
+        setInterval(() => {
+            if (questionArea && questionArea.innerHTML.includes('Preparing') && questions && questions.length > 0 && !window.isLocked) {
+                console.warn("Self-Healing: Restoring rendering engine state.");
+                renderQuestion(currentIndex);
+            }
+        }, 2000);
     };
 
-    // Attach Recovery Button
-    const resBtn = document.getElementById('resumeExamBtn');
-    if (resBtn) {
-      resBtn.onclick = resumeExam;
+    // --- 7. GLOBAL INTERFACE HELPERS ---
+
+    window.startExamFlow = () => { if(questions && questions.length > 0) renderQuestion(currentIndex); };
+    window.confirmLeave = url => { Swal.fire({ title: 'Leave Exam?', text: 'Your progress is saved, but time continues.', icon: 'warning', showCancelButton: true, confirmButtonText: 'Yes, Leave' }).then(r => { if(r.isConfirmed) location.href = url; }); };
+    window.confirmLogout = () => { Swal.fire({ title: 'Logout Session?', text: 'Ensure you have submitted or saved your work.', icon: 'error', showCancelButton: true, confirmButtonText: 'Logout Now' }).then(r => { if(r.isConfirmed) location.href = 'student_logout.php'; }); };
+    window.togglePowerMenu = () => { window.confirmLogout(); };
+    
+    // NAVIGATION LISTENERS
+    document.getElementById('prevBtn')?.addEventListener('click', () => { if(currentIndex > 0) renderQuestion(currentIndex - 1); });
+    document.getElementById('nextBtn')?.addEventListener('click', () => { if(currentIndex < total - 1) renderQuestion(currentIndex + 1); });
+
+    function showAdminWarning(msg) {
+        const toastEl = document.getElementById('adminWarningToast');
+        if (toastEl) {
+            document.getElementById('adminWarningMsg').textContent = msg;
+            new bootstrap.Toast(toastEl).show();
+            const bell = document.getElementById('alertBell');
+            if (bell) bell.play().catch(() => {});
+        }
     }
   </script>
 
@@ -1619,6 +1557,12 @@ $current_index = 0;
       </div>
     </div>
   </div>
+  <?php if ($exam['proctor_webcam'] || $exam['is_strict']): ?>
+  <!-- AI Proctoring: TensorFlow.js BlazeFace — runs 100% client-side, no GPU server needed -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.1.0/dist/blazeface.min.js"></script>
+  <script src="assets/js/ai_proctor.js"></script>
+  <?php endif; ?>
   <!-- sweetalert_custom_injected_v1 -->
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script>
@@ -1707,6 +1651,8 @@ $current_index = 0;
       });
     });
   </script>
+  <!-- Aggressive Global Lockdown -->
+  <script src="assets/js/student_lockdown.js"></script>
 </body>
 
 

@@ -3,6 +3,10 @@ require 'auth.php';
 require 'db.php';
 header('Content-Type: application/json');
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    validate_csrf();
+}
+
 $action = $_GET['action'] ?? '';
 $attempt_id = intval($_POST['attempt_id'] ?? ($_GET['attempt_id'] ?? 0));
 $role = $_SESSION['role'] ?? (isset($_SESSION['student_id']) ? 'student' : 'unknown');
@@ -29,6 +33,20 @@ if ($action === 'get') {
     }
     $signals = $stmt->fetchAll(PDO::FETCH_ASSOC);
     echo json_encode(['success' => true, 'signals' => $signals]);
+    exit;
+}
+
+if ($action === 'request_live') {
+    $stmt = $db->prepare("UPDATE objective_attempts SET is_live_requested = 1 WHERE id = ?");
+    $stmt->execute([$attempt_id]);
+    echo json_encode(['success' => true]);
+    exit;
+}
+
+if ($action === 'stop_live') {
+    $stmt = $db->prepare("UPDATE objective_attempts SET is_live_requested = 0 WHERE id = ?");
+    $stmt->execute([$attempt_id]);
+    echo json_encode(['success' => true]);
     exit;
 }
 

@@ -28,8 +28,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $start_time = !empty($_POST['start_time']) ? $_POST['start_time'] : null;
     $end_time = !empty($_POST['end_time']) ? $_POST['end_time'] : null;
 
-    $stmt = $db->prepare("INSERT INTO exams (name, description, is_active, type, student_can_view_score, total_mark, duration_minutes, shuffle_objective, questions_to_show, max_attempts, grading_method, is_strict, shuffle_options, proctor_fullscreen, proctor_tab_lock, proctor_kb_lock, proctor_auto_submit, proctor_browser_check, proctor_webcam, proctor_live_video, start_time, end_time) VALUES (?, ?, ?, 'objective', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$name, $desc, $is_active, $student_can_view_score, $total_mark, $duration, $shuffle, $q_to_show, $max_attempts, $grading_method, $is_strict, $shuffle_opts, $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time]);
+    $session_id = $_POST['session_id'];
+    $stmt = $db->prepare("INSERT INTO exams (name, description, is_active, type, session_id, student_can_view_score, total_mark, duration_minutes, shuffle_objective, questions_to_show, max_attempts, grading_method, is_strict, shuffle_options, proctor_fullscreen, proctor_tab_lock, proctor_kb_lock, proctor_auto_submit, proctor_browser_check, proctor_webcam, proctor_live_video, start_time, end_time) VALUES (?, ?, ?, 'objective', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$name, $desc, $is_active, $session_id, $student_can_view_score, $total_mark, $duration, $shuffle, $q_to_show, $max_attempts, $grading_method, $is_strict, $shuffle_opts, $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time]);
     header('Location: admin_objective_exams?success=created');
     exit;
   }
@@ -57,8 +58,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $start_time = !empty($_POST['start_time']) ? $_POST['start_time'] : null;
     $end_time = !empty($_POST['end_time']) ? $_POST['end_time'] : null;
 
-    $stmt = $db->prepare("UPDATE exams SET name=?, description=?, is_active=?, student_can_view_score=?, total_mark=?, duration_minutes=?, shuffle_objective=?, questions_to_show=?, max_attempts=?, grading_method=?, is_strict=?, shuffle_options=?, proctor_fullscreen=?, proctor_tab_lock=?, proctor_kb_lock=?, proctor_auto_submit=?, proctor_browser_check=?, proctor_webcam=?, proctor_live_video=?, start_time=?, end_time=? WHERE id=? AND type='objective'");
-    $stmt->execute([$name, $desc, $is_active, $student_can_view_score, $total_mark, $duration, $shuffle, $q_to_show, $max_attempts, $grading_method, $is_strict, $shuffle_opts, $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time, $id]);
+    $session_id = $_POST['session_id'];
+    $stmt = $db->prepare("UPDATE exams SET name=?, description=?, is_active=?, session_id=?, student_can_view_score=?, total_mark=?, duration_minutes=?, shuffle_objective=?, questions_to_show=?, max_attempts=?, grading_method=?, is_strict=?, shuffle_options=?, proctor_fullscreen=?, proctor_tab_lock=?, proctor_kb_lock=?, proctor_auto_submit=?, proctor_browser_check=?, proctor_webcam=?, proctor_live_video=?, start_time=?, end_time=? WHERE id=? AND type='objective'");
+    $stmt->execute([$name, $desc, $is_active, $session_id, $student_can_view_score, $total_mark, $duration, $shuffle, $q_to_show, $max_attempts, $grading_method, $is_strict, $shuffle_opts, $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time, $id]);
     header('Location: admin_objective_exams?success=edited');
     exit;
   }
@@ -75,6 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Fetch all objective exams
+$sessions = $db->query("SELECT * FROM academic_sessions ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
 $exams = $db->query("SELECT * FROM exams WHERE type='objective' ORDER BY created_at DESC, id DESC")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
@@ -150,6 +153,16 @@ $exams = $db->query("SELECT * FROM exams WHERE type='objective' ORDER BY created
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                       </div>
                       <div class="modal-body">
+                        <div class="mb-3">
+                          <label class="form-label">Academic Session</label>
+                          <select name="session_id" class="form-select" required>
+                            <?php foreach ($sessions as $s): ?>
+                              <option value="<?= $s['id'] ?>" <?= ($exam['session_id'] ?? 0) == $s['id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($s['session_name']) ?>
+                              </option>
+                            <?php endforeach; ?>
+                          </select>
+                        </div>
                         <div class="mb-3">
                           <label class="form-label">Name</label>
                           <input type="text" name="name" class="form-control"
@@ -308,6 +321,17 @@ $exams = $db->query("SELECT * FROM exams WHERE type='objective' ORDER BY created
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Academic Session</label>
+              <select name="session_id" class="form-select" required>
+                <option value="">-- Select Session --</option>
+                <?php foreach ($sessions as $s): ?>
+                  <option value="<?= $s['id'] ?>" <?= $s['is_active'] ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($s['session_name']) ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+            </div>
             <div class="mb-3">
               <label class="form-label">Name</label>
               <input type="text" name="name" class="form-control" required>

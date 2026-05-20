@@ -60,50 +60,84 @@ if ($exam_id && $exam_info && isset($_GET['download'])) {
   $header[] = 'Total';
   fputcsv($out, $header);
 
-  foreach ($students as $stu) {
-    $row = [$stu['firstname'], $stu['middlename'], $stu['lastname'], $stu['username'], $stu['matric_no']];
-    $total = 0;
+    foreach ($students as $stu) {
+      $row = [$stu['firstname'], $stu['middlename'], $stu['lastname'], $stu['username'], $stu['matric_no']];
+      $total = 0;
 
-    if ($is_objective) {
-      $att_stmt = $db->prepare("SELECT attempt_no, question_order FROM objective_attempts WHERE exam_id=? AND student_id=? AND finished_at IS NOT NULL ORDER BY attempt_no DESC LIMIT 1");
-      $att_stmt->execute([$exam_id, $stu['id']]);
-      $att_row = $att_stmt->fetch(PDO::FETCH_ASSOC);
-      $latest_attempt = $att_row['attempt_no'] ?? null;
-      $assigned_ids = !empty($att_row['question_order']) ? explode(',', $att_row['question_order']) : [];
+      if ($is_objective) {
+        $method = $exam_info['grading_method'] ?? 'highest';
+        if ($method === 'average') {
+          // Average logic: Get all finished attempts
+          $all_att = $db->prepare("SELECT attempt_no, score, question_order FROM objective_attempts WHERE exam_id=? AND student_id=? AND finished_at IS NOT NULL");
+          $all_att->execute([$exam_id, $stu['id']]);
+          $attempts_data = $all_att->fetchAll(PDO::FETCH_ASSOC);
+          
+          if (!empty($attempts_data)) {
+            $total_pts = 0; $count = count($attempts_data);
+            $q_sums = array_fill_keys($question_ids, 0);
+            $q_counts = array_fill_keys($question_ids, 0);
 
-      if ($latest_attempt) {
-        $ans_stmt = $db->prepare("SELECT question_id, selected_option FROM objective_answers WHERE exam_id=? AND student_id=? AND attempt_no=?");
-        $ans_stmt->execute([$exam_id, $stu['id'], $latest_attempt]);
-        $submitted_answers = $ans_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+            foreach ($attempts_data as $att) {
+              $total_pts += $att['score'];
+              $att_no = $att['attempt_no'];
+              $ans_st = $db->prepare("SELECT question_id, selected_option FROM objective_answers WHERE exam_id=? AND student_id=? AND attempt_no=?");
+              $ans_st->execute([$exam_id, $stu['id'], $att_no]);
+              $ans_map = $ans_st->fetchAll(PDO::FETCH_KEY_PAIR);
+              
+              foreach ($questions_data as $q) {
+                $sel = $ans_map[$q['id']] ?? '';
+                $sc = (strtoupper($sel) === strtoupper($q['correct_option'])) ? ($q['mark'] ?? 1) : 0;
+                $q_sums[$q['id']] += $sc;
+                $q_counts[$q['id']]++;
+              }
+            }
 
-        $possible_total = 0;
-        foreach ($assigned_ids as $aid) {
-          foreach ($questions_data as $qd) {
-            if ($qd['id'] == $aid)
-              $possible_total += ($qd['mark'] ?? 1);
+            foreach ($questions_data as $q) {
+              $avg_q = ($q_counts[$q['id']] > 0) ? round($q_sums[$q['id']] / $q_counts[$q['id']], 2) : 0;
+              $row[] = $avg_q;
+            }
+            $display_total = round($total_pts / $count, 2);
+          } else {
+            foreach ($question_ids as $qid) $row[] = 0;
+            $display_total = 0;
           }
-        }
+        } else {
+          // Highest (Override) logic
+          $att_stmt = $db->prepare("SELECT attempt_no, question_order FROM objective_attempts WHERE exam_id=? AND student_id=? AND finished_at IS NOT NULL ORDER BY score DESC LIMIT 1");
+          $att_stmt->execute([$exam_id, $stu['id']]);
+          $att_row = $att_stmt->fetch(PDO::FETCH_ASSOC);
+          $best_attempt = $att_row['attempt_no'] ?? null;
+          $assigned_ids = !empty($att_row['question_order']) ? explode(',', $att_row['question_order']) : [];
 
-        foreach ($questions_data as $q) {
-          if (!in_array($q['id'], $assigned_ids)) {
-            $row[] = '-';
-            continue;
+          if ($best_attempt) {
+            $ans_stmt = $db->prepare("SELECT question_id, selected_option FROM objective_answers WHERE exam_id=? AND student_id=? AND attempt_no=?");
+            $ans_stmt->execute([$exam_id, $stu['id'], $best_attempt]);
+            $submitted_answers = $ans_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+            $possible_total = 0;
+            foreach ($assigned_ids as $aid) {
+              foreach ($questions_data as $qd) {
+                if ($qd['id'] == $aid) $possible_total += ($qd['mark'] ?? 1);
+              }
+            }
+
+            foreach ($questions_data as $q) {
+              if (!empty($assigned_ids) && !in_array($q['id'], $assigned_ids)) {
+                $row[] = '-'; continue;
+              }
+              $sel = $submitted_answers[$q['id']] ?? '';
+              $sc = (strtoupper($sel) === strtoupper($q['correct_option'])) ? ($q['mark'] ?? 1) : 0;
+              $row[] = $sc;
+              $total += $sc;
+            }
+            $display_total = $total;
+            if (isset($exam_info['total_mark']) && $exam_info['total_mark'] > 0 && $possible_total > 0) {
+              $display_total = ($total / $possible_total) * $exam_info['total_mark'];
+            }
+          } else {
+            foreach ($question_ids as $qid) $row[] = 0;
+            $display_total = 0;
           }
-          $sel = $submitted_answers[$q['id']] ?? '';
-          $sc = (strtoupper($sel) === strtoupper($q['correct_option'])) ? ($q['mark'] ?? 1) : 0;
-          $row[] = $sc;
-          $total += $sc;
-        }
-
-        // Scale total if total_mark is set
-        $display_total = $total;
-        if (isset($exam_info['total_mark']) && $exam_info['total_mark'] > 0 && $possible_total > 0) {
-          $display_total = ($total / $possible_total) * $exam_info['total_mark'];
-        }
-      } else {
-        foreach ($question_ids as $qid)
-          $row[] = 0;
-        $display_total = 0;
       }
     } else {
       $scores_stmt = $db->prepare("SELECT question_id, score FROM answers WHERE exam_id=? AND student_id=?");
@@ -178,6 +212,12 @@ $exams = $db->query("SELECT * FROM exams ORDER BY created_at DESC")->fetchAll(PD
       color: #0d9488;
       border: 1px solid #99f6e4;
     }
+
+    .badge-viva {
+      background: #fff7ed;
+      color: #ea580c;
+      border: 1px solid #ffedd5;
+    }
   </style>
   <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
@@ -221,10 +261,20 @@ $exams = $db->query("SELECT * FROM exams ORDER BY created_at DESC")->fetchAll(PD
                       <div class="small text-muted"><?= date('M d, Y', strtotime($ex['created_at'])) ?></div>
                     </td>
                     <td>
-                      <span
-                        class="badge rounded-pill <?= $ex['type'] === 'objective' ? 'badge-objective' : 'badge-practical' ?>">
-                        <i class="bi <?= $ex['type'] === 'objective' ? 'bi-list-check' : 'bi-laptop' ?> me-1"></i>
-                        <?= ucfirst($ex['type']) ?>
+                      <?php
+                        $badge_class = 'badge-practical';
+                        $icon_class = 'bi-laptop';
+                        if ($ex['type'] === 'objective') {
+                            $badge_class = 'badge-objective';
+                            $icon_class = 'bi-list-check';
+                        } elseif ($ex['type'] === 'viva') {
+                            $badge_class = 'badge-viva';
+                            $icon_class = 'bi-mic';
+                        }
+                      ?>
+                      <span class="badge rounded-pill <?= $badge_class ?>">
+                        <i class="bi <?= $icon_class ?> me-1"></i>
+                        <?= ucfirst($ex['type'] ?? 'practical') ?>
                       </span>
                     </td>
                     <td>
@@ -317,42 +367,65 @@ $exams = $db->query("SELECT * FROM exams ORDER BY created_at DESC")->fetchAll(PD
             'total' => 0
           ];
           if ($is_obj) {
-            $att_stmt = $db->prepare("SELECT attempt_no, question_order FROM objective_attempts WHERE exam_id=? AND student_id=? AND finished_at IS NOT NULL ORDER BY score DESC LIMIT 1");
-            $att_stmt->execute([$exam_id, $stu['id']]);
-            $best_att_row = $att_stmt->fetch(PDO::FETCH_ASSOC);
-            $best_att = $best_att_row['attempt_no'] ?? null;
-            $assigned_ids = !empty($best_att_row['question_order']) ? explode(',', $best_att_row['question_order']) : [];
+            $method = $exam_info['grading_method'] ?? 'highest';
+            if ($method === 'average') {
+              $all_att = $db->prepare("SELECT attempt_no, score FROM objective_attempts WHERE exam_id=? AND student_id=? AND finished_at IS NOT NULL");
+              $all_att->execute([$exam_id, $stu['id']]);
+              $attempts = $all_att->fetchAll(PDO::FETCH_ASSOC);
+              
+              if (!empty($attempts)) {
+                $count = count($attempts); $total_pts = 0;
+                $q_sums = array_fill_keys($q_ids, 0);
 
-            if ($best_att) {
-              $ans_stmt = $db->prepare("SELECT question_id, selected_option FROM objective_answers WHERE exam_id=? AND student_id=? AND attempt_no=?");
-              $ans_stmt->execute([$exam_id, $stu['id'], $best_att]);
-              $ans_map = $ans_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
-
-              $possible_total = 0;
-              foreach ($assigned_ids as $aid) {
-                foreach ($questions_meta as $qm) {
-                  if ($qm['id'] == $aid)
-                    $possible_total += ($qm['mark'] ?? 1);
+                foreach ($attempts as $att) {
+                  $total_pts += $att['score'];
+                  $ans_st = $db->prepare("SELECT question_id, selected_option FROM objective_answers WHERE exam_id=? AND student_id=? AND attempt_no=?");
+                  $ans_st->execute([$exam_id, $stu['id'], $att['attempt_no']]);
+                  $ans_m = $ans_st->fetchAll(PDO::FETCH_KEY_PAIR);
+                  foreach ($questions_meta as $q_meta) {
+                    $sc = (strtoupper($ans_m[$q_meta['id']] ?? '') === strtoupper($q_meta['correct_option'])) ? ($q_meta['mark'] ?? 1) : 0;
+                    $q_sums[$q_meta['id']] += $sc;
+                  }
                 }
-              }
-
-              foreach ($questions_meta as $q_meta) {
-                if (!in_array($q_meta['id'], $assigned_ids)) {
-                  $row['scores'][] = '-';
-                  continue;
-                }
-                $sc = (strtoupper($ans_map[$q_meta['id']] ?? '') === strtoupper($q_meta['correct_option'])) ? ($q_meta['mark'] ?? 1) : 0;
-                $row['scores'][] = $sc;
-                $row['total'] += $sc;
-              }
-
-              // Scale total if total_mark is set
-              if (isset($exam_info['total_mark']) && $exam_info['total_mark'] > 0 && $possible_total > 0) {
-                $row['total'] = ($row['total'] / $possible_total) * $exam_info['total_mark'];
+                foreach ($q_ids as $qid) $row['scores'][] = round($q_sums[$qid] / $count, 2);
+                $row['total'] = round($total_pts / $count, 2);
+              } else {
+                foreach ($q_ids as $nil) $row['scores'][] = 0;
               }
             } else {
-              foreach ($q_ids as $nil)
-                $row['scores'][] = 0;
+              // Highest (Override)
+              $att_stmt = $db->prepare("SELECT attempt_no, question_order FROM objective_attempts WHERE exam_id=? AND student_id=? AND finished_at IS NOT NULL ORDER BY score DESC LIMIT 1");
+              $att_stmt->execute([$exam_id, $stu['id']]);
+              $best_att_row = $att_stmt->fetch(PDO::FETCH_ASSOC);
+              $best_att = $best_att_row['attempt_no'] ?? null;
+              $assigned_ids = !empty($best_att_row['question_order']) ? explode(',', $best_att_row['question_order']) : [];
+
+              if ($best_att) {
+                $ans_stmt = $db->prepare("SELECT question_id, selected_option FROM objective_answers WHERE exam_id=? AND student_id=? AND attempt_no=?");
+                $ans_stmt->execute([$exam_id, $stu['id'], $best_att]);
+                $ans_map = $ans_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+                $possible_total = 0;
+                foreach ($assigned_ids as $aid) {
+                  foreach ($questions_meta as $qm) {
+                    if ($qm['id'] == $aid) $possible_total += ($qm['mark'] ?? 1);
+                  }
+                }
+
+                foreach ($questions_meta as $q_meta) {
+                  if (!empty($assigned_ids) && !in_array($q_meta['id'], $assigned_ids)) {
+                    $row['scores'][] = '-'; continue;
+                  }
+                  $sc = (strtoupper($ans_map[$q_meta['id']] ?? '') === strtoupper($q_meta['correct_option'])) ? ($q_meta['mark'] ?? 1) : 0;
+                  $row['scores'][] = $sc;
+                  $row['total'] += $sc;
+                }
+                if (isset($exam_info['total_mark']) && $exam_info['total_mark'] > 0 && $possible_total > 0) {
+                  $row['total'] = ($row['total'] / $possible_total) * $exam_info['total_mark'];
+                }
+              } else {
+                foreach ($q_ids as $nil) $row['scores'][] = 0;
+              }
             }
           } else {
             $sc_stmt = $db->prepare("SELECT question_id, score FROM answers WHERE exam_id=? AND student_id=?");

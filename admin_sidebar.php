@@ -1,8 +1,24 @@
+<?php
+// Fetch branding details for admin layout if $db is active
+$admin_logo = 'assets/favicon.ico';
+$admin_title = 'Admin';
+if (isset($db)) {
+    try {
+        $sidebar_settings = $db->query("SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('portal_logo', 'portal_title')")->fetchAll(PDO::FETCH_KEY_PAIR);
+        if (!empty($sidebar_settings['portal_logo']) && file_exists($sidebar_settings['portal_logo'])) {
+            $admin_logo = $sidebar_settings['portal_logo'];
+        }
+        if (!empty($sidebar_settings['portal_title'])) {
+            $admin_title = $sidebar_settings['portal_title'];
+        }
+    } catch (Exception $e) {}
+}
+?>
 <div class="sidebar d-flex flex-column p-3" id="sidebarMenu">
   <div class="d-flex align-items-center justify-content-between mb-4 sidebar-header-container">
-    <div class="text-center sidebar-logo-section">
-      <img src="assets/favicon.ico" alt="Logo" width="40" height="40" class="mb-1">
-      <h4 class="fw-bold mb-0 small text-dark">Admin</h4>
+    <div class="text-center sidebar-logo-section w-100">
+      <img src="<?= htmlspecialchars($admin_logo) ?>" alt="Logo" width="40" style="max-height: 40px; width: auto; object-fit: contain;" class="mb-1 rounded-1">
+      <h4 class="fw-bold mb-0 small text-dark mt-1 text-truncate" style="max-width: 150px;" title="<?= htmlspecialchars($admin_title) ?>"><?= htmlspecialchars($admin_title) ?></h4>
     </div>
     <div class="d-flex gap-2">
       <!-- Desktop Toggle -->
@@ -68,12 +84,19 @@
       </div>
       <div class="collapse show" id="navExams">
         <ul class="nav flex-column ps-2">
+          <li><a href="admin_sessions"
+              class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_sessions.php' ? ' active' : '' ?>">
+              <i class="bx bx-calendar me-2"></i><span>Manage Sessions</span></a></li>
           <li><a href="admin_exams"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_exams.php' ? ' active' : '' ?>">
               <i class="bx bx-cog me-2"></i><span>Manage Practical</span></a></li>
           <li><a href="admin_objective_exams"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_objective_exams.php' ? ' active' : '' ?>">
               <i class="bx bx-list-check me-2"></i><span>Manage Objective</span></a></li>
+          <li><a href="admin_viva_exams"
+              class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_viva_exams.php' ? ' active' : '' ?>">
+              <i class="bx bx-microphone me-2"></i><span>Manage Viva</span>
+              <span class="badge bg-primary-subtle text-primary ms-auto" style="font-size:0.6rem;">NEW</span></a></li>
         </ul>
       </div>
     </li>
@@ -114,11 +137,18 @@
           <li><a href="examiner_objective_results"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'examiner_objective_results.php' ? ' active' : '' ?>">
               <i class="bx bx-check-circle me-2"></i><span>Objective Results</span></a></li>
+          <li><a href="admin_student_scores?type=viva"
+              class="nav-link<?= (basename($_SERVER['PHP_SELF']) == 'admin_student_scores.php' && ($_GET['type'] ?? '') == 'viva') ? ' active' : '' ?>">
+              <i class="bx bx-microphone me-2"></i><span>Viva Results</span></a></li>
           <li><a href="all_students_score"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'all_students_score.php' ? ' active' : '' ?>">
               <i class="bx bx-calculator me-2"></i><span>Score Summary (All)</span></a></li>
           <li><a href="report" class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'report.php' ? ' active' : '' ?>">
               <i class="bx bx-file me-2"></i><span>Generate Reports</span></a></li>
+          <li><a href="admin_session_report"
+              class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_session_report.php' ? ' active' : '' ?>">
+              <i class="bx bx-bar-chart-alt-2 me-2 text-primary"></i><span>Session Reports</span>
+              <span class="badge bg-primary-subtle text-primary ms-auto" style="font-size:0.6rem;">NEW</span></a></li>
         </ul>
       </div>
     </li>
@@ -136,6 +166,10 @@
           <li><a href="admin_live_proctor"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_live_proctor.php' ? ' active' : '' ?>">
               <i class="bx bx-broadcast text-danger me-2"></i><span>Live Monitor</span></a></li>
+          <li><a href="admin_devices"
+              class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_devices.php' ? ' active' : '' ?>">
+              <i class="bx bx-devices text-warning me-2"></i><span>Device Auth</span>
+              <span class="badge bg-warning-subtle text-warning ms-auto" style="font-size:0.6rem;">NEW</span></a></li>
           <li><a href="admin_exam_audit"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_exam_audit.php' ? ' active' : '' ?>">
               <i class="bx bx-shield-quarter me-2"></i><span>Exam Audit Trail</span></a></li>
@@ -155,6 +189,9 @@
         <ul class="nav flex-column ps-2">
           <li><a href="chat" class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'chat.php' ? ' active' : '' ?>">
               <i class="bx bx-message-square-dots me-2"></i><span>Staff Chat</span></a></li>
+          <li><a href="admin_portal_settings"
+              class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_portal_settings.php' ? ' active' : '' ?>">
+              <i class="bx bx-palette me-2 text-info"></i><span>Portal Customization</span></a></li>
           <li><a href="admin_audit_trail"
               class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'admin_audit_trail.php' ? ' active' : '' ?>">
               <i class="bx bx-shield-alt-2 me-2"></i><span>Audit Trail</span></a></li>

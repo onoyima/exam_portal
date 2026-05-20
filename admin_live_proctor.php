@@ -64,6 +64,66 @@ if (isset($_GET['action'])) {
         }
         exit;
     }
+
+    if ($_GET['action'] === 'remote_bypass') {
+        $stmt = $db->prepare("UPDATE objective_attempts SET remote_command = 'SECURITY_BYPASS' WHERE id = ?");
+        $stmt->execute([$id]);
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
+    if ($_GET['action'] === 'force_submit_all') {
+        $exam_id = intval($_POST['exam_id']);
+        if ($exam_id <= 0) {
+            echo json_encode(['success' => false, 'error' => 'No exam selected']);
+            exit;
+        }
+
+        // Fetch all active attempts for this exam
+        $stmt = $db->prepare("SELECT id FROM objective_attempts WHERE exam_id = ? AND finished_at IS NULL");
+        $stmt->execute([$exam_id]);
+        $active_ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        $count = 0;
+        foreach ($active_ids as $att_id) {
+            // Re-use logic for each
+            $st = $db->prepare("SELECT * FROM objective_attempts WHERE id = ?");
+            $st->execute([$att_id]);
+            $attempt = $st->fetch();
+
+            if ($attempt) {
+                $e_id = $attempt['exam_id'];
+                $s_id = $attempt['student_id'];
+                $a_no = $attempt['attempt_no'];
+
+                // Calculate current score
+                $qs_check = $db->prepare("SELECT id, correct_option, mark FROM objective_questions WHERE exam_id=? ORDER BY id");
+                $qs_check->execute([$e_id]);
+                $questions_check = $qs_check->fetchAll(PDO::FETCH_ASSOC);
+
+                $ans_check = $db->prepare("SELECT question_id, selected_option FROM objective_answers WHERE exam_id=? AND student_id=? AND attempt_no=?");
+                $ans_check->execute([$e_id, $s_id, $a_no]);
+                $answers_check = $ans_check->fetchAll(PDO::FETCH_KEY_PAIR);
+
+                $calculated_score = 0;
+                foreach ($questions_check as $q) {
+                    if (isset($answers_check[$q['id']])) {
+                        if (strtoupper($answers_check[$q['id']]) === strtoupper($q['correct_option'])) {
+                            $calculated_score += (isset($q['mark']) ? floatval($q['mark']) : 1);
+                        }
+                    }
+                }
+
+                // Finalize attempt
+                $finish_stmt = $db->prepare("UPDATE objective_attempts SET finished_at=NOW(), time_taken = TIMESTAMPDIFF(SECOND, started_at, NOW()), score=?, proctor_status='submitted' WHERE id=?");
+                $finish_stmt->execute([$calculated_score, $att_id]);
+                $count++;
+            }
+        }
+
+        echo json_encode(['success' => true, 'count' => $count]);
+        exit;
+    }
 }
 
 // Filter Logic
@@ -336,8 +396,13 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                             <option value="history" <?= $status_filter === 'history' ? 'selected' : '' ?>>History</option>
                         </select>
                     </div>
-                    <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary w-100 rounded-3 mb-0">Apply</button>
+                    <div class="col-md-2 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary flex-grow-1 rounded-3 mb-0">Apply</button>
+                        <?php if ($selected_exam > 0 && $status_filter === 'active'): ?>
+                            <button type="button" onclick="forceSubmitAll(<?= $selected_exam ?>)" class="btn btn-danger rounded-3 mb-0" title="Submit all for this exam">
+                                <i class="bi bi-box-arrow-right"></i>
+                            </button>
+                        <?php endif; ?>
                     </div>
                 </form>
             </div>
@@ -352,8 +417,15 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                         <div class="col-12 col-md-6 col-lg-4" id="card-<?= $att['id'] ?>">
                             <div class="card proctor-card shadow-sm h-100">
                                 <div class="video-wrapper">
-                                    <img src="<?= $att['webcam_snapshot'] ?: 'assets/img/user_placeholder.png' ?>"
-                                        class="placeholder-snap zoom-img" id="snap-<?= $att['id'] ?>"
+                                    <?php
+                                    $snap_src = 'assets/img/user_placeholder.png';
+                                    if ($att['snapshot_path'] && file_exists($att['snapshot_path'])) {
+                                        $snap_src = $att['snapshot_path'];
+                                    } elseif ($att['webcam_snapshot']) {
+                                        $snap_src = $att['webcam_snapshot'];
+                                    }
+                                    ?>
+                                    <img src="<?= $snap_src ?>" class="placeholder-snap zoom-img" id="snap-<?= $att['id'] ?>"
                                         onclick="zoomImage(this.src, '<?= addslashes($att['student_name']) ?>')">
                                     <video id="video-<?= $att['id'] ?>" class="student-video" autoplay playsinline
                                         muted></video>
@@ -371,8 +443,12 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
 
                                     <?php if (!$att['finished_at'] && $att['idle_seconds'] < 60): ?>
                                         <button class="btn btn-sm btn-danger rounded-pill fw-bold btn-live shadow"
-                                            onclick="startLiveVideo('<?= $att['id'] ?>')">
+                                            onclick="startLiveVideo('<?= $att['id'] ?>')" id="btn-stream-<?= $att['id'] ?>">
                                             <i class="bi bi-play-fill"></i> Stream
+                                        </button>
+                                        <button class="btn btn-sm btn-dark rounded-pill fw-bold btn-stop shadow"
+                                            onclick="stopLiveVideo('<?= $att['id'] ?>')" id="btn-stop-<?= $att['id'] ?>" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:20;">
+                                            <i class="bi bi-stop-fill"></i> Stop
                                         </button>
                                     <?php endif; ?>
                                 </div>
@@ -401,7 +477,7 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                                     </div>
 
                                     <?php if (!$att['finished_at']): ?>
-                                        <div class="d-flex gap-2">
+                                        <div class="d-flex flex-wrap gap-2">
                                             <button
                                                 onclick="warnStudent(<?= $att['id'] ?>, '<?= addslashes($att['student_name']) ?>')"
                                                 class="btn btn-sm btn-outline-warning flex-grow-1 fw-bold"
@@ -409,10 +485,22 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                                                 Warn
                                             </button>
                                             <button
+                                                onclick="remoteBypass(<?= $att['id'] ?>, '<?= addslashes($att['student_name']) ?>')"
+                                                class="btn btn-sm btn-outline-success flex-grow-1 fw-bold"
+                                                style="font-size: 0.7rem;">
+                                                Bypass
+                                            </button>
+                                            <button
                                                 onclick="tagViolation(<?= $att['id'] ?>, '<?= addslashes($att['student_name']) ?>')"
                                                 class="btn btn-sm btn-outline-danger flex-grow-1 fw-bold"
                                                 style="font-size: 0.7rem;">
                                                 Tag
+                                            </button>
+                                            <button id="btn-speak-<?= $att['id'] ?>"
+                                                onclick="speakToStudent('<?= $att['id'] ?>')"
+                                                class="btn btn-sm btn-outline-primary flex-grow-1 fw-bold"
+                                                style="font-size: 0.7rem;">
+                                                <i class="bi bi-mic-fill me-1"></i>Speak
                                             </button>
                                             <button
                                                 onclick="forceSubmit(<?= $att['id'] ?>, '<?= addslashes($att['student_name']) ?>')"
@@ -496,6 +584,10 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
             const btn = document.querySelector(`#card-${attemptId} .btn-live`);
             if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Syncing...';
 
+            // PHASE 3: SCALE OPTIMIZATION
+            // First, trigger the student to start their signaling loop
+            await fetch(`webrtc_api?action=request_live&attempt_id=${attemptId}`);
+
             // We don't clear signals anymore to avoid race conditions
             // signals are attempt-specific anyway.
 
@@ -515,6 +607,7 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                 const video = document.getElementById(`video-${attemptId}`);
                 const snap = document.getElementById(`snap-${attemptId}`);
                 const liveTag = document.getElementById(`live-tag-${attemptId}`);
+                const stopBtn = document.getElementById(`btn-stop-${attemptId}`);
 
                 video.srcObject = event.streams[0];
                 video.muted = true;
@@ -523,6 +616,10 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                 if (snap) snap.style.display = 'none';
                 if (liveTag) liveTag.style.display = 'block';
                 if (btn) btn.style.display = 'none';
+                if (stopBtn) stopBtn.style.display = 'block';
+
+                // Phase 5: Auto-start recording
+                startRecording(attemptId, event.streams[0]);
             };
 
             pc.onicecandidate = (event) => {
@@ -564,6 +661,86 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
             fd.append('type', type);
             fd.append('payload', payload);
             fetch('webrtc_api?action=send', { method: 'POST', body: fd });
+        }
+
+        async function stopLiveVideo(attemptId) {
+            const stopBtn = document.getElementById(`btn-stop-${attemptId}`);
+            if (stopBtn) stopBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Closing...';
+
+            // Phase 5: Stop recording if active
+            if (activeRecorders[attemptId]) {
+                activeRecorders[attemptId].stop();
+                delete activeRecorders[attemptId];
+            }
+
+            await fetch(`webrtc_api?action=stop_live&attempt_id=${attemptId}`);
+            
+            if (activeConnections[attemptId]) {
+                activeConnections[attemptId].close();
+                delete activeConnections[attemptId];
+            }
+
+            const video = document.getElementById(`video-${attemptId}`);
+            const liveTag = document.getElementById(`live-tag-${attemptId}`);
+            const btn = document.querySelector(`#card-${attemptId} .btn-live`);
+            const snap = document.getElementById(`snap-${attemptId}`);
+
+            if (video) { video.srcObject = null; video.style.display = 'none'; }
+            if (liveTag) liveTag.style.display = 'none';
+            if (stopBtn) stopBtn.style.display = 'none';
+            if (stopBtn) stopBtn.innerHTML = '<i class="bi bi-stop-fill"></i> Stop';
+            if (btn) { btn.style.display = 'block'; btn.innerHTML = '<i class="bi bi-play-fill"></i> Stream'; }
+            if (snap) snap.style.display = 'block';
+        }
+
+        // Phase 5: Video recording storage (MediaRecorder)
+        const activeRecorders = {};
+        const recordingChunks = {};
+
+        function startRecording(attemptId, stream) {
+            if (!window.MediaRecorder) return;
+            const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
+            recordingChunks[attemptId] = [];
+            recorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) {
+                    uploadVideoChunk(attemptId, e.data);
+                }
+            };
+            recorder.start(5000); // Upload chunk every 5 seconds
+            activeRecorders[attemptId] = recorder;
+            // Show recording badge
+            const liveTag = document.getElementById(`live-tag-${attemptId}`);
+            if (liveTag) liveTag.innerHTML = '⏺ RECORDING';
+        }
+
+        async function uploadVideoChunk(attemptId, blob) {
+            const fd = new FormData();
+            fd.append('attempt_id', attemptId);
+            fd.append('chunk', blob, `rec_${attemptId}_${Date.now()}.webm`);
+            await fetch('upload_recording?action=chunk', { method: 'POST', body: fd });
+        }
+
+        // Phase 5: Admin speaks to student (audio injection)
+        const activeMicStreams = {};
+        async function speakToStudent(attemptId) {
+            if (activeMicStreams[attemptId]) {
+                // Toggle off
+                activeMicStreams[attemptId].getTracks().forEach(t => t.stop());
+                delete activeMicStreams[attemptId];
+                document.getElementById(`btn-speak-${attemptId}`).innerHTML = '<i class="bi bi-mic-fill me-1"></i>Speak';
+                return;
+            }
+            try {
+                const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                activeMicStreams[attemptId] = micStream;
+                const pc = activeConnections[attemptId];
+                if (pc) {
+                    micStream.getAudioTracks().forEach(track => pc.addTrack(track, micStream));
+                }
+                document.getElementById(`btn-speak-${attemptId}`).innerHTML = '<i class="bi bi-mic-mute-fill me-1 text-danger"></i>Stop';
+            } catch (e) {
+                alert('Microphone access denied.');
+            }
         }
 
         // Warning/Violation logic (same as before)
@@ -615,6 +792,59 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 ORDER BY n
                             alert('Error: ' + d.error);
                         }
                     });
+                }
+            });
+        }
+
+        function remoteBypass(id, name) {
+            Swal.fire({
+                title: 'Remote Bypass?',
+                text: `Force unlock the security gate for ${name}? Use this if they are stuck on initialization.`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#198754'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const fd = new FormData();
+                    fd.append('attempt_id', id);
+                    fetch('admin_live_proctor?action=remote_bypass', { method: 'POST', body: fd })
+                        .then(r => r.json())
+                        .then(d => {
+                            if (d.success) {
+                                Swal.fire('Command Sent', 'The security shield will be removed on the next student ping (approx. 1-15s).', 'success');
+                            }
+                        });
+                }
+            });
+        }
+
+        function forceSubmitAll(examId) {
+            Swal.fire({
+                title: 'Force Submit ALL?',
+                text: "CRITICAL: This will immediately end and finalize EVERY active attempt for this exam. Students will be logged out. Continue?",
+                icon: 'error',
+                showCancelButton: true,
+                confirmButtonColor: '#e3342f',
+                confirmButtonText: 'Yes, Submit All'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Processing...',
+                        text: 'Grading and finalizing all active sessions.',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
+                    });
+                    const fd = new FormData();
+                    fd.append('exam_id', examId);
+                    fetch('admin_live_proctor?action=force_submit_all', { method: 'POST', body: fd })
+                        .then(r => r.json())
+                        .then(d => {
+                            if (d.success) {
+                                Swal.fire('Success', `Finished ${d.count} active attempts.`, 'success').then(() => location.reload());
+                            } else {
+                                Swal.fire('Error', d.error, 'error');
+                            }
+                        });
                 }
             });
         }
