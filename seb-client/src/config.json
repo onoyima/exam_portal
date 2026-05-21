@@ -1,0 +1,14 @@
+{
+  "examUrl": "http://localhost/exam_portal/student_login",
+  "logoutPatterns": ["student_logout", "login"],
+  "appTitle": "Veritas SEB Kiosk",
+  "allowedDomains": ["localhost", "127.0.0.1"],
+  "connectionTimeout": 30,
+  "_comment": {
+    "examUrl": "The exam portal login URL the browser opens on startup",
+    "logoutPatterns": "URL fragments that trigger app close",
+    "allowedDomains": "Only these domains are allowed for navigation",
+    "appTitle": "Window title shown in OS task manager",
+    "connectionTimeout": "Reserved for future connection health checks"
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "name": "veritas-exam-seb",
+  "version": "1.0.0",
+  "description": "Secure Exam Browser for Veritas Exam Portal — cross-platform kiosk browser",
+  "main": "main.js",
+  "author": "Veritas Exam Portal",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder --win --mac --linux"
+  },
+  "build": {
+    "appId": "com.veritas.exam-seb",
+    "productName": "Veritas SEB Kiosk",
+    "copyright": "Copyright © 2026 Veritas Exam Portal",
+    "directories": {
+      "output": "../installers"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "config.json",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "assets/icon.png",
+      "artifactName": "VeritasSEB-${version}-win.${ext}",
+      "signAndEditExecutable": false,
+      "signDlls": false
+    },
+    "portable": {
+      "artifactName": "VeritasSEB-${version}-win.exe",
+      "splashImage": null
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.png",
+      "category": "public.app-category.education",
+      "artifactName": "VeritasSEB-${version}-mac.${ext}"
+    },
+    "dmg": {
+      "title": "Veritas SEB Kiosk",
+      "contents": [
+        { "x": 130, "y": 220, "type": "file" },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "icon": "assets/icon.png",
+      "category": "Education",
+      "artifactName": "VeritasSEB-${version}-linux.${ext}"
+    }
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}

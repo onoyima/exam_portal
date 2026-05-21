@@ -1328,6 +1328,35 @@ input[type="file"].form-control {
   width: calc(100% - 72px) !important;
 }
 
+/* ── Floating toggle for pages without navbar ── */
+.sidebar-floating-toggle {
+  position: fixed !important;
+  top: 12px;
+  left: 12px;
+  z-index: 1060;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #64748b;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transition: all 0.2s ease;
+}
+.sidebar-floating-toggle:hover {
+  background: #f1f5f9;
+  border-color: #198754;
+  color: #198754;
+}
+.sidebar-floating-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
 /* ═══════════════════════════════════════════════════
    RESPONSIVE (Mobile)
    ═══════════════════════════════════════════════════ */
@@ -1344,6 +1373,8 @@ input[type="file"].form-control {
 }
 
 @media (max-width: 991.98px) {
+  body.sidebar-open { overflow: hidden; }
+
   .sidebar {
     width: 280px !important;
     transform: translateX(-100%);
@@ -1351,10 +1382,15 @@ input[type="file"].form-control {
     top: 0;
     left: 0;
     height: 100vh;
+    height: 100dvh;
     z-index: 1050;
     box-shadow: none;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .sidebar.show { transform: translateX(0); }
+  .sidebar.show {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.12);
+  }
   .sidebar.collapsed { width: 280px !important; }
   .sidebar.collapsed .brand-text,
   .sidebar.collapsed .group-label,
@@ -1388,10 +1424,33 @@ input[type="file"].form-control {
     inset: 0;
     background: rgba(0,0,0,0.5);
     backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     z-index: 1049;
     display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
   }
-  .sidebar-backdrop.show { display: block; }
+  .sidebar-backdrop.show {
+    display: block;
+    opacity: 1;
+  }
+
+  /* Hide floating toggle on desktop, show on mobile */
+  .sidebar-floating-toggle { display: flex; }
+
+  /* Adjust floating toggle for pages with navbar — don't overlap nav */
+  .navbar .sidebar-floating-toggle { display: none; }
+  .sidebar-floating-toggle {
+    top: 10px;
+    left: 10px;
+    width: 38px;
+    height: 38px;
+    z-index: 1060;
+  }
+}
+
+@media (min-width: 992px) {
+  .sidebar-floating-toggle { display: none; }
 }
 
 /* Removing duplicate sidebar link styles that will conflict with the premium overhauled styles above */
