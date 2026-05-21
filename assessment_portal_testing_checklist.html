@@ -1,213 +1,415 @@
+<?php
+$active_tab = $_GET['tab'] ?? 'overview';
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Assessment Portal Testing Checklist</title>
+  <title>Assessment Portal — Documentation</title>
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <style>
-    body { background: #f8fafc; color: #222; }
-    .checklist-section { margin-bottom: 2.5rem; }
-    .checklist-section h3 { background: #092c19; color: #fff; padding: 0.75rem 1rem; border-radius: 0.5rem 0.5rem 0 0; margin-bottom: 0; }
-    .checklist-section .card { border-radius: 0 0 0.5rem 0.5rem; border-top: none; }
-    .checklist-list { padding: 1.5rem; }
-    .checklist-list label { font-weight: 500; }
-    .checklist-list input[type=checkbox] { margin-right: 0.75rem; }
-    .checklist-list .form-check { margin-bottom: 0.75rem; }
-    .checklist-list .form-check:last-child { margin-bottom: 0; }
-    .checklist-meta { font-size: 0.95rem; color: #666; margin-bottom: 1.5rem; }
-    .checklist-title { text-align: center; margin: 2rem 0 1rem 0; }
-    .checklist-title h1 { font-size: 2.2rem; font-weight: 700; color: #092c19; }
-    .checklist-title p { color: #555; }
-    .checklist-footer { text-align: center; color: #888; margin: 2rem 0 1rem 0; font-size: 0.95rem; }
-    @media (max-width: 600px) {
-      .checklist-list { padding: 0.75rem; }
-      .checklist-title h1 { font-size: 1.3rem; }
+    :root {
+      --primary: #092c19;
+      --primary-light: #0f4a2a;
+      --accent: #198754;
+      --bg: #f0f4f8;
+      --card-bg: #ffffff;
+      --border: #dee2e6;
+      --text: #1a1a2e;
+      --text-muted: #6c757d;
+    }
+    body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+    .docs-wrapper { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; }
+    .docs-header { text-align: center; margin-bottom: 2.5rem; }
+    .docs-header h1 { font-size: 2.4rem; font-weight: 800; color: var(--primary); letter-spacing: -0.5px; }
+    .docs-header p { color: var(--text-muted); font-size: 1.05rem; max-width: 650px; margin: 0.5rem auto 0; }
+    .docs-header .badge-doc { background: var(--primary); color: #fff; padding: 0.35rem 1rem; border-radius: 50px; font-size: 0.8rem; font-weight: 600; display: inline-block; margin-bottom: 0.75rem; }
+
+    .nav-tabs-doc {
+      display: flex; flex-wrap: wrap; gap: 0.25rem;
+      border-bottom: 2px solid var(--border); margin-bottom: 2rem;
+      background: var(--card-bg); border-radius: 12px 12px 0 0; padding: 0.5rem 0.75rem 0;
+    }
+    .nav-tabs-doc .nav-link {
+      border: none; border-radius: 8px 8px 0 0;
+      font-weight: 600; font-size: 0.9rem; color: var(--text-muted);
+      padding: 0.6rem 1.2rem; transition: all 0.2s;
+    }
+    .nav-tabs-doc .nav-link:hover { color: var(--primary); background: rgba(9,44,25,0.05); }
+    .nav-tabs-doc .nav-link.active {
+      color: #fff; background: var(--primary);
+      box-shadow: 0 -2px 8px rgba(9,44,25,0.15);
+    }
+    .nav-tabs-doc .nav-link i { margin-right: 6px; }
+
+    .tab-content-doc { background: var(--card-bg); border-radius: 0 0 12px 12px; padding: 2rem; box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
+
+    .section-card { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 1.5rem; overflow: hidden; }
+    .section-card h4 { background: var(--primary); color: #fff; padding: 0.65rem 1.25rem; font-size: 1rem; font-weight: 700; margin: 0; }
+    .section-card .body { padding: 1.25rem; }
+    .section-card .body p, .section-card .body li { font-size: 0.95rem; line-height: 1.6; }
+    .section-card .body ul { padding-left: 1.25rem; }
+    .section-card .body ul li { margin-bottom: 0.4rem; }
+
+    .feature-badge {
+      display: inline-block; padding: 0.2rem 0.6rem; border-radius: 6px;
+      font-size: 0.75rem; font-weight: 700; margin-right: 0.3rem;
+    }
+    .feature-badge.security { background: #fef3c7; color: #92400e; }
+    .feature-badge.admin { background: #dbeafe; color: #1e40af; }
+    .feature-badge.student { background: #d1fae5; color: #065f46; }
+    .feature-badge.examiner { background: #f3e8ff; color: #6b21a8; }
+
+    .step-list { counter-reset: step; list-style: none; padding: 0; }
+    .step-list li { counter-increment: step; padding: 0.5rem 0 0.5rem 2.2rem; position: relative; font-size: 0.95rem; }
+    .step-list li::before {
+      content: counter(step); position: absolute; left: 0; top: 0.5rem;
+      width: 1.6rem; height: 1.6rem; background: var(--primary); color: #fff;
+      font-size: 0.75rem; font-weight: 700; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .evidence-form { max-width: 500px; }
+    .evidence-form .form-label { font-weight: 600; font-size: 0.85rem; color: var(--text-muted); }
+    .evidence-form .form-control, .evidence-form .form-select { border-radius: 8px; border: 1px solid var(--border); padding: 0.55rem 0.75rem; }
+
+    .footer-doc { text-align: center; margin-top: 2.5rem; padding: 1.5rem 0; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.85rem; }
+
+    @media (max-width: 768px) {
+      .docs-wrapper { padding: 1rem 0.5rem; }
+      .nav-tabs-doc .nav-link { font-size: 0.8rem; padding: 0.5rem 0.8rem; }
+      .tab-content-doc { padding: 1.25rem; }
     }
   </style>
 </head>
 <body>
-  <div class="container-xl">
-    <div class="checklist-title">
-      <h1>Assessment Portal Testing Checklist</h1>
-      <p>Comprehensive QA checklist for verifying all features and workflows before deployment.</p>
-    </div>
-    <div class="checklist-meta">
-      <strong>Date:</strong> <span id="today"></span> &nbsp; | &nbsp; <strong>Tested by:</strong> ______________________
-    </div>
 
-    <!-- 1. Environment Setup -->
-    <div class="checklist-section">
-      <h3>1. Environment Setup</h3>
-      <div class="card">
-        <div class="checklist-list">
-          <div class="form-check"><input type="checkbox"> PHP, MySQL, and web server are installed</div>
-          <div class="form-check"><input type="checkbox"> Database imported from provided SQL files</div>
-          <div class="form-check"><input type="checkbox"> db.php configured with correct credentials</div>
-          <div class="form-check"><input type="checkbox"> App loads in browser without errors</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 2. User Roles & Access Control -->
-    <div class="checklist-section">
-      <h3>2. User Roles & Access Control</h3>
-      <div class="card">
-        <div class="checklist-list">
-          <div class="form-check"><input type="checkbox"> Admin can log in and access all admin pages</div>
-          <div class="form-check"><input type="checkbox"> Examiner can log in and access examiner dashboard</div>
-          <div class="form-check"><input type="checkbox"> Unauthorized users cannot access protected pages</div>
-          <div class="form-check"><input type="checkbox"> Session expires on logout</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 3. Student Management -->
-    <div class="checklist-section">
-      <h3>3. Student Management</h3>
-      <div class="card">
-        <div class="checklist-list">
-          <div class="form-check"><input type="checkbox"> Add a new student (unique matric/username enforced)</div>
-          <div class="form-check"><input type="checkbox"> Edit student details and verify update</div>
-          <div class="form-check"><input type="checkbox"> Delete a student and verify removal</div>
-          <div class="form-check"><input type="checkbox"> Bulk upload students via CSV</div>
-          <div class="form-check"><input type="checkbox"> Error shown for invalid/malformed CSV</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 4. Question Management -->
-    <div class="checklist-section">
-      <h3>4. Question Management</h3>
-      <div class="card">
-        <div class="checklist-list">
-          <div class="form-check"><input type="checkbox"> Add, edit, and delete questions</div>
-          <div class="form-check"><input type="checkbox"> Bulk upload questions (CSV with partial marks)</div>
-          <div class="form-check"><input type="checkbox"> Error shown for invalid/malformed question CSV</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 5. Exam Management -->
-    <div class="checklist-section">
-      <h3>5. Exam Management</h3>
-      <div class="card">
-        <div class="checklist-list">
-          <div class="form-check"><input type="checkbox"> Create a new exam and assign questions/students</div>
-          <div class="form-check"><input type="checkbox"> Edit exam details, add/remove questions/students</div>
-          <div class="form-check"><input type="checkbox"> Activate/deactivate exam and verify access</div>
-          <div class="form-check"><input type="checkbox"> Assign/remove examiners from exams</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 6. Assessment Workflow -->
-    <div class="checklist-section">
-      <h3>6. Assessment Workflow</h3>
-      <div class="card">
-        <div class="checklist-list">
-          <div class="form-check"><input type="checkbox"> Examiner searches for a student assigned to an exam</div>
-          <div class="form-check"><input type="checkbox"> Student name, matric number, and exam name are displayed</div>
-          <div class="form-check"><input type="checkbox"> Complete and submit assessment; verify scores saved</div>
-          <div class="form-check"><input type="checkbox"> Re-assess updates scores, not duplicates</div>
-          <div class="form-check"><input type="checkbox"> Admin resets a student's scores; reassessment possible</div>
-          <div class="form-check"><input type="checkbox"> Searching for a non-assigned student shows error message</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 7. Results & Reporting -->
-    <div class="checklist-section">
-      <h3>7. Results & Reporting</h3>
-      <div class="card">
-        <div class="checklist-list">
-          <div class="form-check"><input type="checkbox"> Admin/examiner can view student scores and totals</div>
-          <div class="form-check"><input type="checkbox"> Download report as CSV; verify structure and data</div>
-          <div class="form-check"><input type="checkbox"> Students with no scores are clearly indicated</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 8. Chat System -->
-    <div class="checklist-section">
-      <h3>8. Chat System</h3>
-      <div class="card">
-        <div class="checklist-list">
-          <div class="form-check"><input type="checkbox"> Send and receive messages between admin and examiner</div>
-          <div class="form-check"><input type="checkbox"> Attach media files in chat</div>
-          <div class="form-check"><input type="checkbox"> Group chat (if available) works as expected</div>
-          <div class="form-check"><input type="checkbox"> Chat notifications and unread indicators work</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 9. Audit Trail -->
-    <div class="checklist-section">
-      <h3>9. Audit Trail</h3>
-      <div class="card">
-        <div class="checklist-list">
-          <div class="form-check"><input type="checkbox"> Actions (login, add, assess, etc.) are logged</div>
-          <div class="form-check"><input type="checkbox"> Admin can view and filter audit logs</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 10. UI/UX & Responsiveness -->
-    <div class="checklist-section">
-      <h3>10. UI/UX & Responsiveness</h3>
-      <div class="card">
-        <div class="checklist-list">
-          <div class="form-check"><input type="checkbox"> Footer is sticky on all pages</div>
-          <div class="form-check"><input type="checkbox"> Dark/Light mode toggle works everywhere</div>
-          <div class="form-check"><input type="checkbox"> Layout is responsive on mobile, tablet, desktop</div>
-          <div class="form-check"><input type="checkbox"> Accessibility: alt text, keyboard nav, color contrast</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 11. Security -->
-    <div class="checklist-section">
-      <h3>11. Security</h3>
-      <div class="card">
-        <div class="checklist-list">
-          <div class="form-check"><input type="checkbox"> Sessions expire on logout</div>
-          <div class="form-check"><input type="checkbox"> SQL injection attempts are blocked</div>
-          <div class="form-check"><input type="checkbox"> XSS attempts are blocked (inputs escaped)</div>
-          <div class="form-check"><input type="checkbox"> File uploads restricted to allowed types</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 12. Error Handling -->
-    <div class="checklist-section">
-      <h3>12. Error Handling</h3>
-      <div class="card">
-        <div class="checklist-list">
-          <div class="form-check"><input type="checkbox"> Invalid/missing form data shows clear error</div>
-          <div class="form-check"><input type="checkbox"> Database errors show user-friendly messages</div>
-          <div class="form-check"><input type="checkbox"> 404/500 error pages are handled gracefully</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 13. Performance -->
-    <div class="checklist-section">
-      <h3>13. Performance</h3>
-      <div class="card">
-        <div class="checklist-list">
-          <div class="form-check"><input type="checkbox"> Bulk uploads (students/questions) are fast</div>
-          <div class="form-check"><input type="checkbox"> Multiple users can assess at the same time</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="checklist-footer">
-      &copy; <span id="year"></span> Assessment Portal QA Checklist &mdash; Powered by BMXcode Initiator
-    </div>
+<div class="docs-wrapper">
+  <div class="docs-header">
+    <span class="badge-doc"><i class="bi bi-book-fill me-1"></i> Documentation v2.0</span>
+    <h1><i class="bi bi-mortarboard-fill me-2"></i>Assessment Portal</h1>
+    <p>Complete guide for students, administrators, and examiners. Learn how the portal works, how to use each feature, and how to retrieve video evidence.</p>
   </div>
-  <script>
-    document.getElementById('today').textContent = new Date().toLocaleDateString();
-    document.getElementById('year').textContent = new Date().getFullYear();
-  </script>
+
+  <!-- Tab Navigation -->
+  <ul class="nav nav-tabs-doc" role="tablist">
+    <li class="nav-item" role="presentation">
+      <a class="nav-link <?= $active_tab === 'overview' ? 'active' : '' ?>" href="?tab=overview"><i class="bi bi-info-circle"></i>Overview</a>
+    </li>
+    <li class="nav-item" role="presentation">
+      <a class="nav-link <?= $active_tab === 'student' ? 'active' : '' ?>" href="?tab=student"><i class="bi bi-person-graduate"></i>Student Guide</a>
+    </li>
+    <li class="nav-item" role="presentation">
+      <a class="nav-link <?= $active_tab === 'admin' ? 'active' : '' ?>" href="?tab=admin"><i class="bi bi-shield-lock"></i>Admin Guide</a>
+    </li>
+    <li class="nav-item" role="presentation">
+      <a class="nav-link <?= $active_tab === 'examiner' ? 'active' : '' ?>" href="?tab=examiner"><i class="bi bi-clipboard-check"></i>Examiner Guide</a>
+    </li>
+  </ul>
+
+  <!-- Tab Content -->
+  <div class="tab-content-doc">
+
+    <!-- ════════════════════ OVERVIEW ════════════════════ -->
+    <?php if ($active_tab === 'overview'): ?>
+      <h3 class="fw-bold mb-3"><i class="bi bi-info-circle-fill me-2" style="color:var(--primary);"></i>System Overview</h3>
+      <p style="font-size:1rem;line-height:1.7;margin-bottom:1.5rem;">
+        The <strong>Assessment Portal</strong> is a secure online examination platform designed for academic institutions.
+        It supports objective (MCQ) exams with live proctoring, practical/VIVA scoring by examiners, and comprehensive
+        security monitoring including webcam recording, fullscreen enforcement, tab-lock, keyboard lockdown, and AI-based
+        proctoring alerts.
+      </p>
+
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">
+          <div class="section-card">
+            <h4><i class="bi bi-cpu me-2"></i>Tech Stack</h4>
+            <div class="body">
+              <ul>
+                <li><strong>Backend:</strong> PHP 7.4+ with PDO / MySQL</li>
+                <li><strong>Frontend:</strong> Bootstrap 5, JavaScript (vanilla + jQuery)</li>
+                <li><strong>Real-time:</strong> WebRTC peer-to-peer for live video/audio streaming</li>
+                <li><strong>Recording:</strong> MediaRecorder API → server-side chunked upload (.webm)</li>
+                <li><strong>Security:</strong> CSRF tokens, session management, device authorization</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="section-card">
+            <h4><i class="bi bi-people me-2"></i>User Roles</h4>
+            <div class="body">
+              <ul>
+                <li><span class="feature-badge admin">Admin</span> Full system control, user/ exam management, live proctoring, video evidence</li>
+                <li><span class="feature-badge examiner">Examiner</span> Grade practical/VIVA exams, view results</li>
+                <li><span class="feature-badge student">Student</span> Take objective exams, view results when permitted</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h4><i class="bi bi-shield-check me-2"></i>Key Security Features</h4>
+        <div class="body">
+          <div class="row g-2">
+            <div class="col-md-4 col-6"><span class="feature-badge security">Fullscreen Enforcement</span> Exam locks browser into fullscreen</div>
+            <div class="col-md-4 col-6"><span class="feature-badge security">Tab Lock</span> Switching tabs counts as a violation</div>
+            <div class="col-md-4 col-6"><span class="feature-badge security">Keyboard Lock</span> F12, PrintScreen, Ctrl+U/C etc. blocked</div>
+            <div class="col-md-4 col-6"><span class="feature-badge security">Webcam Recording</span> Continuous video+audio capture</div>
+            <div class="col-md-4 col-6"><span class="feature-badge security">AI Proctor</span> Automated violation detection</div>
+            <div class="col-md-4 col-6"><span class="feature-badge security">Persistent Lock</span> Locked exams survive logout/relogin</div>
+          </div>
+        </div>
+      </div>
+    <?php endif; ?>
+
+    <!-- ════════════════════ STUDENT GUIDE ════════════════════ -->
+    <?php if ($active_tab === 'student'): ?>
+      <h3 class="fw-bold mb-3"><i class="bi bi-person-graduate me-2" style="color:var(--primary);"></i>Student Guide</h3>
+
+      <div class="section-card">
+        <h4><i class="bi bi-box-arrow-in-right me-2"></i>Logging In</h4>
+        <div class="body">
+          <ol class="step-list">
+            <li>Navigate to the <strong>Student Login</strong> page.</li>
+            <li>Enter your <strong>Username</strong> (usually your matric number or assigned username) and <strong>Password</strong>.</li>
+            <li>Click <strong>Log In</strong>. You will be taken to your dashboard.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h4><i class="bi bi-speedometer2 me-2"></i>Dashboard &amp; Exam Cards</h4>
+        <div class="body">
+          <p>Your dashboard shows all exams assigned to you. Each exam card displays:</p>
+          <ul>
+            <li><strong>Exam name</strong> and scheduled date/time</li>
+            <li><strong>Security badges</strong> — icons indicating which proctoring features are active (Fullscreen, Tab Lock, KB Lock, Webcam, Live Monitor, Auto Submit, Browser Check)</li>
+            <li><strong>Status</strong> — <span class="badge bg-success">ACTIVE</span>, <span class="badge bg-secondary">NOT STARTED</span>, <span class="badge bg-dark">LOCKED — CONTACT ADMIN</span>, or <span class="badge bg-light text-dark">COMPLETED</span></li>
+            <li><strong>Locked exams</strong> show a padlock icon and a disabled "LOCKED — CONTACT ADMIN" button. Only an admin can unlock it.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h4><i class="bi bi-pencil-square me-2"></i>Taking an Objective Exam</h4>
+        <div class="body">
+          <ol class="step-list">
+            <li>From your dashboard, click <strong>Start Exam</strong> or <strong>Resume Exam</strong> on the exam card.</li>
+            <li>The exam page loads immediately — <strong>no security initialization screen appears</strong>. All security features (webcam, fullscreen, AI proctor) start automatically in the background.</li>
+            <li>Answer questions by selecting the radio button for your chosen option. Use <strong>Prev</strong> / <strong>Next</strong> to navigate.</li>
+            <li>The timer at the top shows remaining time. The exam auto-submits when time expires.</li>
+            <li>To finish early, click <strong>Submit Exam</strong> and confirm.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h4><i class="bi bi-exclamation-triangle me-2"></i>Violations &amp; Locking</h4>
+        <div class="body">
+          <p>Security violations are triggered by:</p>
+          <ul>
+            <li>Leaving the browser tab / window</li>
+            <li>Exiting fullscreen mode</li>
+            <li>Pressing forbidden keys (F12, PrintScreen, Ctrl+U/C, etc.)</li>
+            <li>AI proctor detecting suspicious behavior</li>
+          </ul>
+          <p>Each violation shows a red overlay with a <strong>60-second countdown</strong>. Click <strong>RETURN TO EXAM</strong> to continue. After <strong>5 violations</strong>, the exam is permanently <strong>LOCKED</strong> — you cannot proceed and must contact an administrator.</p>
+          <p>When locked, the exam card on your dashboard shows <span class="badge bg-dark">LOCKED — CONTACT ADMIN</span>. Only an admin can unlock it from the Live Proctoring panel.</p>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h4><i class="bi bi-camera-video me-2"></i>Recording &amp; Privacy</h4>
+        <div class="body">
+          <p>During the exam, your <strong>webcam video and microphone audio are continuously recorded</strong> and streamed to the proctoring server. This serves as:</p>
+          <ul>
+            <li><strong>Live monitoring</strong> — the admin can view your video in real-time</li>
+            <li><strong>Evidence recording</strong> — all footage is saved as <code>.webm</code> files and can be retrieved later as proof if a cheating dispute arises</li>
+          </ul>
+          <p>Recordings are stored securely and can only be downloaded by administrators.</p>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h4><i class="bi bi-clock-history me-2"></i>Reviewing Results</h4>
+        <div class="body">
+          <p>If the exam allows score viewing, you can see your results by clicking <strong>View Result</strong> on the exam card after the exam is completed.</p>
+        </div>
+      </div>
+    <?php endif; ?>
+
+    <!-- ════════════════════ ADMIN GUIDE ════════════════════ -->
+    <?php if ($active_tab === 'admin'): ?>
+      <h3 class="fw-bold mb-3"><i class="bi bi-shield-lock me-2" style="color:var(--primary);"></i>Admin Guide</h3>
+
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">
+          <div class="section-card">
+            <h4><i class="bi bi-people-fill me-2"></i>Student Management</h4>
+            <div class="body">
+              <ul>
+                <li><strong>Add Student:</strong> Fill in name, username, matric number, and password. Unique matric/username enforced.</li>
+                <li><strong>Edit / Delete:</strong> Update student details or remove them from the system.</li>
+                <li><strong>Bulk Upload:</strong> Upload students via CSV (columns: name, username, matric_no, password).</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="section-card">
+            <h4><i class="bi bi-question-circle-fill me-2"></i>Question Management</h4>
+            <div class="body">
+              <ul>
+                <li><strong>Add / Edit / Delete</strong> objective questions with options, correct answer, and mark value.</li>
+                <li><strong>Bulk Upload:</strong> Upload questions via CSV (columns: question, option_a, option_b, option_c, option_d, correct_option, mark).</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="section-card">
+            <h4><i class="bi bi-calendar-check-fill me-2"></i>Exam Management</h4>
+            <div class="body">
+              <ul>
+                <li><strong>Create Exam:</strong> Set name, type (objective/viva), duration, dates, max attempts, and security flags.</li>
+                <li><strong>Assign Students:</strong> Select which students can take the exam.</li>
+                <li><strong>Assign Questions:</strong> Select which questions appear in the exam.</li>
+                <li><strong>Assign Examiners:</strong> Link examiners to practical/VIVA exams for grading.</li>
+                <li><strong>Activate / Deactivate:</strong> Control whether the exam is accessible to students.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="section-card">
+            <h4><i class="bi bi-file-earmark-bar-graph-fill me-2"></i>Results &amp; Reports</h4>
+            <div class="body">
+              <ul>
+                <li>View student scores and totals per exam.</li>
+                <li><strong>Download CSV</strong> reports for offline analysis.</li>
+                <li>Students with no scores are clearly indicated.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h4><i class="bi bi-eye-fill me-2"></i>Live Proctoring (admin_live_proctor.php)</h4>
+        <div class="body">
+          <p>The Live Proctoring panel is your command center for monitoring active exams. Access it via the admin sidebar.</p>
+          <p><strong>Features:</strong></p>
+          <ul>
+            <li><strong>Live Video Stream:</strong> Click <strong>Stream</strong> on any active student card to view their webcam feed in real-time via WebRTC. Click <strong>Stop</strong> to end the stream.</li>
+            <li><strong>Speak to Student:</strong> After starting a stream, click <strong>Speak</strong> to broadcast your voice to the student. Your microphone audio is sent through the same WebRTC connection. Click again to mute.</li>
+            <li><strong>Send Warning:</strong> Click <strong>Warn</strong> to send a popup warning message to the student's screen.</li>
+            <li><strong>Tag Violation:</strong> Click <strong>Tag</strong> to manually increment the student's violation count.</li>
+            <li><strong>Force Submit:</strong> Click <strong>Submit</strong> to immediately end the student's exam, calculate their score, and finalize the attempt.</li>
+            <li><strong>Force Submit All:</strong> When filtering by a specific exam, the <strong>Submit All</strong> button ends and grades every active attempt for that exam.</li>
+            <li><strong>Unlock Student:</strong> When a student's exam is locked (after 5 violations), a <strong>Unlock Student</strong> button replaces Warn/Tag/Speak/Submit. Clicking it resets <code>is_locked = 0</code> and clears all violations.</li>
+          </ul>
+          <p><strong>Filters:</strong> Search by name/matric, filter by exam, sort by activity/violations/name, and toggle between Active and History view.</p>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h4><i class="bi bi-camera-reels me-2"></i>Video Evidence</h4>
+        <div class="body">
+          <p>Every streaming session is automatically recorded. Chunks are uploaded every 5 seconds and saved as <code>.webm</code> files in <code>uploads/recordings/attempt_{id}/</code>.</p>
+          <p>To download evidence:</p>
+          <ol class="step-list">
+            <li>Go to the <strong>Video Evidence</strong> tab (accessible from this documentation page).</li>
+            <li>Select the <strong>Exam</strong> and <strong>Date</strong> from the dropdowns.</li>
+            <li>Click <strong>Download ZIP</strong>. The system compiles all recordings into a single ZIP file.</li>
+            <li>Inside the ZIP, videos are organized into folders named after each student's <strong>matric number</strong>.</li>
+          </ol>
+          <p>These recordings serve as irrefutable evidence if a student disputes a cheating accusation.</p>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h4><i class="bi bi-chat-dots-fill me-2"></i>Chat System</h4>
+        <div class="body">
+          <p>Admins and examiners can communicate via the built-in chat system, send messages, attach media files, and view unread indicators.</p>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h4><i class="bi bi-journal-text me-2"></i>Audit Trail</h4>
+        <div class="body">
+          <p>All significant actions (logins, additions, assessments, violations) are logged with timestamps and user details. The admin can view and filter the audit log from the sidebar.</p>
+        </div>
+      </div>
+    <?php endif; ?>
+
+    <!-- ════════════════════ EXAMINER GUIDE ════════════════════ -->
+    <?php if ($active_tab === 'examiner'): ?>
+      <h3 class="fw-bold mb-3"><i class="bi bi-clipboard-check me-2" style="color:var(--primary);"></i>Examiner Guide</h3>
+
+      <div class="section-card">
+        <h4><i class="bi bi-box-arrow-in-right me-2"></i>Logging In</h4>
+        <div class="body">
+          <p>Log in using your examiner credentials on the <strong>Examiner Login</strong> page. You will be taken to your dashboard showing assigned exams.</p>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h4><i class="bi bi-list-check me-2"></i>Grading Practical / VIVA Exams</h4>
+        <div class="body">
+          <p>Use the <strong>Assess Practical/VIVA</strong> page (assess.php) to grade students assigned to you.</p>
+          <ol class="step-list">
+            <li>Select the <strong>Exam</strong> from the dropdown.</li>
+            <li><strong>Search</strong> for a student by name, username, or matric number.</li>
+            <li>When the student is found, their question checklist appears with score options (e.g., 0, 1/4, 1/2, 3/4, 1).</li>
+            <li><strong>Click any score</strong> — it saves <strong>instantly via AJAX</strong> without needing to press a "Save" button. A green checkmark indicator confirms the save.</li>
+            <li>Continue scoring all questions. The <strong>Save Assessment Data</strong> button also exists for a final bulk save.</li>
+            <li>After saving, the page shows a success message. The scores are stored in the database and can be updated later (re-assessment).</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h4><i class="bi bi-search me-2"></i>Searching for Students</h4>
+        <div class="body">
+          <p>The search supports:</p>
+          <ul>
+            <li>Full name (<code>John Doe</code>)</li>
+            <li>Username (<code>john.doe</code>)</li>
+            <li>Full matric number (<code>2021/123456</code>)</li>
+            <li>Last 4–6 digits of matric (<code>123456</code>)</li>
+          </ul>
+          <p>If a student is not assigned to the selected exam, an error message is shown.</p>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h4><i class="bi bi-arrow-repeat me-2"></i>Re-assessment</h4>
+        <div class="body">
+          <p>Searching for a student who has already been graded will load their existing scores. Changing a score updates the record (it does not create a duplicate). The page shows "Second Attempt/Revision" to indicate an update. Only an admin can reset scores to allow a full fresh assessment.</p>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h4><i class="bi bi-chat-dots me-2"></i>Chat with Admin</h4>
+        <div class="body">
+          <p>Examiners can use the chat system to communicate with administrators, share files, and coordinate during exam sessions.</p>
+        </div>
+      </div>
+    <?php endif; ?>
+
+
+
+  </div><!-- /tab-content-doc -->
+
+  <div class="footer-doc">
+    &copy; <?= date('Y') ?> Assessment Portal &mdash; Powered by Exam Portal System
+  </div>
+</div>
+
+<script src="assets/js/bootstrap.bundle.min.js"></script>
 </body>
-</html> 
+</html>

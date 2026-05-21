@@ -78,6 +78,39 @@ try {
       }
     }
 
+    // ── AJAX instant save: saves a single score immediately on radio click ──
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_score') {
+        header('Content-Type: application/json');
+        try {
+            $qid = intval($_POST['question_id'] ?? 0);
+            $sid = intval($_POST['student_id'] ?? 0);
+            $eid = intval($_POST['exam_id'] ?? 0);
+            $score = floatval($_POST['score'] ?? 0);
+            validate_csrf();
+
+            if (!$qid || !$sid || !$eid) {
+                throw new Exception('Missing parameters');
+            }
+
+            $stmt = $db->prepare("SELECT id FROM answers WHERE exam_id=? AND question_id=? AND student_id=?");
+            $stmt->execute([$eid, $qid, $sid]);
+            $answer_id = $stmt->fetchColumn();
+
+            if ($answer_id) {
+                $db->prepare("UPDATE answers SET score=?, examiner_id=?, updated_by=?, updated_at=NOW() WHERE id=?")
+                    ->execute([$score, $examiner_id, $examiner_id, $answer_id]);
+            } else {
+                $db->prepare("INSERT INTO answers(exam_id, question_id, student_id, examiner_id, score, created_at, updated_at) VALUES (?,?,?,?,?, NOW(), NOW())")
+                    ->execute([$eid, $qid, $sid, $examiner_id, $score]);
+            }
+
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit']) && $selected_exam) {
         // Verify exam is active and assigned
         $is_valid_exam = false;
@@ -114,8 +147,8 @@ try {
                 $answer_id = $stmt->fetchColumn();
                 
                 if ($answer_id) {
-                    $db->prepare("UPDATE answers SET score=?, examiner_id=?, updated_by=? WHERE id=?")
-                      ->execute([floatval($score), $examiner_id, $examiner_id, $answer_id]);
+                    $db->prepare("UPDATE answers SET score=?, examiner_id=?, updated_by=NOW() WHERE id=?")
+                      ->execute([floatval($score), $examiner_id, $answer_id]);
                 } else {
                     $db->prepare("INSERT INTO answers(exam_id, question_id, student_id, examiner_id, score, created_at) VALUES (?,?,?,?,?, NOW())")
                       ->execute([$selected_exam, $qid, $student_id, $examiner_id, floatval($score)]);
@@ -412,6 +445,8 @@ function decimalToFractionLabel($decimal) {
               <?php if ($is_active): ?>
                 <form method="post" id="assessmentForm" class="p-4">
                   <input type="hidden" name="student_id" value="<?= $stu['student_id'] ?>">
+                  <?php csrf_field(); ?>
+                  <input type="hidden" id="ajaxExamId" value="<?= $selected_exam ?>">
                   <div class="table-responsive">
                     <table class="table table-assessment align-middle">
                       <thead>
@@ -444,10 +479,10 @@ function decimalToFractionLabel($decimal) {
                           }
                           $current_val = isset($existing_answers[$q['id']]) ? $existing_answers[$q['id']] : null;
                         ?>
-                          <tr>
+                          <tr id="qrow-<?= $q['id'] ?>">
                             <td class="text-center fw-bold text-muted"><?= $sn++ ?></td>
                             <td class="question-cell fw-medium"><?= htmlspecialchars($q['text']) ?></td>
-                            <td class="score-cell">
+                            <td class="score-cell" style="position:relative;">
                               <div class="assessment-radio-group">
                                 <?php foreach ($values as $col_score):
                                   $input_id = "q{$q['id']}_" . str_replace('.', '_', $col_score);
@@ -456,11 +491,15 @@ function decimalToFractionLabel($decimal) {
                                 ?>
                                   <div class="form-check">
                                     <input type="radio" id="<?= $input_id ?>" name="q[<?= $q['id'] ?>]" 
-                                           value="<?= $col_score ?>" required class="form-check-input" <?= $checked ?>>
+                                           value="<?= $col_score ?>" required class="form-check-input" <?= $checked ?>
+                                           data-question-id="<?= $q['id'] ?>">
                                     <label for="<?= $input_id ?>" class="form-check-label"><?= $label_display ?></label>
                                   </div>
                                 <?php endforeach; ?>
                               </div>
+                              <small class="save-indicator text-success fw-bold" style="position:absolute;bottom:2px;right:8px;opacity:0;transition:opacity 0.3s;">
+                                <i class="bi bi-check-circle-fill"></i>
+                              </small>
                             </td>
                           </tr>
                         <?php endwhile; ?>
@@ -584,6 +623,56 @@ function decimalToFractionLabel($decimal) {
           $(this).closest('form').submit();
           return false;
         }
+      });
+
+      // ── Instant save: each radio click saves immediately via AJAX ──
+      $(document).on('change', 'input[type="radio"][data-question-id]', function() {
+        const radio = $(this);
+        const qid = radio.data('question-id');
+        const score = radio.val();
+        const sid = $('input[name="student_id"]').val();
+        const eid = $('#ajaxExamId').val();
+        const row = $('#qrow-' + qid);
+        const indicator = row.find('.save-indicator');
+        const csrf = $('input[name="csrf_token"]').val();
+
+        indicator.css('opacity', '0.5').html('<i class="bi bi-arrow-repeat"></i>');
+
+        $.ajax({
+          url: 'assess?exam_id=' + eid,
+          method: 'POST',
+          data: {
+            action: 'save_score',
+            question_id: qid,
+            student_id: sid,
+            exam_id: eid,
+            score: score,
+            csrf_token: csrf
+          },
+          success: function(res) {
+            if (res.success) {
+              indicator.css('opacity', '1').html('<i class="bi bi-check-circle-fill"></i>');
+              setTimeout(function() {
+                indicator.css('opacity', '0');
+              }, 2000);
+            } else {
+              indicator.css('opacity', '1').html('<i class="bi bi-exclamation-circle-fill text-danger"></i>');
+              console.error('Save failed:', res.error);
+            }
+          },
+          error: function() {
+            indicator.css('opacity', '1').html('<i class="bi bi-exclamation-circle-fill text-danger"></i>');
+          }
+        });
+      });
+
+      // Show saved indicators for already-checked radios on page load
+      $('input[type="radio"][data-question-id]:checked').each(function() {
+        const qid = $(this).data('question-id');
+        $('#qrow-' + qid).find('.save-indicator').css('opacity', '1').html('<i class="bi bi-check-circle-fill text-success"></i>');
+        setTimeout(function() {
+          $('#qrow-' + qid).find('.save-indicator').css('opacity', '0');
+        }, 3000);
       });
     });
   </script>

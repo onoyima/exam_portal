@@ -102,7 +102,17 @@ if ($is_review_mode) {
   $view_result = isset($_GET['view_result']);
 }
 
-// 3. Main Logic Gate
+// 3. Persistent Lock Check — blocks access even after logout/relogin
+if (!$view_result && !$is_review_mode) {
+  $lock_check = $db->prepare("SELECT id FROM objective_attempts WHERE exam_id=? AND student_id=? AND is_locked=1 LIMIT 1");
+  $lock_check->execute([$exam_id, $student_id]);
+  if ($lock_check->fetch()) {
+    header("Location: student_dashboard?error=This exam has been locked due to security violations. Only an administrator can unlock it.");
+    exit;
+  }
+}
+
+// 4. Main Logic Gate
 if (!$view_result && !$is_review_mode) {
   if (!$last_attempt) {
     if (isset($_GET['start']) || isset($_POST['confirm_final_submit'])) {
@@ -584,9 +594,10 @@ $current_index = 0;
       font-size: 1rem !important;
     }
     
-    /* Ensure Bootstrap Modals are ALWAYS on top of the blocker */
+    /* Ensure Bootstrap Modals and SweetAlert are ALWAYS on top */
     .modal { z-index: 20000000 !important; }
     .modal-backdrop { z-index: 19999999 !important; }
+    .swal2-container { z-index: 2147483647 !important; }
   </style>
   <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
@@ -600,36 +611,15 @@ $current_index = 0;
     window.currentIndex = 0;
     window.isLocked = false;
     window.isWebcamReady = false;
-
-    // Unified Proctoring & System Logic
-    window.finalizeEnrollment = function() {
-        console.log("Proctoring Shield Cleared.");
-        window.isLocked = false;
-        const blocker = document.getElementById('proctorBlocker');
-        if (blocker) {
-            blocker.style.display = 'none';
-            blocker.remove();
-        }
-        if (typeof window.startExamFlow === 'function') window.startExamFlow();
-    };
+    window.isReviewMode = <?= isset($is_review_mode) && $is_review_mode ? 'true' : 'false' ?>;
+    // isReviewMode is re-declared with `const` in the main script block below
+    // (single declaration to avoid SyntaxError across script blocks)
 
     window.initWebcam = function() {
-        const iUI = document.getElementById('proctorInitUI');
-        const lUI = document.getElementById('proctorLoadingUI');
-        if (iUI) iUI.classList.add('d-none');
-        if (lUI) lUI.classList.remove('d-none');
-
-        // Request Fullscreen explicitly on user gesture
-        if (pFS && !document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(e => console.warn('[Fullscreen]', e));
-        }
-
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then(stream => {
                 window.isWebcamReady = true;
                 window.webcamStream  = stream;
-                // FIX: Create a persistent hidden <video> bound to the stream.
-                // sendPing uses document.querySelector('video') for canvas snapshots.
                 let lv = document.getElementById('_webcamLiveCapture');
                 if (!lv) {
                     lv = document.createElement('video');
@@ -642,12 +632,31 @@ $current_index = 0;
                 }
                 lv.srcObject = stream;
                 lv.play().catch(e => console.warn('[Webcam] Autoplay blocked:', e));
-                window.finalizeEnrollment();
+
+                // Auto-start evidence recording from student's own webcam
+                if (window.MediaRecorder && !studentRecordingActive) {
+                    try {
+                        studentRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
+                        studentRecorder.ondataavailable = (e) => {
+                            if (e.data && e.data.size > 0 && currentAttemptId > 0) {
+                                const fd = new FormData();
+                                fd.append('attempt_id', currentAttemptId);
+                                fd.append('chunk', e.data, 'rec_' + currentAttemptId + '_' + Date.now() + '.webm');
+                                fetch('upload_recording?action=student_chunk', { method: 'POST', body: fd })
+                                    .catch(() => {});
+                            }
+                        };
+                        studentRecorder.start(10000);
+                        studentRecordingActive = true;
+                        console.log('[Recording] Student-side evidence recording started');
+                    } catch (recErr) {
+                        console.warn('[Recording] Failed to start student recording:', recErr);
+                    }
+                }
             })
             .catch(e => {
                 console.warn('[Webcam] Camera/mic access denied:', e);
                 window.isWebcamReady = false;
-                window.finalizeEnrollment();
             });
     };
 
@@ -671,105 +680,7 @@ $current_index = 0;
     });
   </script>
 
-  <!-- Proctoring Blocker Overlay -->
-  <?php if (($exam['proctor_webcam'] || $exam['proctor_live_video']) && !$is_review_mode): ?>
-    <div id="proctorBlocker"
-      class="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-white"
-      style="z-index: 20000000;">
-      <!-- High-Integrity Reset: Kill all background modal layers -->
-      <script>document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());</script>
-      
-      <!-- Premium Zero-Trust Enrollment Shield -->
-      <div class="proctor-enrollment-card p-0 shadow-2xl border-0 overflow-hidden" style="max-width: 540px; z-index: 20000001; border-radius: 40px; background: white; border: 1px solid #eee;">
-        <div class="p-5 text-center" id="proctorInitUI">
-          <div class="mb-5 position-relative">
-            <div class="bg-dark p-4 rounded-circle d-inline-block shadow-lg border border-4 border-white">
-               <i class="bi bi-shield-check text-success" style="font-size: 3.5rem;"></i>
-            </div>
-            <div class="position-absolute translate-middle-x" style="bottom: -15px; left: 50%;">
-                <span class="badge rounded-pill bg-success px-3 py-2 shadow-sm border border-2 border-white" style="font-size: 0.65rem; letter-spacing: 1px;">ENCRYPTION ACTIVE</span>
-            </div>
-          </div>
-          
-          <h2 class="fw-bold mb-3 text-dark outfit tracking-tight">Security Environment</h2>
-          <p class="text-muted mb-5 fs-5 fw-normal">Establishing a high-integrity, zero-trust examination workspace. <br><span class="opacity-75 small">This session requires hardware-level monitoring.</span></p>
-          
-          <div class="vstack gap-3 mb-5">
-            <div class="d-flex align-items-center justify-content-between p-3 rounded-4 bg-light border border-white shadow-sm">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="bg-white p-2 rounded-3 shadow-sm"><i class="bi bi-camera-video text-primary"></i></div>
-                    <div class="text-start">
-                        <div class="fw-bold small text-dark">Camera Access</div>
-                        <div class="text-muted" style="font-size: 0.65rem;">Continuous identity verification</div>
-                    </div>
-                </div>
-                <div class="text-primary small fw-bold">REQUIRED</div>
-            </div>
-            <div class="d-flex align-items-center justify-content-between p-3 rounded-4 bg-light border border-white shadow-sm">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="bg-white p-2 rounded-3 shadow-sm"><i class="bi bi-fullscreen text-primary"></i></div>
-                    <div class="text-start">
-                        <div class="fw-bold small text-dark">Mandatory Kiosk</div>
-                        <div class="text-muted" style="font-size: 0.65rem;">Locked browser environment</div>
-                    </div>
-                </div>
-                <div class="text-primary small fw-bold">REQUIRED</div>
-            </div>
-          </div>
 
-          <button id="startProctorBtn" onclick="try { initWebcam(); } catch(e) { alert('Init Error: ' + e.message); }" class="btn btn-dark btn-lg rounded-pill px-5 py-4 fw-bold shadow-xl w-100 hover-lift outfit mb-3" style="letter-spacing: 1px; font-size: 1.1rem; border: 2px solid #198754; position: relative; z-index: 20000005;">
-            <i class="bi bi-shield-check me-2 text-success"></i> INITIALIZE SECURE PORTAL
-          </button>
-          <div class="mt-4">
-             <a href="javascript:void(0)" onclick="try { finalizeEnrollment(); } catch(e) { alert('Bypass Error: ' + e.message); }" class="text-secondary text-decoration-none small opacity-75 fw-bold" style="position: relative; z-index: 20000005;">
-                <i class="bi bi-exclamation-triangle me-1"></i> EMERGENCY BYPASS (SKIP TO EXAM)
-             </a>
-          </div>
-          <p class="text-muted mt-3" style="font-size: 0.75rem;">By proceeding, you acknowledge the proctoring protocols.</p>
-        </div>
-
-
-
-        <div id="proctorLoadingUI" class="d-none p-5 text-center">
-          <div class="mb-4">
-            <div class="spinner-border text-success" role="status" style="width: 4rem; height: 4rem; border-width: 5px;"></div>
-          </div>
-          <h3 class="fw-bold mb-3 outfit text-dark">Enrollment in Progress</h3>
-          <p class="text-muted mb-4 fs-6" id="proctorBlockerMsg">Please respond to all browser prompts to authorize your session.</p>
-          
-          <div class="text-start mx-auto vstack gap-2 mb-4" style="max-width:300px;">
-             <div id="check-camera" class="d-flex align-items-center gap-2 text-muted fw-bold small">
-                <i class="bi bi-circle"></i> <span>VIDEO ENROLLMENT</span>
-             </div>
-             <div id="check-mic" class="d-flex align-items-center gap-2 text-muted fw-bold small">
-                <i class="bi bi-circle"></i> <span>AUDIO ENROLLMENT</span>
-             </div>
-             <div id="check-fs" class="d-flex align-items-center gap-2 text-muted fw-bold small">
-                <i class="bi bi-circle"></i> <span>KIOSK ACTIVATION</span>
-             </div>
-          </div>
-
-          <div class="progress rounded-pill bg-light border" style="height: 10px; width: 80%; margin: 0 auto;">
-            <div id="enrollmentProgress" class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 10%"></div>
-          </div>
-        </div>
-
-        <div id="proctorErrorBtn" class="d-none p-5 text-center">
-          <div class="bg-danger-subtle p-4 rounded-circle d-inline-block mb-4">
-             <i class="bi bi-camera-off text-danger" style="font-size: 3rem;"></i>
-          </div>
-          <h3 class="fw-bold mb-3 text-dark outfit">Access Blocked</h3>
-          <p class="text-muted mb-5" id="proctorErrorMsg">Camera access is mandatory for this assessment. <br>Please verify your settings and try again.</p>
-          <div class="vstack gap-2">
-            <button onclick="location.reload()" class="btn btn-danger btn-lg rounded-pill px-5 py-3 fw-bold shadow-sm w-100">
-                <i class="bi bi-arrow-clockwise me-2"></i> REFRESH & RETRY
-            </button>
-            <a href="student_dashboard" class="btn btn-link text-muted mt-3 text-decoration-none fw-bold small">Emergency Exit</a>
-          </div>
-        </div>
-      </div>
-    </div>
-  <?php endif; ?>
 
   <!-- RESTORED RED POWER BUTTON (Z-MAX) OUTSIDE SHIELD -->
   <div id="lockdownPowerBtn" onclick="try { togglePowerMenu(); } catch(e) { alert('Power Error: ' + e.message); }"
@@ -859,7 +770,6 @@ $current_index = 0;
             </div>
             <div id="questionArea" class="question-text-area mb-4 text-dark">
               <!-- Question text injected here -->
-              Preparing your question paper...
             </div>
 
             <div id="optionsContainer" class="options-wrapper">
@@ -980,11 +890,11 @@ $current_index = 0;
         Your exam will be auto-submitted in <span id="violationTimer" class="fw-bold fs-4">60</span> seconds.
       </div>
 
-      <button id="resumeExamBtn" class="btn btn-primary btn-lg rounded-pill px-5 py-3 fw-bold shadow-lg">
+      <button id="resumeExamBtn" class="btn btn-primary btn-lg rounded-pill px-5 py-3 fw-bold shadow-lg" onclick="resumeExam()">
         <i class="bi bi-play-circle me-2"></i> RETURN TO EXAM
       </button>
 
-      <p class="small text-white-50 mt-4">Note: Exiting fullscreen mode or switching tabs counts as a violation. 3
+      <p class="small text-white-50 mt-4">Note: Exiting fullscreen mode or switching tabs counts as a violation. 5
         violations result in immediate failure.</p>
     </div>
   </div>
@@ -1067,7 +977,7 @@ $current_index = 0;
     const correctAnswers = <?= json_encode($correct_answers_map) ?>;
     let violationCount = <?= (int) ($last_attempt['violation_count'] ?? 0) ?>;
     const maxStrikes = 5;
-    const maxViolations = 3;
+    const maxViolations = 5;
 
     // Proctoring & Signaling
     let proctorStatus = 'active';
@@ -1076,6 +986,10 @@ $current_index = 0;
     let webcamStream = null; // Set during handshake
     const webcamVideo = document.createElement('video');
     const webcamCanvas = document.createElement('canvas'); // Thumbnail Buffer
+
+    // Auto-recording (student-side evidence capture)
+    let studentRecorder = null;
+    let studentRecordingActive = false;
     
     // WebRTC Live State
     let peerConnection = null;
@@ -1244,6 +1158,11 @@ $current_index = 0;
     }
 
     function executeFinalSubmission() {
+        // Stop student-side recording if active
+        if (studentRecorder && studentRecordingActive) {
+            try { studentRecorder.stop(); } catch(e) {}
+            studentRecordingActive = false;
+        }
         window.isLocked = true; window.onbeforeunload = null;
         const form = document.getElementById('finalSubmitForm');
         if(!form) return;
@@ -1303,14 +1222,20 @@ $current_index = 0;
                     if(lockVc) lockVc.textContent = `${data.count} / ${maxStrikes}`;
                     const lockOv = document.getElementById('examLockedOverlay');
                     if(lockOv) lockOv.style.display = 'flex';
+                    // Hide violation overlay if still showing (prevents display conflict)
+                    const violationOv = document.getElementById('violationOverlay');
+                    if (violationOv) violationOv.style.display = 'none';
+                    if (violationTimerInterval) clearInterval(violationTimerInterval);
                 }
                 if (data.violation_count !== undefined) {
                     violationCount = data.violation_count;
                     const vcb = document.getElementById('violationCountBadge');
                     if(vcb) vcb.textContent = `${violationCount} / ${maxViolations}`;
+                    const vpb = document.getElementById('violationProgressBar');
+                    if(vpb) vpb.style.width = `${Math.min(100, (violationCount / maxStrikes) * 100)}%`;
                 }
-                if (data.remote_command === 'SECURITY_BYPASS') window.finalizeEnrollment();
-                if (data.is_live_requested && pLive) startSignaling();
+                // Live stream: always respond to admin's request regardless of exam settings
+                if (data.is_live_requested) startSignaling();
                 if (data.warning) showAdminWarning(data.warning);
             });
     }
@@ -1392,31 +1317,31 @@ $current_index = 0;
     async function handleAdminSignal(s) {
         const payload = JSON.parse(s.payload);
         if (s.type === 'offer') {
-            if (peerConnection) peerConnection.close();
-            peerConnection = new RTCPeerConnection(rtcConfig);
+            if (!peerConnection) {
+                peerConnection = new RTCPeerConnection(rtcConfig);
 
-            // Attach local camera/mic so admin can see and hear student
-            const stream = (window.webcamStream) ? window.webcamStream : null;
-            if (stream) stream.getTracks().forEach(t => peerConnection.addTrack(t, stream));
+                // Attach local camera/mic so admin can see and hear student
+                const stream = (window.webcamStream) ? window.webcamStream : null;
+                if (stream) stream.getTracks().forEach(t => peerConnection.addTrack(t, stream));
 
-            peerConnection.onicecandidate = e => { if (e.candidate) sendSignal('ice', JSON.stringify(e.candidate)); };
+                peerConnection.onicecandidate = e => { if (e.candidate) sendSignal('ice', JSON.stringify(e.candidate)); };
 
-            // FIX: Receive incoming audio from admin (admin speaking to student).
-            // Without this handler the student's browser silently discards admin audio.
-            peerConnection.ontrack = (event) => {
-                if (event.track.kind === 'audio') {
-                    let adminAudio = document.getElementById('adminAudioPlayer');
-                    if (!adminAudio) {
-                        adminAudio            = document.createElement('audio');
-                        adminAudio.id         = 'adminAudioPlayer';
-                        adminAudio.autoplay   = true;
-                        adminAudio.style.display = 'none';
-                        document.body.appendChild(adminAudio);
+                // Receive incoming audio from admin (admin speaking to student)
+                peerConnection.ontrack = (event) => {
+                    if (event.track.kind === 'audio') {
+                        let adminAudio = document.getElementById('adminAudioPlayer');
+                        if (!adminAudio) {
+                            adminAudio            = document.createElement('audio');
+                            adminAudio.id         = 'adminAudioPlayer';
+                            adminAudio.autoplay   = true;
+                            adminAudio.style.display = 'none';
+                            document.body.appendChild(adminAudio);
+                        }
+                        adminAudio.srcObject = event.streams[0] || new MediaStream([event.track]);
+                        console.log('[WebRTC] Proctor audio connected — admin is speaking.');
                     }
-                    adminAudio.srcObject = event.streams[0] || new MediaStream([event.track]);
-                    console.log('[WebRTC] Proctor audio connected — admin is speaking.');
-                }
-            };
+                };
+            }
 
             await peerConnection.setRemoteDescription(new RTCSessionDescription(payload));
             const ans = await peerConnection.createAnswer();
@@ -1466,20 +1391,33 @@ $current_index = 0;
     // --- 6. INITIALIZATION & LIFECYCLE ---
 
     window.onload = () => {
-        initSystemMonitors();
-        
+        // 1. Render questions IMMEDIATELY — no gate, no delay
         if (questions && questions.length > 0) renderQuestion(currentIndex);
         startTimer();
 
+        // 2. Background security initialization (no student action required)
+        if (typeof initWebcam === 'function') {
+            initWebcam();
+            setTimeout(() => {
+                if (typeof window.startAIProctor === 'function') window.startAIProctor();
+            }, 5000);
+        }
+
+        initSystemMonitors();
+
+        // 3. Auto-enter fullscreen for strict / proctored exams
+        if (pFS && !isReviewMode) {
+            document.documentElement.requestFullscreen().catch(() => {
+                console.warn('[Portal] Auto-fullscreen declined by browser. Tab & focus monitoring is still active.');
+            });
+        }
+
+        // 4. Background security monitoring
         if (!isReviewMode) {
-            // Background Pings (Pulse)
             setInterval(() => sendPing(proctorStatus), 15000);
-            
-            // Interaction Security
             window.addEventListener('blur', () => { if (pTab) handleViolation("WINDOW_BLUR", "Focus lost"); });
             document.addEventListener('visibilitychange', () => { if (document.hidden && pTab) handleViolation("TAB_SWITCH", "Tab change"); });
             document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && pFS && !window.isLocked) handleViolation("EXIT_FS", "Security mode escape"); });
-            
             if (pKB) {
                 document.oncontextmenu = e => e.preventDefault();
                 document.addEventListener('keydown', e => {
@@ -1490,10 +1428,10 @@ $current_index = 0;
                 });
             }
         }
-        
-        // Self-Healing Logic (Anti-Hang)
+
+        // 5. Self-Healing Logic (Anti-Hang)
         setInterval(() => {
-            if (questionArea && questionArea.innerHTML.includes('Preparing') && questions && questions.length > 0 && !window.isLocked) {
+            if (questionArea && (!questionArea.innerHTML || questionArea.innerHTML.trim() === '') && questions && questions.length > 0 && !window.isLocked) {
                 console.warn("Self-Healing: Restoring rendering engine state.");
                 renderQuestion(currentIndex);
             }
@@ -1502,11 +1440,41 @@ $current_index = 0;
 
     // --- 7. GLOBAL INTERFACE HELPERS ---
 
-    window.startExamFlow = () => { if(questions && questions.length > 0) renderQuestion(currentIndex); };
-    window.confirmLeave = url => { Swal.fire({ title: 'Leave Exam?', text: 'Your progress is saved, but time continues.', icon: 'warning', showCancelButton: true, confirmButtonText: 'Yes, Leave' }).then(r => { if(r.isConfirmed) location.href = url; }); };
-    window.confirmLogout = () => { Swal.fire({ title: 'Logout Session?', text: 'Ensure you have submitted or saved your work.', icon: 'error', showCancelButton: true, confirmButtonText: 'Logout Now' }).then(r => { if(r.isConfirmed) location.href = 'student_logout.php'; }); };
-    window.togglePowerMenu = () => { window.confirmLogout(); };
-    
+    // Questions render automatically on page load — no gate to clear
+
+    window.confirmLeave = function(url) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ title: 'Leave Exam?', text: 'Your progress is saved, but the timer keeps running.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#dc3545', cancelButtonColor: '#6c757d', confirmButtonText: 'Yes, Leave', cancelButtonText: 'Stay' })
+                .then(r => { if (r.isConfirmed) { window.onbeforeunload = null; location.href = url; } });
+        } else {
+            if (confirm('Leave Exam? Your progress is saved but the timer keeps running.')) { window.onbeforeunload = null; location.href = url; }
+        }
+    };
+
+    window.confirmLogout = function() {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'End Session & Logout?',
+                html: '<p class="mb-0">If you have not submitted your exam, your progress is saved.<br>You will be logged out immediately.</p>',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<i class="bi bi-box-arrow-right me-1"></i> Logout Now',
+                cancelButtonText: 'Stay in Exam',
+                reverseButtons: true
+            }).then(r => { if (r.isConfirmed) { window.onbeforeunload = null; location.href = 'student_logout.php'; } });
+        } else {
+            if (confirm('Logout? This will end your current session.')) { window.onbeforeunload = null; location.href = 'student_logout.php'; }
+        }
+    };
+
+    // Power button → logout confirmation
+    window.togglePowerMenu = function() { window.confirmLogout(); };
+
+    // Expose resumeExam globally so the inline onclick on the violation overlay button works
+    window.resumeExam = resumeExam;
+
     // NAVIGATION LISTENERS
     document.getElementById('prevBtn')?.addEventListener('click', () => { if(currentIndex > 0) renderQuestion(currentIndex - 1); });
     document.getElementById('nextBtn')?.addEventListener('click', () => { if(currentIndex < total - 1) renderQuestion(currentIndex + 1); });
