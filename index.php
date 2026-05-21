@@ -314,6 +314,7 @@ try {
                     <?php if (($settings['section_team_active'] ?? '1') === '1'): ?>
                         <li class="nav-item"><a class="nav-link fw-bold" href="#team">Team</a></li>
                     <?php endif; ?>
+                    <li class="nav-item"><a class="nav-link fw-bold text-success" href="downloads/seb/" ><i class="bi bi-download me-1"></i>Download SEB</a></li>
                 </ul>
                 <div class="d-flex flex-column flex-lg-row gap-3">
                     <a href="login" class="btn btn-outline-dark rounded-pill px-4 fw-bold">Staff Login</a>
@@ -348,6 +349,7 @@ try {
                             class="btn btn-success btn-lg rounded-pill px-5 py-3 fw-bold shadow-lg w-100 w-sm-auto"><?= htmlspecialchars($settings['hero_btn1_text'] ?? 'STUDENT ENTRANCE') ?></a>
                         <a href="<?= htmlspecialchars($settings['hero_btn2_url'] ?? '#workflow') ?>"
                             class="btn btn-outline-dark btn-lg rounded-pill px-5 py-3 fw-bold w-100 w-sm-auto"><?= htmlspecialchars($settings['hero_btn2_text'] ?? 'HOW IT WORKS') ?></a>
+                        <a href="downloads/seb/VeritasSEB-1.0.0-win.exe" class="btn btn-outline-success btn-lg rounded-pill px-5 py-3 fw-bold w-100 w-sm-auto" target="_blank"><i class="bi bi-download me-2"></i>Download SEB Browser</a>
                     </div>
                 </div>
 
@@ -460,6 +462,7 @@ try {
                             <h4 class="fw-bold m-0 outfit text-white fs-5"><?= htmlspecialchars($settings['sec_l7_title'] ?? 'OS Kiosk (SEB)') ?></h4>
                         </div>
                         <p class="text-muted small mb-0"><?= htmlspecialchars($settings['sec_l7_desc'] ?? '') ?></p>
+                        <a href="downloads/seb/VeritasSEB-1.0.0-win.exe" class="btn btn-sm btn-outline-success rounded-pill mt-3 px-4" target="_blank"><i class="bi bi-download me-1"></i> Download SEB</a>
                     </div>
                 </div>
                 <div class="col-md-6 col-lg-4" data-aos="fade-up" data-aos-delay="200">
@@ -884,6 +887,15 @@ try {
                             </ul>
                         </div>
                         <?php endif; ?>
+                        <div class="col-md-4">
+                            <h6 class="fw-bold text-uppercase small opacity-25 mb-4">Download SEB Browser</h6>
+                            <ul class="list-unstyled opacity-75 small p-0">
+                                <li class="mb-2"><a href="downloads/seb/VeritasSEB-1.0.0-win.exe" class="link-light text-decoration-none" target="_blank"><i class="bi bi-download me-1"></i> Windows (.exe)</a></li>
+                                <li class="mb-2"><span class="text-secondary"><i class="bi bi-clock me-1"></i> macOS — Coming Soon</span></li>
+                                <li class="mb-2"><span class="text-secondary"><i class="bi bi-clock me-1"></i> Linux — Coming Soon</span></li>
+                                <li class="mt-3"><a href="seb-client/README.md" class="link-light text-decoration-none small" target="_blank"><i class="bi bi-info-circle me-1"></i> Setup Guide</a></li>
+                            </ul>
+                        </div>
                         <div class="col-md-4">
                             <h6 class="fw-bold text-uppercase small opacity-25 mb-4">Official Contact</h6>
                             <p class="opacity-75 small mb-1"><?= htmlspecialchars($contact_email) ?></p>

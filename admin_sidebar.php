@@ -216,6 +216,44 @@ $ICONS['clipboard']      = $S.'<rect x="5" y="2" width="10" height="18" rx="2"/>
 
 <script src="assets/js/bootstrap.bundle.min.js"></script>
 <script>
+function createToggleButton(sidebar, backdrop, mainContent) {
+  var btn = document.createElement('button');
+  btn.className = 'btn sidebar-navbar-toggle';
+  btn.setAttribute('aria-label', 'Toggle sidebar');
+  btn.innerHTML =
+    '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="2" y="4" width="16" height="2" rx="1"/><rect x="2" y="9" width="16" height="2" rx="1"/><rect x="2" y="14" width="16" height="2" rx="1"/>' +
+    '</svg>';
+
+  function toggleSidebar() {
+    if (window.innerWidth < 992) {
+      sidebar.classList.toggle('show');
+      if (backdrop) backdrop.classList.toggle('show');
+      document.body.classList.toggle('sidebar-open');
+    } else {
+      var isCollapsed = sidebar.classList.toggle('collapsed');
+      if (mainContent) mainContent.classList.toggle('sidebar-collapsed');
+      localStorage.setItem('sidebarCollapsed', isCollapsed);
+    }
+  }
+  btn.addEventListener('click', toggleSidebar);
+
+  // Try injecting into navbar first
+  var navbarContainer = document.querySelector('.main-content .navbar .container-fluid');
+  if (navbarContainer) {
+    navbarContainer.insertBefore(btn, navbarContainer.firstChild);
+    return;
+  }
+
+  // No navbar — inject a floating toggle at top of main-content
+  btn.classList.add('sidebar-floating-toggle');
+  if (mainContent) {
+    mainContent.insertBefore(btn, mainContent.firstChild);
+  } else {
+    document.body.insertBefore(btn, document.body.firstChild);
+  }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   var sidebar = document.getElementById('sidebarMenu');
   var backdrop = document.getElementById('sidebarBackdrop');
@@ -225,40 +263,12 @@ document.addEventListener('DOMContentLoaded', function () {
     sidebar.classList.add('collapsed');
     if (mainContent) mainContent.classList.add('sidebar-collapsed');
   }
-  // Inject toggle button into page navbar
-  var navbarContainer = document.querySelector('.main-content .navbar .container-fluid');
-  if (navbarContainer) {
-    var navToggle = document.createElement('button');
-    navToggle.className = 'btn sidebar-navbar-toggle';
-    navToggle.setAttribute('aria-label', 'Toggle sidebar');
-    navToggle.innerHTML =
-      '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
-      '<rect x="2" y="4" width="16" height="2" rx="1"/><rect x="2" y="9" width="16" height="2" rx="1"/><rect x="2" y="14" width="16" height="2" rx="1"/>' +
-      '</svg>';
-    navToggle.addEventListener('click', function () {
-      if (window.innerWidth < 992) {
-        sidebar.classList.toggle('show');
-        if (backdrop) backdrop.classList.toggle('show');
-      } else {
-        var isCollapsed = sidebar.classList.toggle('collapsed');
-        if (mainContent) mainContent.classList.toggle('sidebar-collapsed');
-        localStorage.setItem('sidebarCollapsed', isCollapsed);
-      }
-    });
-    navbarContainer.insertBefore(navToggle, navbarContainer.firstChild);
-  }
-  var mobileToggle = document.getElementById('sidebarToggle');
-  if (mobileToggle) {
-    mobileToggle.addEventListener('click', function (e) {
-      e.preventDefault();
-      sidebar.classList.toggle('show');
-      if (backdrop) backdrop.classList.toggle('show');
-    });
-  }
+  createToggleButton(sidebar, backdrop, mainContent);
   if (backdrop) {
     backdrop.addEventListener('click', function () {
       sidebar.classList.remove('show');
       backdrop.classList.remove('show');
+      document.body.classList.remove('sidebar-open');
     });
   }
   document.querySelectorAll('.nav-group-header').forEach(function (header) {
