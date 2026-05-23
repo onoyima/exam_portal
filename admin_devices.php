@@ -4,6 +4,7 @@ check_auth('admin');
 require 'db.php';
 
 $name = $_SESSION['user'] ?? 'Admin';
+$back_url = 'admin_dashboard';
 
 // ── AJAX Actions ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
@@ -30,45 +31,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>Device Authorization - Admin</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
-  <style>
-    .device-card { border-radius: 12px; border: 1px solid rgba(0,0,0,0.07); transition: box-shadow 0.2s; }
-    .device-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-    .status-badge { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; padding: 4px 10px; border-radius: 20px; }
-    .badge-pending  { background: rgba(251,191,36,0.15); color: #b45309; }
-    .badge-approved { background: rgba(34,197,94,0.15);  color: #15803d; }
-    .badge-rejected { background: rgba(239,68,68,0.15);  color: #b91c1c; }
-    .ip-code { font-family: monospace; font-size: 1rem; font-weight: 700; color: #0f172a; }
-    .pulse-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-    .dot-pending  { background: #f59e0b; animation: pulse 2s infinite; }
-    .dot-approved { background: #22c55e; }
-    .dot-rejected { background: #ef4444; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-  </style>
 </head>
-<body class="bg-light">
+<body>
 <?php include 'admin_sidebar.php'; ?>
 <div class="main-content">
-  <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm mb-4">
-    <div class="container-fluid">
-      <span class="navbar-brand fw-bold text-primary"><i class="bi bi-hdd-network-fill me-2"></i>Device Authorization</span>
-      <div class="ms-auto d-flex gap-2">
-        <button class="btn btn-success btn-sm rounded-pill fw-bold px-4" onclick="approveAll()">
-          <i class="bi bi-check-all me-1"></i> Approve All Pending
+  <nav class="admin-navbar">
+    <div class="admin-navbar-inner">
+      <div class="admin-navbar-start">
+        <button class="admin-navbar-toggle d-lg-none" id="sidebarToggle" aria-label="Toggle sidebar">
+          <i class="bi bi-list"></i>
         </button>
-        <button class="btn btn-outline-secondary btn-sm rounded-pill px-3" onclick="location.reload()">
-          <i class="bi bi-arrow-clockwise"></i>
-        </button>
+        <a href="<?= $back_url ?>" class="admin-back-btn">
+          <i class="bi bi-arrow-left"></i>
+        </a>
+        <h1 class="admin-navbar-title">Device Authorization</h1>
+      </div>
+      <div class="admin-navbar-end">
+        <div class="admin-user-badge">
+          <span class="admin-user-avatar"><?= strtoupper(substr($name, 0, 1)) ?></span>
+          <span class="admin-user-name"><?= htmlspecialchars($name) ?></span>
+        </div>
+        <a href="logout" class="admin-logout-btn" title="Logout">
+          <i class="bi bi-box-arrow-right"></i>
+        </a>
       </div>
     </div>
   </nav>
 
+  <div class="admin-content">
+    <nav class="admin-breadcrumb" aria-label="Breadcrumb">
+      <ol>
+        <li><a href="admin_dashboard"><i class="bi bi-house"></i></a></li>
+        <li class="sep">/</li>
+        <li class="current" aria-current="page">Device Auth</li>
+      </ol>
+    </nav>
+
+    <div class="admin-page-header">
+      <h2 class="admin-page-title">Device Authorization</h2>
+      <div class="admin-page-actions">
+        <button class="admin-btn admin-btn-primary" onclick="approveAll()">
+          <i class="bi bi-check-all me-1"></i> Approve All Pending
+        </button>
+        <button class="admin-btn admin-btn-outline" onclick="location.reload()">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+    </div>
+
   <div class="container-xl">
-    <!-- Stats Row -->
     <div class="row g-3 mb-4">
       <?php
         $stats = $db->query("SELECT status, COUNT(*) as cnt FROM approved_devices GROUP BY status")->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -78,54 +95,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
         $total    = $pending + $approved + $rejected;
       ?>
       <div class="col-md-3">
-        <div class="card border-0 shadow-sm rounded-4 p-4 text-center">
-          <div class="display-6 fw-bold text-primary"><?= $total ?></div>
-          <div class="text-muted small fw-bold mt-1">TOTAL DEVICES</div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-value"><?= $total ?></div>
+          <div class="admin-stat-label">TOTAL DEVICES</div>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card border-0 shadow-sm rounded-4 p-4 text-center">
-          <div class="display-6 fw-bold text-warning"><?= $pending ?></div>
-          <div class="text-muted small fw-bold mt-1">PENDING</div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-value"><?= $pending ?></div>
+          <div class="admin-stat-label">PENDING</div>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card border-0 shadow-sm rounded-4 p-4 text-center">
-          <div class="display-6 fw-bold text-success"><?= $approved ?></div>
-          <div class="text-muted small fw-bold mt-1">APPROVED</div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-value"><?= $approved ?></div>
+          <div class="admin-stat-label">APPROVED</div>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card border-0 shadow-sm rounded-4 p-4 text-center">
-          <div class="display-6 fw-bold text-danger"><?= $rejected ?></div>
-          <div class="text-muted small fw-bold mt-1">REJECTED</div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-value"><?= $rejected ?></div>
+          <div class="admin-stat-label">REJECTED</div>
         </div>
       </div>
     </div>
 
-    <!-- Device List -->
-    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
-      <div class="card-header bg-white border-0 p-4 d-flex justify-content-between align-items-center">
-        <h5 class="mb-0 fw-bold"><i class="bi bi-list-check me-2 text-primary"></i>All Connected Devices</h5>
-        <div class="d-flex gap-2">
-          <select id="filterStatus" class="form-select form-select-sm rounded-3 border-0 bg-light" onchange="filterDevices(this.value)" style="width:auto;">
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-          </select>
-        </div>
+    <div class="admin-card">
+      <div class="admin-card-header d-flex justify-content-between align-items-center">
+        <h3 class="admin-card-title mb-0"><i class="bi bi-list-check me-2"></i>All Connected Devices</h3>
+        <select id="filterStatus" class="admin-filter-input" onchange="filterDevices(this.value)">
+          <option value="all">All Status</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
       </div>
-      <div class="card-body p-0">
+      <div class="admin-card-body-flush">
         <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0" id="devicesTable">
-            <thead class="bg-light">
-              <tr class="small text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.05em;">
-                <th class="ps-4 py-3 border-0">Status</th>
-                <th class="py-3 border-0">IP Address</th>
-                <th class="py-3 border-0">Device Info</th>
-                <th class="py-3 border-0">Last Seen</th>
-                <th class="py-3 border-0 text-end pe-4">Actions</th>
+          <table class="admin-table" id="devicesTable">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>IP Address</th>
+                <th>Device Info</th>
+                <th>Last Seen</th>
+                <th class="actions-cell">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -134,44 +148,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
               if (empty($devices)):
               ?>
               <tr><td colspan="5" class="text-center py-5 text-muted">
-                <i class="bi bi-hdd-network display-4 d-block mb-3"></i>
-                No devices registered yet. Devices will appear here when students attempt to access the portal.
+                <i class="bi bi-hdd-network big-icon d-block mb-3"></i>
+                No devices registered yet.
               </td></tr>
               <?php else: foreach ($devices as $d): ?>
               <tr data-status="<?= $d['status'] ?>">
-                <td class="ps-4 py-3">
-                  <span class="pulse-dot dot-<?= $d['status'] ?>"></span>
-                  <span class="status-badge badge-<?= $d['status'] ?>"><?= strtoupper($d['status']) ?></span>
+                <td>
+                  <span class="admin-badge admin-badge-<?= $d['status'] === 'approved' ? 'success' : ($d['status'] === 'pending' ? 'warning' : 'danger') ?>">
+                    <i class="bi bi-<?= $d['status'] === 'approved' ? 'check-circle' : ($d['status'] === 'pending' ? 'clock' : 'x-circle') ?>"></i>
+                    <?= strtoupper($d['status']) ?>
+                  </span>
                 </td>
-                <td class="py-3">
-                  <div class="ip-code"><?= htmlspecialchars($d['ip_address']) ?></div>
+                <td>
+                  <code><?= htmlspecialchars($d['ip_address']) ?></code>
                   <?php if ($d['mac_address']): ?>
-                    <div class="text-muted" style="font-size:0.72rem;">MAC: <?= htmlspecialchars($d['mac_address']) ?></div>
+                    <div class="text-muted small">MAC: <?= htmlspecialchars($d['mac_address']) ?></div>
                   <?php endif; ?>
                 </td>
-                <td class="py-3">
-                  <div class="text-muted" style="font-size:0.78rem; max-width:280px;" title="<?= htmlspecialchars($d['device_info'] ?? '') ?>">
+                <td>
+                  <span class="small text-muted" title="<?= htmlspecialchars($d['device_info'] ?? '') ?>">
                     <?= htmlspecialchars(substr($d['device_info'] ?? 'Unknown', 0, 60)) ?><?= strlen($d['device_info'] ?? '') > 60 ? '...' : '' ?>
-                  </div>
+                  </span>
                 </td>
-                <td class="py-3">
-                  <div class="small text-muted"><?= date('M j, Y H:i', strtotime($d['last_seen'])) ?></div>
+                <td>
+                  <span class="small text-muted"><?= date('M j, Y H:i', strtotime($d['last_seen'])) ?></span>
                 </td>
-                <td class="py-3 text-end pe-4">
+                <td class="actions-cell">
                   <div class="d-flex justify-content-end gap-2">
                     <?php if ($d['status'] !== 'approved'): ?>
-                    <button class="btn btn-sm btn-success rounded-pill fw-bold px-3"
+                    <button class="admin-btn admin-btn-sm admin-btn-success"
                       onclick="deviceAction('approve','<?= htmlspecialchars($d['ip_address']) ?>', this)">
                       <i class="bi bi-check-circle-fill me-1"></i>Approve
                     </button>
                     <?php endif; ?>
                     <?php if ($d['status'] !== 'rejected'): ?>
-                    <button class="btn btn-sm btn-outline-danger rounded-pill fw-bold px-3"
+                    <button class="admin-btn admin-btn-sm admin-btn-outline-danger"
                       onclick="deviceAction('reject','<?= htmlspecialchars($d['ip_address']) ?>', this)">
                       <i class="bi bi-x-circle-fill me-1"></i>Reject
                     </button>
                     <?php endif; ?>
-                    <button class="btn btn-sm btn-outline-secondary rounded-pill px-3"
+                    <button class="admin-btn admin-btn-sm admin-btn-outline"
                       onclick="deviceAction('delete','<?= htmlspecialchars($d['ip_address']) ?>', this)">
                       <i class="bi bi-trash3"></i>
                     </button>
@@ -185,21 +201,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
       </div>
     </div>
 
-    <div class="mt-4 p-4 bg-warning bg-opacity-10 border border-warning border-opacity-25 rounded-4">
-      <h6 class="fw-bold text-warning-emphasis mb-2"><i class="bi bi-shield-exclamation me-2"></i>How Device Authorization Works</h6>
-      <p class="mb-0 small text-muted">
-        When a student accesses the exam portal from a new device, it is automatically logged here as <strong>Pending</strong>.
-        Only <strong>Approved</strong> devices can access exams. <strong>Rejected</strong> devices are blocked with an access-denied screen.
-        You can approve all pending devices at once using the button above, or approve/reject individually.
-      </p>
+    <div class="admin-card">
+      <div class="admin-card-header"><h3 class="admin-card-title"><i class="bi bi-shield-exclamation me-2"></i>How Device Authorization Works</h3></div>
+      <div class="admin-card-body">
+        <p class="mb-0 small text-muted">
+          When a student accesses the exam portal from a new device, it is automatically logged here as <strong>Pending</strong>.
+          Only <strong>Approved</strong> devices can access exams. <strong>Rejected</strong> devices are blocked with an access-denied screen.
+          You can approve all pending devices at once using the button above, or approve/reject individually.
+        </p>
+      </div>
     </div>
   </div>
 </div>
 
+<?php include 'footer.php'; ?>
+
 <script src="assets/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="assets/js/admin-swal.js"></script>
+<script src="assets/js/admin-common.js"></script>
 <script>
   async function deviceAction(action, ip, btn) {
+    if (action === 'delete') {
+      const result = await Swal.fire({
+        title: 'Delete this device?',
+        text: 'This will remove the device from the approved list permanently.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        confirmButtonText: 'Yes, Delete'
+      });
+      if (!result.isConfirmed) return;
+    }
     const orig = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';

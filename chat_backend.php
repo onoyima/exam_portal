@@ -10,7 +10,7 @@ if (!isset($_SESSION['user'])) {
 }
 
 // Get sender id and role
-$stmt = $db->prepare("SELECT id, role FROM examiners WHERE username=?");
+$stmt = $db->prepare("SELECT id, role FROM examiners WHERE username=? AND deleted_at IS NULL");
 $stmt->execute([$_SESSION['user']]);
 $row = $stmt->fetch(PDO::FETCH_ASSOC);
 $sender_id = $row['id'];

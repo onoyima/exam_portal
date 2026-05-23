@@ -1,18 +1,17 @@
 <?php
-session_start();
+require 'auth.php';
+check_auth('admin');
 require 'db.php';
-if (!isset($_SESSION['role']) || $_SESSION['role'] != 'admin') {
-    die("Access denied.");
-}
 
 $name = $_SESSION['user'] ?? 'Admin';
+$back_url = 'admin_dashboard';
 $type_filter = $_GET['type'] ?? '';
 
-$sql = "SELECT * FROM exams";
+$sql = "SELECT * FROM exams WHERE deleted_at IS NULL";
 if ($type_filter === 'viva') {
-    $sql .= " WHERE type='viva'";
+    $sql .= " AND type='viva'";
 } else {
-    $sql .= " WHERE type='practical' OR type IS NULL";
+    $sql .= " AND (type='practical' OR type IS NULL)";
 }
 $sql .= " ORDER BY created_at DESC";
 
@@ -28,7 +27,7 @@ if ($selected_exam) {
         SELECT s.* 
         FROM students s 
         JOIN exam_students es ON s.id = es.student_id 
-        WHERE es.exam_id = $selected_exam 
+        WHERE es.exam_id = $selected_exam AND s.deleted_at IS NULL
         ORDER BY s.name
     ")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -58,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_score']) && iss
         SELECT s.* 
         FROM students s 
         JOIN exam_students es ON s.id = es.student_id 
-        WHERE es.exam_id = $selected_exam 
+        WHERE es.exam_id = $selected_exam AND s.deleted_at IS NULL
         ORDER BY s.name
     ")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -83,30 +82,40 @@ $exam_name = ($exam_index !== false && isset($exams[$exam_index]['name'])) ? $ex
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>Student Scores - Assessment Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="icon" href="assets/favicon.ico">
+  <link href="assets/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
-  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 <body>
   <?php include 'admin_sidebar.php'; ?>
   <div class="main-content">
-    <nav class="navbar navbar-light bg-white shadow-sm mb-4">
-      <div class="container-fluid d-flex justify-content-between align-items-center">
-        <div class="d-flex align-items-center gap-2">
-          <button class="btn btn-outline-primary d-lg-none me-2" id="sidebarToggle"><span class="navbar-toggler-icon"></span></button>
-          <a href="admin_dashboard" class="btn btn-outline-secondary me-2">Back</a>
-          <span class="navbar-brand fw-bold">Student Scores</span>
+    <nav class="admin-navbar">
+      <div class="admin-navbar-inner">
+        <div class="admin-navbar-start">
+          <button class="admin-navbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar"><i class="bi bi-list"></i></button>
+          <h1 class="admin-navbar-title">Student Scores</h1>
         </div>
-        <div class="d-flex align-items-center gap-2">
-          <span class="profile-icon"><?= strtoupper(substr($name,0,1)) ?></span>
-          <span class="fw-semibold"><?= htmlspecialchars($name) ?></span>
-          <a href="logout" class="btn btn-outline-danger ms-2">Logout</a>
+        <div class="admin-navbar-end">
+          <div class="admin-user-badge">
+            <span class="admin-user-avatar"><?= strtoupper(substr($name, 0, 1)) ?></span>
+            <span class="admin-user-name"><?= htmlspecialchars($name) ?></span>
+          </div>
+          <a href="logout" class="admin-logout-btn" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
         </div>
       </div>
     </nav>
-    <div class="container-xl">
+    <div class="admin-content">
+      <nav class="admin-breadcrumb">
+        <ol>
+          <li><a href="admin_dashboard"><i class="bi bi-house"></i></a></li>
+          <li class="sep">/</li>
+          <li class="current" aria-current="page">Student Scores</li>
+        </ol>
+      </nav>
       <form method="get" class="mb-4">
         <div class="row g-3">
           <div class="col-md-6">
@@ -128,10 +137,11 @@ $exam_name = ($exam_index !== false && isset($exams[$exam_index]['name'])) ? $ex
         </div>
       </form>
       <?php if ($selected_exam && $students): ?>
-        <div class="card p-4 shadow-sm">
-          <h4 class="mb-3">Scores for Exam: <span class="text-primary"><?= htmlspecialchars($exam_name) ?></span></h4>
+        <div class="admin-card">
+          <div class="admin-card-header"><h3 class="admin-card-title">Scores for Exam: <span class="text-primary"><?= htmlspecialchars($exam_name) ?></span></h3></div>
+          <div class="admin-card-body-flush">
           <div class="table-responsive">
-            <table class="table align-middle">
+            <table class="admin-table">
               <thead>
                 <tr>
                   <th>Student</th>
@@ -169,7 +179,7 @@ $exam_name = ($exam_index !== false && isset($exams[$exam_index]['name'])) ? $ex
                       ?>
                     </td>
                     <td>
-                      <form method="post" style="display:inline;" onsubmit="return confirm('Reset this student\'s scores for this exam?');">
+                       <form method="post" class="d-inline" data-swal="Reset this student's scores for this exam?">
                         <input type="hidden" name="student_id" value="<?= $stu['id'] ?>">
                         <button type="submit" name="reset_score" class="btn btn-sm btn-danger">Reset Score</button>
                       </form>
@@ -180,121 +190,30 @@ $exam_name = ($exam_index !== false && isset($exams[$exam_index]['name'])) ? $ex
             </table>
           </div>
         </div>
+        </div>
       <?php elseif ($selected_exam): ?>
-        <div class="alert alert-warning mt-3">No students or scores found for this exam.</div>
+        <div class="admin-alert admin-alert-warning">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          <span>No students or scores found for this exam.</span>
+          <button class="admin-alert-close" onclick="this.parentElement.remove()">&times;</button>
+        </div>
       <?php endif; ?>
       <?php if (isset($reset_success)): ?>
-        <div class="alert alert-success mt-3"> <?= htmlspecialchars($reset_success) ?> </div>
+        <div class="admin-alert admin-alert-success">
+          <i class="bi bi-check-circle-fill"></i>
+          <span><?= htmlspecialchars($reset_success) ?></span>
+          <button class="admin-alert-close" onclick="this.parentElement.remove()">&times;</button>
+        </div>
       <?php endif; ?>
     </div>
   </div>
   
   <?php include 'footer.php'; ?>
   
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    const sidebar = document.getElementById('sidebarMenu');
-    const sidebarBackdrop = document.getElementById('sidebarBackdrop');
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    if (sidebarToggle) {
-      sidebarToggle.onclick = function() {
-        sidebar.classList.toggle('show');
-        sidebarBackdrop.classList.toggle('show');
-      };
-      sidebarBackdrop.onclick = function() {
-        sidebar.classList.remove('show');
-        sidebarBackdrop.classList.remove('show');
-      };
-    }
-  </script>
-<!-- sweetalert_custom_injected_v1 -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Override global alert
-        window.alert = function(msg) {
-            Swal.fire({
-                title: 'Message',
-                text: msg,
-                icon: 'info',
-                confirmButtonColor: '#092c19'
-            });
-        };
-
-        // Intercept inline onsubmit confirms
-        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
-            let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
-            if(match) {
-                let msg = match[1];
-                el.removeAttribute('onsubmit');
-                el.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    Swal.fire({
-                        title: 'Are you sure?',
-                        text: msg,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#092c19',
-                        cancelButtonColor: '#d33',
-                        confirmButtonText: 'Yes, proceed'
-                    }).then((result) => {
-                        if(result.isConfirmed) {
-                            let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover') 
-                                      || el.querySelector('button[type="submit"], input[type="submit"]');
-                            if(btn && btn.name) {
-                                let hidden = document.createElement('input');
-                                hidden.type = 'hidden';
-                                hidden.name = btn.name;
-                                hidden.value = btn.value || '1';
-                                el.appendChild(hidden);
-                            }
-                            HTMLFormElement.prototype.submit.call(el);
-                        }
-                    });
-                });
-            }
-        });
-
-        // Intercept inline onclick confirms for anchors
-        document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
-            let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
-            if(match) {
-                let msg = match[1];
-                el.removeAttribute('onclick');
-                el.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    Swal.fire({
-                        title: 'Are you sure?',
-                        text: msg,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#092c19',
-                        cancelButtonColor: '#d33',
-                        confirmButtonText: 'Yes, proceed'
-                    }).then((result) => {
-                        if(result.isConfirmed) {
-                            if(el.tagName === 'A' && el.href) {
-                                window.location.href = el.href;
-                            } else if(el.tagName === 'BUTTON') {
-                                // if it's a submit button inside a form
-                                if(el.type === 'submit' && el.form) {
-                                    if(el.name) {
-                                        let hidden = document.createElement('input');
-                                        hidden.type = 'hidden';
-                                        hidden.name = el.name;
-                                        hidden.value = el.value || '1';
-                                        el.form.appendChild(hidden);
-                                    }
-                                    HTMLFormElement.prototype.submit.call(el.form);
-                                }
-                            }
-                        }
-                    });
-                });
-            }
-        });
-    });
-</script>
+  <script src="assets/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/admin-common.js"></script>
+  <script src="assets/js/admin-swal.js"></script>
 </body>
+
 
 </html> 

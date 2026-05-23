@@ -20,10 +20,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   $identity = trim($_POST['matric_no'] ?? '');
   $cleanIdentity = preg_replace('/[\\/\\s\\-]/', '', strtoupper($identity));
 
-  $stmt = $db->prepare("SELECT id, name, matric_no, password FROM students WHERE 
+  $stmt = $db->prepare("SELECT id, name, matric_no, password FROM students WHERE deleted_at IS NULL AND (
                         REPLACE(UPPER(matric_no), '/', '') = ? OR 
                         REPLACE(UPPER(username), '/', '') = ? OR 
-                        matric_no = ? OR username = ?");
+                        matric_no = ? OR username = ?)");
   $stmt->execute([$cleanIdentity, $cleanIdentity, $identity, $identity]);
   $student = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -43,10 +43,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   $identity = trim($_POST['matric_no'] ?? '');
   $cleanIdentity = preg_replace('/[\\/\\s\\-]/', '', strtoupper($identity));
 
-  $stmt = $db->prepare("SELECT * FROM students WHERE 
+  $stmt = $db->prepare("SELECT * FROM students WHERE deleted_at IS NULL AND (
                         REPLACE(UPPER(matric_no), '/', '') = ? OR 
                         REPLACE(UPPER(username), '/', '') = ? OR 
-                        matric_no = ? OR username = ?");
+                        matric_no = ? OR username = ?)");
   $stmt->execute([$cleanIdentity, $cleanIdentity, $identity, $identity]);
   $student = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -104,8 +104,6 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <!-- sweetalert_custom_injected_v1 -->
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -556,7 +554,7 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
       <?php endif; ?>
       <span><?= htmlspecialchars($portal_title) ?></span>
     </div>
-    <span class="secure-badge">🔒 SECURE ENVIRONMENT</span>
+    <span class="secure-badge"><i class="bi bi-shield-lock-fill"></i> SECURE ENVIRONMENT</span>
   </header>
 
   <!-- Main Login Screen -->
@@ -779,5 +777,7 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
   <script src="assets/js/bootstrap.bundle.min.js"></script>
   <!-- Aggressive Global Lockdown -->
   <script src="assets/js/student_lockdown.js"></script>
+    <script src="assets/js/admin-common.js"></script>
+    <script src="assets/js/admin-swal.js"></script>
 </body>
 </html>

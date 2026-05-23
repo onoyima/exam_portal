@@ -66,8 +66,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           $matric_no = trim($row[1]);
           $username = trim($row[2]);
 
-          // Check if student already exists
-          $stmt = $db->prepare("SELECT id FROM students WHERE matric_no = ? OR username = ?");
+          // Check if student already exists (including soft-deleted)
+          $stmt = $db->prepare("SELECT id FROM students WHERE (matric_no = ? OR username = ?) AND deleted_at IS NULL");
           $stmt->execute([$matric_no, $username]);
           $existing_student = $stmt->fetch();
 
@@ -91,6 +91,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $success = "$uploaded_count students uploaded and assigned to exam successfully!";
     } else {
       $error = "Please select a file to upload.";
+    }
+  } elseif (isset($_POST['assign_all_students'])) {
+    $exam_id = $_POST['exam_id'];
+    $db->prepare("INSERT IGNORE INTO exam_students (exam_id, student_id) SELECT ?, id FROM students WHERE deleted_at IS NULL")->execute([$exam_id]);
+    $success = "All students assigned to exam successfully!";
+  } elseif (isset($_POST['assign_by_matric_prefix'])) {
+    $exam_id = $_POST['exam_id'];
+    $prefix = trim($_POST['matric_prefix']);
+    if (!empty($prefix)) {
+      $stmt = $db->prepare("INSERT IGNORE INTO exam_students (exam_id, student_id) SELECT ?, id FROM students WHERE matric_no LIKE ? AND deleted_at IS NULL");
+      $stmt->execute([$exam_id, $prefix . '%']);
+      $success = "Students with matric prefix '$prefix' assigned to exam successfully!";
+    } else {
+      $error = "Please enter a matric prefix.";
+    }
+  } elseif (isset($_POST['assign_by_email_domain'])) {
+    $exam_id = $_POST['exam_id'];
+    $domain = '%' . trim($_POST['email_domain']);
+    if (!empty($domain)) {
+      $db->prepare("INSERT IGNORE INTO exam_students (exam_id, student_id) SELECT ?, id FROM students WHERE email LIKE ? AND deleted_at IS NULL")->execute([$exam_id, $domain]);
+      $success = "Students with email domain assigned to exam successfully!";
+    } else {
+      $error = "Please enter an email domain.";
     }
   } elseif (isset($_POST['add_question'])) {
     // Step 3: Add new question to existing exam
@@ -148,39 +171,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $db->prepare("DELETE FROM exam_examiners WHERE exam_id=? AND examiner_id=?")->execute([$_POST['exam_id'], $_POST['examiner_id']]);
     $success = "Examiner removed from exam successfully!";
   } elseif (isset($_POST['delete_exam'])) {
-    // Delete exam and all related data
+    // Soft delete exam (mark as deleted, keep child data for audit)
     $exam_id = $_POST['exam_id'];
-    $db->prepare("DELETE FROM exam_students WHERE exam_id=?")->execute([$exam_id]);
-    $db->prepare("DELETE FROM exam_questions WHERE exam_id=?")->execute([$exam_id]);
-    $db->prepare("DELETE FROM exam_examiners WHERE exam_id=?")->execute([$exam_id]);
-    $db->prepare("DELETE FROM answers WHERE exam_id=?")->execute([$exam_id]);
-    $db->prepare("DELETE FROM exams WHERE id=?")->execute([$exam_id]);
+    $db->prepare("UPDATE exams SET deleted_at=NOW() WHERE id=?")->execute([$exam_id]);
     $success = "Exam deleted successfully!";
   }
 
+  $tab_param = isset($_POST['current_tab']) ? '&tab=' . urlencode($_POST['current_tab']) : '';
   if (isset($success)) {
-    header('Location: admin_exams?success=' . urlencode($success));
+    header('Location: admin_exams?success=' . urlencode($success) . $tab_param);
     exit;
   } elseif (isset($error)) {
-    header('Location: admin_exams?error=' . urlencode($error));
+    header('Location: admin_exams?error=' . urlencode($error) . $tab_param);
     exit;
   }
 }
 
-$sessions = $db->query("SELECT * FROM academic_sessions ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
-$exams = $db->query("SELECT * FROM exams ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
-$students = $db->query("SELECT * FROM students ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
-$questions = $db->query("SELECT * FROM questions ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
-$examiners = $db->query("SELECT * FROM examiners WHERE username != 'admin' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+$sessions = $db->query("SELECT * FROM academic_sessions WHERE deleted_at IS NULL ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+$exams = $db->query("SELECT * FROM exams WHERE deleted_at IS NULL ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+$students = $db->query("SELECT * FROM students WHERE deleted_at IS NULL ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+$questions = $db->query("SELECT * FROM questions WHERE deleted_at IS NULL ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+$examiners = $db->query("SELECT * FROM examiners WHERE username != 'admin' AND deleted_at IS NULL ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 
 // For each exam, get assigned students, questions, and examiners
 $exam_students = [];
 $exam_questions = [];
 $exam_examiners = [];
+$stmt = $db->prepare("SELECT student_id FROM exam_students WHERE exam_id=?");
+$stmt2 = $db->prepare("SELECT q.* FROM exam_questions eq JOIN questions q ON eq.question_id=q.id WHERE eq.exam_id=? AND q.deleted_at IS NULL");
+$stmt3 = $db->prepare("SELECT examiner_id FROM exam_examiners WHERE exam_id=?");
 foreach ($exams as $exam) {
-  $exam_students[$exam['id']] = $db->query("SELECT student_id FROM exam_students WHERE exam_id=" . $exam['id'])->fetchAll(PDO::FETCH_COLUMN);
-  $exam_questions[$exam['id']] = $db->query("SELECT q.* FROM exam_questions eq JOIN questions q ON eq.question_id=q.id WHERE eq.exam_id=" . $exam['id'])->fetchAll(PDO::FETCH_ASSOC);
-  $exam_examiners[$exam['id']] = $db->query("SELECT examiner_id FROM exam_examiners WHERE exam_id=" . $exam['id'])->fetchAll(PDO::FETCH_COLUMN);
+  $stmt->execute([$exam['id']]);
+  $exam_students[$exam['id']] = $stmt->fetchAll(PDO::FETCH_COLUMN);
+  $stmt2->execute([$exam['id']]);
+  $exam_questions[$exam['id']] = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+  $stmt3->execute([$exam['id']]);
+  $exam_examiners[$exam['id']] = $stmt3->fetchAll(PDO::FETCH_COLUMN);
 }
 ?>
 <!DOCTYPE html>
@@ -188,412 +214,550 @@ foreach ($exams as $exam) {
 
 <head>
   <title>Manage Exams - Assessment Portal</title>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
-  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>
   <?php include 'admin_sidebar.php'; ?>
   <div class="main-content">
-    <nav class="navbar navbar-light bg-white shadow-sm mb-4">
-      <div class="container-fluid d-flex justify-content-between align-items-center">
-        <div class="d-flex align-items-center gap-2">
-          <button class="btn btn-outline-primary d-lg-none me-2" id="sidebarToggle"><span
-              class="navbar-toggler-icon"></span></button>
-          <a href="admin_dashboard" class="btn btn-outline-secondary me-2">Back</a>
-          <span class="navbar-brand fw-bold">Manage Exams</span>
+    <nav class="admin-navbar">
+      <div class="admin-navbar-inner">
+        <div class="admin-navbar-start">
+          <button class="admin-navbar-toggle d-lg-none" id="sidebarToggle" aria-label="Toggle sidebar">
+            <i class="bi bi-list"></i>
+          </button>
+          <a href="admin_dashboard" class="admin-back-btn" aria-label="Go back">
+            <i class="bi bi-arrow-left"></i>
+          </a>
+          <h1 class="admin-navbar-title">Manage Exams</h1>
         </div>
-        <div class="d-flex align-items-center gap-2">
-          <span class="profile-icon"><?= strtoupper(substr($name, 0, 1)) ?></span>
-          <span class="fw-semibold"><?= htmlspecialchars($name) ?></span>
-          <a href="logout" class="btn btn-outline-danger ms-2">Logout</a>
+        <div class="admin-navbar-end">
+          <div class="admin-user-badge">
+            <span class="admin-user-avatar"><?= strtoupper(substr($name, 0, 1)) ?></span>
+            <span class="admin-user-name"><?= htmlspecialchars($name) ?></span>
+          </div>
+          <a href="logout" class="admin-logout-btn" title="Logout">
+            <i class="bi bi-box-arrow-right"></i>
+          </a>
         </div>
       </div>
     </nav>
 
-    <div class="container-xl">
+    <div class="admin-content">
+      <nav class="admin-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="admin_dashboard"><i class="bi bi-house"></i></a></li>
+          <li class="sep">/</li>
+          <li class="current" aria-current="page">Manage Exams</li>
+        </ol>
+      </nav>
+
       <?php if (isset($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-          <?= htmlspecialchars($_GET['success']) ?>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="admin-alert admin-alert-success">
+          <i class="bi bi-check-circle-fill"></i>
+          <span><?= htmlspecialchars($_GET['success']) ?></span>
+          <button class="admin-alert-close" onclick="this.parentElement.remove()">&times;</button>
         </div>
       <?php endif; ?>
-
       <?php if (isset($_GET['error'])): ?>
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-          <?= htmlspecialchars($_GET['error']) ?>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="admin-alert admin-alert-danger">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          <span><?= htmlspecialchars($_GET['error']) ?></span>
+          <button class="admin-alert-close" onclick="this.parentElement.remove()">&times;</button>
         </div>
       <?php endif; ?>
 
-      <!-- Step 1: Create New Exam -->
-      <div class="card p-4 shadow-sm mb-4">
-        <div class="d-flex align-items-center mb-3">
-          <span class="badge bg-primary me-3 fs-6">Step 1</span>
-          <h4 class="mb-0">Create New Exam</h4>
+      <div class="admin-page-header">
+        <h2 class="admin-page-title">Exams</h2>
+        <div class="admin-page-actions">
+          <span class="admin-badge admin-badge-primary"><i class="bi bi-collection"></i> <?= count($exams) ?> total</span>
         </div>
-        <p class="text-muted mb-3">First, create a new exam. You can add students and questions to it after creation.
-        </p>
-        <form method="post" class="row g-3">
-          <div class="col-md-3">
-            <label for="session_id" class="form-label">Academic Session</label>
-            <select name="session_id" id="session_id" class="form-select" required>
-              <option value="">-- Select --</option>
-              <?php foreach ($sessions as $s): ?>
-                <option value="<?= $s['id'] ?>" <?= $s['is_active'] ? 'selected' : '' ?>><?= htmlspecialchars($s['session_name']) ?></option>
-              <?php endforeach; ?>
-            </select>
+      </div>
+
+      <!-- Tabbed Navigation -->
+      <ul class="nav nav-tabs admin-exam-tabs mb-4" id="examTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="tab-create" data-bs-toggle="tab" data-bs-target="#panel-create" type="button" role="tab">
+            <i class="bi bi-plus-circle"></i> Create Exam
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-students" data-bs-toggle="tab" data-bs-target="#panel-students" type="button" role="tab">
+            <i class="bi bi-people"></i> Students
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-questions" data-bs-toggle="tab" data-bs-target="#panel-questions" type="button" role="tab">
+            <i class="bi bi-question-circle"></i> Questions
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-examiners" data-bs-toggle="tab" data-bs-target="#panel-examiners" type="button" role="tab">
+            <i class="bi bi-person-badge"></i> Examiners
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-manage" data-bs-toggle="tab" data-bs-target="#panel-manage" type="button" role="tab">
+            <i class="bi bi-collection"></i> Manage Exams
+            <span class="admin-badge admin-badge-primary ms-1"><?= count($exams) ?></span>
+          </button>
+        </li>
+      </ul>
+
+      <div class="tab-content" id="examTabsContent">
+
+        <!-- ── Tab: Create Exam ── -->
+        <div class="tab-pane fade show active" id="panel-create" role="tabpanel">
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <h3 class="admin-card-title"><i class="bi bi-plus-circle"></i> Create New Exam</h3>
+            </div>
+            <div class="admin-card-body">
+              <p class="text-muted mb-4">Create a new exam. You can add students and questions to it after creation.</p>
+              <form method="post">
+                <div class="row g-3">
+                  <div class="col-md-3">
+                    <div class="admin-form-group">
+                      <label for="session_id" class="admin-form-label">Academic Session</label>
+                      <select name="session_id" id="session_id" class="admin-input admin-select" required>
+                        <option value="">-- Select --</option>
+                        <?php foreach ($sessions as $s): ?>
+                          <option value="<?= $s['id'] ?>" <?= $s['is_active'] ? 'selected' : '' ?>><?= htmlspecialchars($s['session_name']) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <div class="admin-form-group">
+                      <label for="exam_name" class="admin-form-label">Exam Name</label>
+                      <input type="text" name="exam_name" id="exam_name" class="admin-input" placeholder="Enter exam name" required>
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <div class="admin-form-group">
+                      <label for="is_active" class="admin-form-label">Initial Status</label>
+                      <select name="is_active" id="is_active" class="admin-input admin-select">
+                        <option value="0">Inactive (Recommended)</option>
+                        <option value="1">Active</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <div class="admin-form-group">
+                      <label for="is_strict" class="admin-form-label">Tab Security</label>
+                      <select name="is_strict" id="is_strict" class="admin-input admin-select">
+                        <option value="1">Strict (Enabled)</option>
+                        <option value="0">Flexible (Disabled)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <div class="admin-form-group">
+                      <label class="admin-form-label">Start Time</label>
+                      <input type="datetime-local" name="start_time" class="admin-input">
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <div class="admin-form-group">
+                      <label class="admin-form-label">End Time</label>
+                      <input type="datetime-local" name="end_time" class="admin-input">
+                    </div>
+                  </div>
+                </div>
+                <details class="mb-3 cursor-pointer">
+                  <summary class="admin-form-label fw-semibold"><i class="bi bi-shield-check"></i> Proctoring Features</summary>
+                  <div class="admin-checkbox-group mt-2">
+                    <label class="admin-checkbox"><input type="checkbox" name="proctor_fullscreen" checked> Fullscreen</label>
+                    <label class="admin-checkbox"><input type="checkbox" name="proctor_tab_lock" checked> Tab/Focus</label>
+                    <label class="admin-checkbox"><input type="checkbox" name="proctor_kb_lock" checked> Keyboard/Copy</label>
+                    <label class="admin-checkbox"><input type="checkbox" name="proctor_auto_submit" checked> 3-Strike Auto</label>
+                    <label class="admin-checkbox"><input type="checkbox" name="proctor_browser_check" checked> Browser Check</label>
+                    <label class="admin-checkbox"><input type="checkbox" name="proctor_webcam" checked> Webcam Monitor</label>
+                    <label class="admin-checkbox text-danger fw-semibold"><input type="checkbox" name="proctor_live_video"> Live Video Stream</label>
+                  </div>
+                </details>
+                <div class="text-end mt-4">
+                  <button type="reset" class="admin-btn admin-btn-outline me-2" onclick="document.querySelector('#panel-create form').reset()">Reset</button>
+                  <button type="submit" name="create_exam" class="admin-btn admin-btn-primary"><i class="bi bi-plus-lg"></i> Create Exam</button>
+                </div>
+              </form>
+            </div>
           </div>
-          <div class="col-md-3">
-            <label for="exam_name" class="form-label">Exam Name</label>
-            <input type="text" name="exam_name" id="exam_name" class="form-control" placeholder="Enter exam name"
-              required>
-          </div>
-          <div class="col-md-3">
-            <label for="is_active" class="form-label">Initial Status</label>
-            <select name="is_active" id="is_active" class="form-select">
-              <option value="0">Inactive (Recommended)</option>
-              <option value="1">Active</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label for="is_strict" class="form-label">Tab Security (Strictness)</label>
-            <select name="is_strict" id="is_strict" class="form-select mb-2">
-              <option value="1">Strict (Enabled)</option>
-              <option value="0">Flexible (Disabled)</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">Start Time</label>
-            <input type="datetime-local" name="start_time" class="form-control">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">End Time</label>
-            <input type="datetime-local" name="end_time" class="form-control">
-          </div>
-          <div class="col-12">
-            <div class="d-flex flex-wrap gap-3 p-3 bg-light rounded-3 border">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="proctor_fullscreen" id="pfsNew" checked>
-                <label class="form-check-label small" for="pfsNew">Fullscreen</label>
+        </div>
+
+        <!-- ── Tab: Students ── -->
+        <div class="tab-pane fade" id="panel-students" role="tabpanel">
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <h3 class="admin-card-title"><i class="bi bi-people"></i> Assign Students</h3>
+            </div>
+            <div class="admin-card-body">
+              <p class="text-muted mb-4">Select an existing exam and assign students to it.</p>
+
+              <div class="admin-card border mb-4">
+                <div class="admin-card-header">
+                  <span class="admin-card-title fw-semibold"><i class="bi bi-person-plus"></i> Select Existing Students</span>
+                </div>
+                <div class="admin-card-body">
+                  <form method="post" class="row g-3">
+                    <div class="col-md-4">
+                      <label for="exam_id_students" class="admin-form-label">Select Exam</label>
+                      <select name="exam_id" id="exam_id_students" class="admin-input admin-select" required>
+                        <option value="">-- Select Exam --</option>
+                        <?php foreach ($exams as $exam): ?>
+                          <option value="<?= $exam['id'] ?>"><?= htmlspecialchars($exam['name']) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                    <div class="col-md-6">
+                      <label for="students" class="admin-form-label">Select Existing Students</label>
+                      <select name="students[]" id="students" class="admin-input" multiple size="4">
+                        <?php foreach ($students as $stu): ?>
+                          <option value="<?= $stu['id'] ?>"><?= htmlspecialchars($stu['name']) ?> (<?= htmlspecialchars($stu['matric_no']) ?>)</option>
+                        <?php endforeach; ?>
+                      </select>
+                      <small class="admin-form-label opacity-50">Hold Ctrl/Cmd to select multiple</small>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                      <button type="submit" name="assign_students" class="admin-btn admin-btn-primary w-100"><i class="bi bi-person-check"></i> Assign</button>
+                    </div>
+                  </form>
+                </div>
               </div>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="proctor_tab_lock" id="ptabNew" checked>
-                <label class="form-check-label small" for="ptabNew">Tab/Focus</label>
+
+              <div class="admin-card border">
+                <div class="admin-card-header">
+                  <span class="admin-card-title fw-semibold"><i class="bi bi-upload"></i> Bulk Upload Students</span>
+                </div>
+                <div class="admin-card-body">
+                  <form method="post" enctype="multipart/form-data" class="row g-3">
+                    <div class="col-md-4">
+                      <label for="exam_id_upload_students" class="admin-form-label">Select Exam</label>
+                      <select name="exam_id" id="exam_id_upload_students" class="admin-input admin-select" required>
+                        <option value="">-- Select Exam --</option>
+                        <?php foreach ($exams as $exam): ?>
+                          <option value="<?= $exam['id'] ?>"><?= htmlspecialchars($exam['name']) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                    <div class="col-md-6">
+                      <label for="students_file" class="admin-form-label">Upload CSV/TXT File</label>
+                      <input type="file" name="students_file" id="students_file" class="admin-input" accept=".csv,.txt" required>
+                      <small class="admin-form-label opacity-50">Format: <code>Name,Matric No,Username</code></small>
+                      <br>
+                      <a href="download_template.php?type=student_assign" class="admin-btn admin-btn-sm admin-btn-outline mt-1"><i class="bi bi-download"></i> CSV Template</a>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                      <button type="submit" name="upload_students" class="admin-btn admin-btn-primary w-100"><i class="bi bi-cloud-upload"></i> Upload</button>
+                    </div>
+                  </form>
+                </div>
               </div>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="proctor_kb_lock" id="pkbNew" checked>
-                <label class="form-check-label small" for="pkbNew">Keyboard/Copy</label>
+
+              <div class="admin-card border mb-4">
+                <div class="admin-card-header">
+                  <span class="admin-card-title fw-semibold"><i class="bi bi-person-check-fill"></i> Assign All Students</span>
+                </div>
+                <div class="admin-card-body">
+                  <form method="post" class="row g-3">
+                    <div class="col-md-4">
+                      <select name="exam_id" class="admin-input admin-select" required>
+                        <option value="">-- Select Exam --</option>
+                        <?php foreach ($exams as $exam): ?>
+                          <option value="<?= $exam['id'] ?>"><?= htmlspecialchars($exam['name']) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                    <div class="col-md-8 d-flex align-items-end">
+                      <button type="submit" name="assign_all_students" class="admin-btn admin-btn-primary" data-swal="Assign every student in the system to this exam?"><i class="bi bi-person-plus-fill"></i> Assign All Students</button>
+                    </div>
+                  </form>
+                </div>
               </div>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="proctor_auto_submit" id="pautoNew" checked>
-                <label class="form-check-label small" for="pautoNew">3-Strike Auto</label>
+
+              <div class="admin-card border mb-4">
+                <div class="admin-card-header">
+                  <span class="admin-card-title fw-semibold"><i class="bi bi-filter"></i> Assign by Matric Prefix</span>
+                </div>
+                <div class="admin-card-body">
+                  <form method="post" class="row g-3">
+                    <div class="col-md-4">
+                      <select name="exam_id" class="admin-input admin-select" required>
+                        <option value="">-- Select Exam --</option>
+                        <?php foreach ($exams as $exam): ?>
+                          <option value="<?= $exam['id'] ?>"><?= htmlspecialchars($exam['name']) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                    <div class="col-md-4">
+                      <input type="text" name="matric_prefix" class="admin-input" placeholder="e.g. VUG/BNS/22" required>
+                      <small class="admin-form-label opacity-50">Assigns all students whose matric starts with this prefix</small>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                      <button type="submit" name="assign_by_matric_prefix" class="admin-btn admin-btn-primary w-100"><i class="bi bi-funnel"></i> Assign by Prefix</button>
+                    </div>
+                  </form>
+                </div>
               </div>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="proctor_browser_check" id="pbcNew" checked>
-                <label class="form-check-label small" for="pbcNew">Browser Check</label>
-              </div>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="proctor_webcam" id="pwcNew" checked>
-                <label class="form-check-label small" for="pwcNew">Webcam Monitor</label>
-              </div>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="proctor_live_video" id="pliveNew">
-                <label class="form-check-label small text-danger fw-bold" for="pliveNew">Live Video Stream</label>
+
+              <div class="admin-card border">
+                <div class="admin-card-header">
+                  <span class="admin-card-title fw-semibold"><i class="bi bi-globe"></i> Assign by Email Domain</span>
+                </div>
+                <div class="admin-card-body">
+                  <form method="post" class="row g-3">
+                    <div class="col-md-4">
+                      <select name="exam_id" class="admin-input admin-select" required>
+                        <option value="">-- Select Exam --</option>
+                        <?php foreach ($exams as $exam): ?>
+                          <option value="<?= $exam['id'] ?>"><?= htmlspecialchars($exam['name']) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                    <div class="col-md-4">
+                      <input type="text" name="email_domain" class="admin-input" placeholder="@domain.com" required>
+                      <small class="admin-form-label opacity-50">Assigns all students whose email contains this domain</small>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                      <button type="submit" name="assign_by_email_domain" class="admin-btn admin-btn-primary w-100"><i class="bi bi-mailbox"></i> Assign by Domain</button>
+                    </div>
+                  </form>
+                </div>
               </div>
             </div>
           </div>
-          <div class="col-md-12 text-end">
-            <button type="submit" name="create_exam" class="btn btn-primary px-4">Create Exam</button>
-          </div>
-        </form>
-      </div>
-
-      <!-- Step 2: Assign Students to Existing Exams -->
-      <div class="card p-4 shadow-sm mb-4">
-        <div class="d-flex align-items-center mb-3">
-          <span class="badge bg-success me-3 fs-6">Step 2</span>
-          <h4 class="mb-0">Assign Students to Exam</h4>
         </div>
-        <p class="text-muted mb-3">Select an existing exam and assign students to it. You can select existing students
-          or upload new ones in bulk.</p>
 
-        <!-- Select Existing Students -->
-        <form method="post" class="row g-3 mb-3">
-          <div class="col-md-4">
-            <label for="exam_id_students" class="form-label">Select Exam</label>
-            <select name="exam_id" id="exam_id_students" class="form-select" required>
-              <option value="">-- Select Exam --</option>
-              <?php foreach ($exams as $exam): ?>
-                <option value="<?= $exam['id'] ?>"><?= htmlspecialchars($exam['name']) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-          <div class="col-md-6">
-            <label for="students" class="form-label">Select Existing Students</label>
-            <select name="students[]" id="students" class="form-select" multiple size="4">
-              <?php foreach ($students as $stu): ?>
-                <option value="<?= $stu['id'] ?>"><?= htmlspecialchars($stu['name']) ?>
-                  (<?= htmlspecialchars($stu['matric_no']) ?>)</option>
-              <?php endforeach; ?>
-            </select>
-            <small class="text-muted">Hold Ctrl/Cmd to select multiple students</small>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">&nbsp;</label>
-            <button type="submit" name="assign_students" class="btn btn-success w-100">Assign Students</button>
-          </div>
-        </form>
+        <!-- ── Tab: Questions ── -->
+        <div class="tab-pane fade" id="panel-questions" role="tabpanel">
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <h3 class="admin-card-title"><i class="bi bi-question-circle"></i> Add Questions</h3>
+            </div>
+            <div class="admin-card-body">
+              <p class="text-muted mb-4">Add questions to existing exams.</p>
 
-        <!-- Upload Bulk Students -->
-        <form method="post" enctype="multipart/form-data" class="row g-3">
-          <div class="col-md-4">
-            <label for="exam_id_upload_students" class="form-label">Select Exam</label>
-            <select name="exam_id" id="exam_id_upload_students" class="form-select" required>
-              <option value="">-- Select Exam --</option>
-              <?php foreach ($exams as $exam): ?>
-                <option value="<?= $exam['id'] ?>"><?= htmlspecialchars($exam['name']) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-          <div class="col-md-6">
-            <label for="students_file" class="form-label">Upload Students File (CSV/TXT)</label>
-            <input type="file" name="students_file" id="students_file" class="form-control" accept=".csv,.txt" required>
-            <small class="text-muted">Format: <code>Name,Matric No,Username</code> (e.g.
-              <code>John Doe,MAT1001,johndoe</code>)</small>
-            <br>
-            <a href="download_template.php?type=student_assign" class="btn btn-sm btn-link p-0 text-info fw-bold"><i class="bi bi-download me-1"></i>Download CSV Template</a>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">&nbsp;</label>
-            <button type="submit" name="upload_students" class="btn btn-info w-100">Upload Students</button>
-          </div>
-        </form>
-      </div>
+              <div class="admin-card border mb-4">
+                <div class="admin-card-header">
+                  <span class="admin-card-title fw-semibold"><i class="bi bi-bookmark-plus"></i> Add Existing Question</span>
+                </div>
+                <div class="admin-card-body">
+                  <form method="post" class="row g-3">
+                    <div class="col-md-3">
+                      <label for="exam_id_questions" class="admin-form-label">Select Exam</label>
+                      <select name="exam_id" id="exam_id_questions" class="admin-input admin-select" required>
+                        <option value="">-- Select Exam --</option>
+                        <?php foreach ($exams as $exam): ?>
+                          <option value="<?= $exam['id'] ?>"><?= htmlspecialchars($exam['name']) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                    <div class="col-md-6">
+                      <label for="question_id" class="admin-form-label">Select Question</label>
+                      <select name="question_id" id="question_id" class="admin-input admin-select" required>
+                        <option value="">-- Select Question --</option>
+                        <?php foreach ($questions as $q): ?>
+                          <option value="<?= $q['id'] ?>"><?= htmlspecialchars($q['text']) ?> (<?= htmlspecialchars($q['score_values']) ?>)</option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                      <button type="submit" name="add_existing_question" class="admin-btn admin-btn-primary w-100"><i class="bi bi-plus"></i> Add Question</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
 
-      <!-- Step 3: Add Questions to Existing Exams -->
-      <div class="card p-4 shadow-sm mb-4">
-        <div class="d-flex align-items-center mb-3">
-          <span class="badge bg-warning me-3 fs-6">Step 3</span>
-          <h4 class="mb-0">Add Questions to Exam</h4>
+              <div class="admin-card border mb-4">
+                <div class="admin-card-header">
+                  <span class="admin-card-title fw-semibold"><i class="bi bi-pencil-square"></i> Create New Question</span>
+                </div>
+                <div class="admin-card-body">
+                  <form method="post" class="row g-3">
+                    <div class="col-md-3">
+                      <label for="exam_id_new" class="admin-form-label">Select Exam</label>
+                      <select name="exam_id" id="exam_id_new" class="admin-input admin-select" required>
+                        <option value="">-- Select Exam --</option>
+                        <?php foreach ($exams as $exam): ?>
+                          <option value="<?= $exam['id'] ?>"><?= htmlspecialchars($exam['name']) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                    <div class="col-md-4">
+                      <label for="text" class="admin-form-label">Question Text</label>
+                      <input type="text" name="text" id="text" class="admin-input" placeholder="Enter question text" required>
+                    </div>
+                    <div class="col-md-3">
+                      <label for="score_values" class="admin-form-label">Score Values</label>
+                      <input type="text" name="score_values" id="score_values" class="admin-input" placeholder="e.g. 0.5,1,2" required>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                      <button type="submit" name="add_question" class="admin-btn admin-btn-primary w-100"><i class="bi bi-plus"></i> Create</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+
+              <div class="admin-card border">
+                <div class="admin-card-header">
+                  <span class="admin-card-title fw-semibold"><i class="bi bi-upload"></i> Bulk Upload Questions</span>
+                </div>
+                <div class="admin-card-body">
+                  <form method="post" enctype="multipart/form-data" class="row g-3">
+                    <div class="col-md-3">
+                      <label for="exam_id_upload" class="admin-form-label">Select Exam</label>
+                      <select name="exam_id" id="exam_id_upload" class="admin-input admin-select" required>
+                        <option value="">-- Select Exam --</option>
+                        <?php foreach ($exams as $exam): ?>
+                          <option value="<?= $exam['id'] ?>"><?= htmlspecialchars($exam['name']) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                    <div class="col-md-6">
+                      <label for="questions_file" class="admin-form-label">Upload CSV/TXT File</label>
+                      <input type="file" name="questions_file" id="questions_file" class="admin-input" accept=".csv,.txt" required>
+                      <small class="admin-form-label opacity-50">Format: <code>Question Text,Score Values</code></small>
+                      <br>
+                      <a href="download_template.php?type=practical_steps" class="admin-btn admin-btn-sm admin-btn-outline mt-1"><i class="bi bi-download"></i> CSV Template</a>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                      <button type="submit" name="upload_questions" class="admin-btn admin-btn-primary w-100"><i class="bi bi-cloud-upload"></i> Upload</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <p class="text-muted mb-3">Add questions to existing exams. You can use existing questions, create new ones, or
-          upload bulk questions.</p>
 
-        <!-- Add Existing Question -->
-        <form method="post" class="row g-3 mb-3">
-          <div class="col-md-3">
-            <label for="exam_id_questions" class="form-label">Select Exam</label>
-            <select name="exam_id" id="exam_id_questions" class="form-select" required>
-              <option value="">-- Select Exam --</option>
-              <?php foreach ($exams as $exam): ?>
-                <option value="<?= $exam['id'] ?>"><?= htmlspecialchars($exam['name']) ?></option>
-              <?php endforeach; ?>
-            </select>
+        <!-- ── Tab: Examiners ── -->
+        <div class="tab-pane fade" id="panel-examiners" role="tabpanel">
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <h3 class="admin-card-title"><i class="bi bi-person-badge"></i> Assign Examiners</h3>
+            </div>
+            <div class="admin-card-body">
+              <p class="text-muted mb-4">Select an existing exam and assign examiners.</p>
+              <form method="post" class="row g-3">
+                <div class="col-md-4">
+                  <label for="exam_id_examiners" class="admin-form-label">Select Exam</label>
+                  <select name="exam_id" id="exam_id_examiners" class="admin-input admin-select" required>
+                    <option value="">-- Select Exam --</option>
+                    <?php foreach ($exams as $exam): ?>
+                      <option value="<?= $exam['id'] ?>" <?= ($_GET['exam_id'] ?? '') == $exam['id'] ? 'selected' : '' ?>><?= htmlspecialchars($exam['name']) ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label for="examiners" class="admin-form-label">Select Examiners</label>
+                  <select name="examiners[]" id="examiners" class="admin-input" multiple size="4">
+                    <?php foreach ($examiners as $examiner): ?>
+                      <option value="<?= $examiner['id'] ?>"><?= htmlspecialchars($examiner['name']) ?> (<?= htmlspecialchars($examiner['username']) ?>)</option>
+                    <?php endforeach; ?>
+                  </select>
+                  <small class="admin-form-label opacity-50">Hold Ctrl/Cmd to select multiple</small>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                  <button type="submit" name="assign_examiners" class="admin-btn admin-btn-primary w-100"><i class="bi bi-person-check"></i> Assign</button>
+                </div>
+              </form>
+            </div>
           </div>
-          <div class="col-md-6">
-            <label for="question_id" class="form-label">Select Existing Question</label>
-            <select name="question_id" id="question_id" class="form-select" required>
-              <option value="">-- Select Question --</option>
-              <?php foreach ($questions as $q): ?>
-                <option value="<?= $q['id'] ?>"><?= htmlspecialchars($q['text']) ?>
-                  (<?= htmlspecialchars($q['score_values']) ?>)</option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">&nbsp;</label>
-            <button type="submit" name="add_existing_question" class="btn btn-outline-primary w-100">Add Existing
-              Question</button>
-          </div>
-        </form>
-
-        <!-- Add New Question -->
-        <form method="post" class="row g-3 mb-3">
-          <div class="col-md-3">
-            <label for="exam_id_new" class="form-label">Select Exam</label>
-            <select name="exam_id" id="exam_id_new" class="form-select" required>
-              <option value="">-- Select Exam --</option>
-              <?php foreach ($exams as $exam): ?>
-                <option value="<?= $exam['id'] ?>"><?= htmlspecialchars($exam['name']) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label for="text" class="form-label">New Question Text</label>
-            <input type="text" name="text" id="text" class="form-control" placeholder="Enter question text" required>
-          </div>
-          <div class="col-md-3">
-            <label for="score_values" class="form-label">Score Values</label>
-            <input type="text" name="score_values" id="score_values" class="form-control" placeholder="e.g. 0.5,1,2"
-              required>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">&nbsp;</label>
-            <button type="submit" name="add_question" class="btn btn-warning w-100">Add New Question</button>
-          </div>
-        </form>
-
-        <!-- Upload Bulk Questions -->
-        <form method="post" enctype="multipart/form-data" class="row g-3">
-          <div class="col-md-3">
-            <label for="exam_id_upload" class="form-label">Select Exam</label>
-            <select name="exam_id" id="exam_id_upload" class="form-select" required>
-              <option value="">-- Select Exam --</option>
-              <?php foreach ($exams as $exam): ?>
-                <option value="<?= $exam['id'] ?>"><?= htmlspecialchars($exam['name']) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-          <div class="col-md-6">
-            <label for="questions_file" class="form-label">Upload Questions File (CSV/TXT)</label>
-            <input type="file" name="questions_file" id="questions_file" class="form-control" accept=".csv,.txt"
-              required>
-            <small class="text-muted">Format: <code>Question Text,Score Values</code> (e.g.
-              <code>How are you?,0.5,1,2</code>)</small>
-            <br>
-            <a href="download_template.php?type=practical_steps" class="btn btn-sm btn-link p-0 text-info fw-bold"><i class="bi bi-download me-1"></i>Download CSV Template</a>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">&nbsp;</label>
-            <button type="submit" name="upload_questions" class="btn btn-info w-100">Upload Questions</button>
-          </div>
-        </form>
-      </div>
-
-      <!-- Step 4: Assign Examiners to Existing Exams -->
-      <div class="card p-4 shadow-sm mb-4">
-        <div class="d-flex align-items-center mb-3">
-          <span class="badge bg-info me-3 fs-6">Step 4</span>
-          <h4 class="mb-0">Assign Examiners to Exam</h4>
         </div>
-        <p class="text-muted mb-3">Select an existing exam and assign examiners who will conduct the assessments.</p>
-        <form method="post" class="row g-3">
-          <div class="col-md-4">
-            <label for="exam_id_examiners" class="form-label">Select Exam</label>
-            <select name="exam_id" id="exam_id_examiners" class="form-select" required>
-              <option value="">-- Select Exam --</option>
-              <?php foreach ($exams as $exam): ?>
-                <option value="<?= $exam['id'] ?>"><?= htmlspecialchars($exam['name']) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-          <div class="col-md-6">
-            <label for="examiners" class="form-label">Select Examiners</label>
-            <select name="examiners[]" id="examiners" class="form-select" multiple size="4">
-              <?php foreach ($examiners as $examiner): ?>
-                <option value="<?= $examiner['id'] ?>"><?= htmlspecialchars($examiner['name']) ?>
-                  (<?= htmlspecialchars($examiner['username']) ?>)</option>
-              <?php endforeach; ?>
-            </select>
-            <small class="text-muted">Hold Ctrl/Cmd to select multiple examiners</small>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">&nbsp;</label>
-            <button type="submit" name="assign_examiners" class="btn btn-info w-100">Assign Examiners</button>
-          </div>
-        </form>
-      </div>
 
-      <!-- Exam Management Section -->
-      <div class="card p-4 shadow-sm mb-4">
-        <h4 class="mb-3">📋 Exam Management (<?= count($exams) ?> total)</h4>
-        <p class="text-muted mb-3">View, modify, and manage all created exams. You can activate/deactivate exams and
-          modify their content.</p>
+        <!-- ── Tab: Manage Exams ── -->
+        <div class="tab-pane fade" id="panel-manage" role="tabpanel">
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <h3 class="admin-card-title"><i class="bi bi-collection"></i> All Exams</h3>
+              <span class="admin-badge admin-badge-primary"><i class="bi bi-collection"></i> <?= count($exams) ?> total</span>
+            </div>
+            <div class="admin-card-body-flush">
+              <?php if (empty($exams)): ?>
+                <div class="admin-empty">
+                  <div class="admin-empty-icon"><i class="bi bi-inbox admin-empty-icon-lg"></i></div>
+                  <div class="admin-empty-title">No exams created yet</div>
+                  <div class="admin-empty-desc">Create your first exam to get started.</div>
+                  <button class="admin-btn admin-btn-primary" onclick="document.getElementById('tab-create').click()"><i class="bi bi-plus-circle"></i> Create Exam</button>
+                </div>
+              <?php else: ?>
+                <div class="table-responsive">
+                  <table class="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Exam Name</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Students</th>
+                        <th>Questions</th>
+                        <th>Examiners</th>
+                        <th class="actions-cell">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <?php foreach ($exams as $exam): ?>
+                        <tr>
+                          <td><strong><?= htmlspecialchars($exam['name']) ?></strong></td>
+                          <td><?= $exam['is_active'] ? '<span class="admin-badge admin-badge-success"><i class="bi bi-check-circle"></i> Active</span>' : '<span class="admin-badge admin-badge-neutral"><i class="bi bi-pause-circle"></i> Inactive</span>' ?></td>
+                          <td><?= htmlspecialchars($exam['created_at']) ?></td>
+                          <td>
+                            <?php $student_count = isset($exam_students[$exam['id']]) ? count($exam_students[$exam['id']]) : 0; ?>
+                            <span class="admin-badge admin-badge-info"><?= $student_count ?></span>
+                            <?php if ($student_count > 0): ?>
+                              <button class="admin-btn admin-btn-sm admin-btn-outline ms-1" onclick="showStudents(<?= $exam['id'] ?>)"><i class="bi bi-eye"></i></button>
+                            <?php endif; ?>
+                          </td>
+                          <td>
+                            <?php $question_count = isset($exam_questions[$exam['id']]) ? count($exam_questions[$exam['id']]) : 0; ?>
+                            <span class="admin-badge admin-badge-warning"><?= $question_count ?></span>
+                            <?php if ($question_count > 0): ?>
+                              <button class="admin-btn admin-btn-sm admin-btn-outline ms-1" onclick="showQuestions(<?= $exam['id'] ?>)"><i class="bi bi-eye"></i></button>
+                            <?php endif; ?>
+                          </td>
+                          <td>
+                            <?php $examiner_count = isset($exam_examiners[$exam['id']]) ? count($exam_examiners[$exam['id']]) : 0; ?>
+                            <span class="admin-badge admin-badge-neutral"><?= $examiner_count ?></span>
+                            <?php if ($examiner_count > 0): ?>
+                              <button class="admin-btn admin-btn-sm admin-btn-outline ms-1" onclick="showExaminers(<?= $exam['id'] ?>)"><i class="bi bi-eye"></i></button>
+                            <?php endif; ?>
+                          </td>
+                          <td class="actions-cell">
+                            <form method="post" class="d-inline">
+                              <input type="hidden" name="exam_id" value="<?= $exam['id'] ?>">
+                              <?php if ($exam['is_active']): ?>
+                                <button type="submit" name="deactivate" class="admin-btn admin-btn-sm admin-btn-outline"><i class="bi bi-pause"></i></button>
+                              <?php else: ?>
+                                <button type="submit" name="activate" class="admin-btn admin-btn-sm admin-btn-primary"><i class="bi bi-play"></i> Activate</button>
+                              <?php endif; ?>
+                            </form>
+                            <button class="admin-btn admin-btn-sm admin-btn-outline" onclick="editExam(<?= $exam['id'] ?>, '<?= addslashes($exam['name']) ?>', <?= $exam['is_active'] ?>, <?= $exam['is_strict'] ?>, <?= $exam['proctor_fullscreen'] ?>, <?= $exam['proctor_tab_lock'] ?>, <?= $exam['proctor_kb_lock'] ?>, <?= $exam['proctor_auto_submit'] ?>, <?= $exam['proctor_browser_check'] ?>, <?= $exam['proctor_webcam'] ?>, <?= $exam['proctor_live_video'] ?? 0 ?>, '<?= $exam['start_time'] ? date('Y-m-d\TH:i', strtotime($exam['start_time'])) : '' ?>', '<?= $exam['end_time'] ? date('Y-m-d\TH:i', strtotime($exam['end_time'])) : '' ?>', <?= $exam['session_id'] ?? 0 ?>)"><i class="bi bi-pencil"></i> Edit</button>
+                            <form method="post" class="d-inline" data-swal="Are you sure you want to delete this exam? This will remove all associated data.">
+                              <input type="hidden" name="exam_id" value="<?= $exam['id'] ?>">
+                              <button type="submit" name="delete_exam" class="admin-btn admin-btn-sm admin-btn-danger"><i class="bi bi-trash"></i> Delete</button>
+                            </form>
+                          </td>
+                        </tr>
+                      <?php endforeach; ?>
+                    </tbody>
+                  </table>
+                </div>
+              <?php endif; ?>
+            </div>
+          </div>
+        </div>
 
-        <?php if (empty($exams)): ?>
-          <div class="alert alert-info">
-            <strong>No exams created yet.</strong> Start by creating your first exam using Step 1 above.
-          </div>
-        <?php else: ?>
-          <div class="table-responsive">
-            <table class="table align-middle">
-              <thead>
-                <tr>
-                  <th>Exam Name</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th>Students</th>
-                  <th>Questions</th>
-                  <th>Examiners</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php foreach ($exams as $exam): ?>
-                  <tr>
-                    <td>
-                      <strong><?= htmlspecialchars($exam['name']) ?></strong>
-                    </td>
-                    <td>
-                      <?= $exam['is_active'] ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>' ?>
-                    </td>
-                    <td><?= htmlspecialchars($exam['created_at']) ?></td>
-                    <td>
-                      <?php
-                      $student_count = isset($exam_students[$exam['id']]) ? count($exam_students[$exam['id']]) : 0;
-                      ?>
-                      <span class="badge bg-info"><?= $student_count ?> students</span>
-                      <?php if ($student_count > 0): ?>
-                        <button class="btn btn-sm btn-outline-info ms-1"
-                          onclick="showStudents(<?= $exam['id'] ?>)">View</button>
-                      <?php endif; ?>
-                    </td>
-                    <td>
-                      <?php
-                      $question_count = isset($exam_questions[$exam['id']]) ? count($exam_questions[$exam['id']]) : 0;
-                      ?>
-                      <span class="badge bg-warning"><?= $question_count ?> questions</span>
-                      <?php if ($question_count > 0): ?>
-                        <button class="btn btn-sm btn-outline-warning ms-1"
-                          onclick="showQuestions(<?= $exam['id'] ?>)">View</button>
-                      <?php endif; ?>
-                    </td>
-                    <td>
-                      <?php
-                      $examiner_count = isset($exam_examiners[$exam['id']]) ? count($exam_examiners[$exam['id']]) : 0;
-                      ?>
-                      <span class="badge bg-secondary"><?= $examiner_count ?> examiners</span>
-                      <?php if ($examiner_count > 0): ?>
-                        <button class="btn btn-sm btn-outline-secondary ms-1"
-                          onclick="showExaminers(<?= $exam['id'] ?>)">View</button>
-                      <?php endif; ?>
-                    </td>
-                    <td>
-                      <div class="btn-group" role="group">
-                        <form method="post" class="d-inline">
-                          <input type="hidden" name="exam_id" value="<?= $exam['id'] ?>">
-                          <?php if ($exam['is_active']): ?>
-                            <button type="submit" name="deactivate" class="btn btn-warning btn-sm">Deactivate</button>
-                          <?php else: ?>
-                            <button type="submit" name="activate" class="btn btn-success btn-sm">Activate</button>
-                          <?php endif; ?>
-                        </form>
-                        <button class="btn btn-info btn-sm"
-                          onclick="editExam(<?= $exam['id'] ?>, '<?= addslashes($exam['name']) ?>', <?= $exam['is_active'] ?>, <?= $exam['is_strict'] ?>, <?= $exam['proctor_fullscreen'] ?>, <?= $exam['proctor_tab_lock'] ?>, <?= $exam['proctor_kb_lock'] ?>, <?= $exam['proctor_auto_submit'] ?>, <?= $exam['proctor_browser_check'] ?>, <?= $exam['proctor_webcam'] ?>, <?= $exam['proctor_live_video'] ?? 0 ?>, '<?= $exam['start_time'] ? date('Y-m-d\TH:i', strtotime($exam['start_time'])) : '' ?>', '<?= $exam['end_time'] ? date('Y-m-d\TH:i', strtotime($exam['end_time'])) : '' ?>', <?= $exam['session_id'] ?? 0 ?>)">Edit</button>
-                        <form method="post" class="d-inline"
-                          onsubmit="return confirm('Are you sure you want to delete this exam? This will remove all associated data.')">
-                          <input type="hidden" name="exam_id" value="<?= $exam['id'] ?>">
-                          <button type="submit" name="delete_exam" class="btn btn-danger btn-sm">Delete</button>
-                        </form>
-                      </div>
-                    </td>
-                  </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
-          </div>
-        <?php endif; ?>
       </div>
     </div>
   </div>
 
   <!-- Edit Exam Modal -->
   <div class="modal fade" id="editExamModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">Edit Exam</h5>
@@ -602,88 +766,60 @@ foreach ($exams as $exam) {
         <form method="post">
           <div class="modal-body">
             <input type="hidden" name="exam_id" id="edit_exam_id">
-            <div class="mb-3">
-              <label for="edit_session_id" class="form-label">Academic Session</label>
-              <select name="session_id" id="edit_session_id" class="form-select" required>
+            <div class="admin-form-group">
+              <label for="edit_session_id" class="admin-form-label">Academic Session</label>
+              <select name="session_id" id="edit_session_id" class="admin-input admin-select" required>
                 <?php foreach ($sessions as $s): ?>
                   <option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['session_name']) ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
-            <div class="mb-3">
-              <label for="edit_exam_name" class="form-label">Exam Name</label>
-              <input type="text" class="form-control" id="edit_exam_name" name="exam_name" required>
+            <div class="admin-form-group">
+              <label for="edit_exam_name" class="admin-form-label">Exam Name</label>
+              <input type="text" class="admin-input" id="edit_exam_name" name="exam_name" required>
             </div>
-            <div class="mb-3">
-              <label for="edit_is_active" class="form-label">Status</label>
-              <select name="is_active" id="edit_is_active" class="form-select">
+            <div class="admin-form-group">
+              <label for="edit_is_active" class="admin-form-label">Status</label>
+              <select name="is_active" id="edit_is_active" class="admin-input admin-select">
                 <option value="0">Inactive</option>
                 <option value="1">Active</option>
               </select>
             </div>
             <div class="row">
-              <div class="col-6 mb-3">
-                <label for="edit_start_time" class="form-label">Start Time</label>
-                <input type="datetime-local" class="form-control" id="edit_start_time" name="start_time">
+              <div class="col-6">
+                <div class="admin-form-group">
+                  <label for="edit_start_time" class="admin-form-label">Start Time</label>
+                  <input type="datetime-local" class="admin-input" id="edit_start_time" name="start_time">
+                </div>
               </div>
-              <div class="col-6 mb-3">
-                <label for="edit_end_time" class="form-label">End Time</label>
-                <input type="datetime-local" class="form-control" id="edit_end_time" name="end_time">
+              <div class="col-6">
+                <div class="admin-form-group">
+                  <label for="edit_end_time" class="admin-form-label">End Time</label>
+                  <input type="datetime-local" class="admin-input" id="edit_end_time" name="end_time">
+                </div>
               </div>
             </div>
-            <div class="mb-3">
-              <label for="edit_is_strict" class="form-label font-monospace" style="font-size: 0.8rem;">Master Toggle
-                (Strict Mode)</label>
-              <select name="is_strict" id="edit_is_strict" class="form-select mb-3">
+            <div class="admin-form-group">
+              <label for="edit_is_strict" class="admin-form-label">Master Toggle (Strict Mode)</label>
+              <select name="is_strict" id="edit_is_strict" class="admin-input admin-select mb-3">
                 <option value="1">Enabled</option>
                 <option value="0">Disabled</option>
               </select>
-
-              <div class="p-3 bg-light rounded-4 border">
-                <div class="fw-bold mb-2 small text-muted">Proctoring Layers</div>
-                <div class="row g-2">
-                  <div class="col-6">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" name="proctor_fullscreen" id="edit_pfs">
-                      <label class="form-check-label small" for="edit_pfs">Fullscreen</label>
-                    </div>
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" name="proctor_tab_lock" id="edit_ptab">
-                      <label class="form-check-label small" for="edit_ptab">Tab/Focus Lock</label>
-                    </div>
-                  </div>
-                  <div class="col-6">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" name="proctor_kb_lock" id="edit_pkb">
-                      <label class="form-check-label small" for="edit_pkb">Keyboard Lock</label>
-                    </div>
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" name="proctor_auto_submit" id="edit_pauto">
-                      <label class="form-check-label small" for="edit_pauto">Auto Submit</label>
-                    </div>
-                  </div>
-                  <div class="col-12">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" name="proctor_browser_check" id="edit_pbc">
-                      <label class="form-check-label small" for="edit_pbc">Browser Integrity Check</label>
-                    </div>
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" name="proctor_webcam" id="edit_pwc">
-                      <label class="form-check-label small" for="edit_pwc">Webcam Monitor</label>
-                    </div>
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" name="proctor_live_video" id="edit_plive">
-                      <label class="form-check-label small text-danger fw-bold" for="edit_plive">Live Video
-                        Stream</label>
-                    </div>
-                  </div>
-                </div>
+              <div class="admin-checkbox-group">
+                <div class="fw-semibold mb-2 w-100 text-muted small text-uppercase">Proctoring Layers</div>
+                <label class="admin-checkbox"><input type="checkbox" name="proctor_fullscreen" id="edit_pfs"> Fullscreen</label>
+                <label class="admin-checkbox"><input type="checkbox" name="proctor_tab_lock" id="edit_ptab"> Tab/Focus Lock</label>
+                <label class="admin-checkbox"><input type="checkbox" name="proctor_kb_lock" id="edit_pkb"> Keyboard Lock</label>
+                <label class="admin-checkbox"><input type="checkbox" name="proctor_auto_submit" id="edit_pauto"> Auto Submit</label>
+                <label class="admin-checkbox"><input type="checkbox" name="proctor_browser_check" id="edit_pbc"> Browser Check</label>
+                <label class="admin-checkbox"><input type="checkbox" name="proctor_webcam" id="edit_pwc"> Webcam Monitor</label>
+                <label class="admin-checkbox text-danger fw-semibold"><input type="checkbox" name="proctor_live_video" id="edit_plive"> Live Video Stream</label>
               </div>
             </div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" name="edit_exam" class="btn btn-primary">Update Exam</button>
+            <button type="button" class="admin-btn admin-btn-outline" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" name="edit_exam" class="admin-btn admin-btn-primary"><i class="bi bi-check-lg"></i> Update Exam</button>
           </div>
         </form>
       </div>
@@ -698,9 +834,7 @@ foreach ($exams as $exam) {
           <h5 class="modal-title">Students in Exam</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-        <div class="modal-body" id="studentsModalBody">
-          <!-- Content will be loaded here -->
-        </div>
+        <div class="modal-body" id="studentsModalBody"></div>
       </div>
     </div>
   </div>
@@ -713,9 +847,7 @@ foreach ($exams as $exam) {
           <h5 class="modal-title">Questions in Exam</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-        <div class="modal-body" id="questionsModalBody">
-          <!-- Content will be loaded here -->
-        </div>
+        <div class="modal-body" id="questionsModalBody"></div>
       </div>
     </div>
   </div>
@@ -728,9 +860,7 @@ foreach ($exams as $exam) {
           <h5 class="modal-title">Examiners in Exam</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-        <div class="modal-body" id="examinersModalBody">
-          <!-- Content will be loaded here -->
-        </div>
+        <div class="modal-body" id="examinersModalBody"></div>
       </div>
     </div>
   </div>
@@ -738,30 +868,65 @@ foreach ($exams as $exam) {
   <?php include 'footer.php'; ?>
 
   <script src="assets/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/admin-common.js"></script>
+  <script src="assets/js/admin-swal.js"></script>
   <script>
-    // Sidebar toggle
-    const sidebar = document.getElementById('sidebarMenu');
-    const sidebarBackdrop = document.getElementById('sidebarBackdrop');
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    if (sidebarToggle) {
-      sidebarToggle.onclick = function () {
-        sidebar.classList.toggle('show');
-        sidebarBackdrop.classList.toggle('show');
-      };
-      sidebarBackdrop.onclick = function () {
-        sidebar.classList.remove('show');
-        sidebarBackdrop.classList.remove('show');
-      };
+    // ── Tab persistence: remember last active tab across reloads ──
+    document.addEventListener('DOMContentLoaded', function() {
+      var tabs = document.querySelectorAll('#examTabs .nav-link');
+      var stored = sessionStorage.getItem('admin_exams_tab');
+
+      <?php if (isset($_GET['exam_id'])): ?>
+      stored = 'tab-examiners';
+      <?php elseif (isset($_GET['tab'])): ?>
+      stored = 'tab-<?= preg_replace('/[^a-z0-9_-]/', '', $_GET['tab']) ?>';
+      <?php endif; ?>
+
+      if (stored) {
+        var target = document.getElementById(stored);
+        if (target) {
+          target.click();
+        } else {
+          sessionStorage.removeItem('admin_exams_tab');
+        }
+      }
+
+      tabs.forEach(function(tab) {
+        tab.addEventListener('shown.bs.tab', function() {
+          sessionStorage.setItem('admin_exams_tab', this.id);
+        });
+      });
+
+      <?php if (isset($_GET['exam_id'])): ?>
+      var examSelect = document.getElementById('exam_id_examiners');
+      if (examSelect) examSelect.value = '<?= (int)$_GET['exam_id'] ?>';
+      <?php endif; ?>
+
+      // ── Inject current tab into every form submit ──
+      document.querySelectorAll('.admin-content form').forEach(function(form) {
+        form.addEventListener('submit', function() {
+          var activeTab = document.querySelector('#examTabs .nav-link.active');
+          if (activeTab) {
+            var h = document.createElement('input');
+            h.type = 'hidden';
+            h.name = 'current_tab';
+            h.value = activeTab.id;
+            this.appendChild(h);
+          }
+        });
+      });
+    });
+    function switchTab(tabId) {
+      var tab = document.getElementById(tabId);
+      if (tab) tab.click();
     }
 
-    // Edit exam function
     function editExam(examId, examName, isActive, isStrict, pfs, ptab, pkb, pauto, pbc, pwc, plive, startTime, endTime, sessionId) {
       document.getElementById('edit_exam_id').value = examId;
       document.getElementById('edit_exam_name').value = examName;
       document.getElementById('edit_is_active').value = isActive ? '1' : '0';
       document.getElementById('edit_is_strict').value = isStrict ? '1' : '0';
       document.getElementById('edit_session_id').value = sessionId;
-
       document.getElementById('edit_pfs').checked = pfs == 1;
       document.getElementById('edit_ptab').checked = ptab == 1;
       document.getElementById('edit_pkb').checked = pkb == 1;
@@ -771,125 +936,97 @@ foreach ($exams as $exam) {
       document.getElementById('edit_plive').checked = plive == 1;
       document.getElementById('edit_start_time').value = startTime || '';
       document.getElementById('edit_end_time').value = endTime || '';
+      new bootstrap.Modal(document.getElementById('editExamModal')).show();
     }
 
-    // Show students in modal
     function showStudents(examId) {
-      const students = <?= json_encode($exam_students) ?>;
-      const allStudents = <?= json_encode($students) ?>;
-      const examStudents = students[examId] || [];
-
-      let html = '<div class="table-responsive"><table class="table"><thead><tr><th>Name</th><th>Matric No</th><th>Username</th><th>Action</th></tr></thead><tbody>';
-
-      examStudents.forEach(studentId => {
-        const student = allStudents.find(s => s.id == studentId);
+      var students = <?= json_encode($exam_students) ?>;
+      var allStudents = <?= json_encode($students) ?>;
+      var examStudents = students[examId] || [];
+      var html = '<div class="table-responsive"><table class="admin-table"><thead><tr><th>Name</th><th>Matric No</th><th>Username</th><th class="actions-cell">Action</th></tr></thead><tbody>';
+      examStudents.forEach(function(studentId) {
+        var student = allStudents.find(function(s) { return s.id == studentId; });
         if (student) {
-          html += `<tr>
-            <td>${student.name}</td>
-            <td>${student.matric_no}</td>
-            <td>${student.username}</td>
-            <td>
-              <form method="post" class="d-inline" onsubmit="return confirm('Remove this student from the exam?')">
-                <input type="hidden" name="exam_id" value="${examId}">
-                <input type="hidden" name="student_id" value="${studentId}">
-                <button type="submit" name="remove_student" class="btn btn-sm btn-outline-danger">Remove</button>
-              </form>
-            </td>
-          </tr>`;
+          html += '<tr><td>' + student.name + '</td><td>' + student.matric_no + '</td><td>' + student.username + '</td><td class="actions-cell"><form method="post" class="d-inline" data-swal="Remove this student from the exam?"><input type="hidden" name="exam_id" value="' + examId + '"><input type="hidden" name="student_id" value="' + studentId + '"><button type="submit" name="remove_student" class="admin-btn admin-btn-sm admin-btn-danger"><i class="bi bi-trash"></i> Remove</button></form></td></tr>';
         }
       });
-
       html += '</tbody></table></div>';
-
-      if (examStudents.length === 0) {
-        html = '<div class="alert alert-info">No students assigned to this exam yet.</div>';
-      }
-
+      if (examStudents.length === 0) html = '<div class="admin-empty"><div class="admin-empty-icon"><i class="bi bi-people admin-empty-icon-lg"></i></div><div class="admin-empty-title">No students assigned</div></div>';
       document.getElementById('studentsModalBody').innerHTML = html;
       new bootstrap.Modal(document.getElementById('studentsModal')).show();
     }
 
-    // Show questions in modal
     function showQuestions(examId) {
-      const questions = <?= json_encode($exam_questions) ?>;
-      const examQuestions = questions[examId] || [];
-
-      let html = '<div class="table-responsive"><table class="table"><thead><tr><th>Question</th><th>Score Values</th><th>Action</th></tr></thead><tbody>';
-
-      examQuestions.forEach(question => {
-        html += `<tr>
-          <td>${question.text}</td>
-          <td><code>${question.score_values}</code></td>
-          <td>
-            <form method="post" class="d-inline" onsubmit="return confirm('Remove this question from the exam?')">
-              <input type="hidden" name="exam_id" value="${examId}">
-              <input type="hidden" name="question_id" value="${question.id}">
-              <button type="submit" name="remove_question" class="btn btn-sm btn-outline-danger">Remove</button>
-            </form>
-          </td>
-        </tr>`;
+      var questions = <?= json_encode($exam_questions) ?>;
+      var examQuestions = questions[examId] || [];
+      var html = '<div class="table-responsive"><table class="admin-table"><thead><tr><th>Question</th><th>Score Values</th><th class="actions-cell">Action</th></tr></thead><tbody>';
+      examQuestions.forEach(function(question) {
+        html += '<tr><td>' + question.text + '</td><td><code>' + question.score_values + '</code></td><td class="actions-cell"><form method="post" class="d-inline" data-swal="Remove this question from the exam?"><input type="hidden" name="exam_id" value="' + examId + '"><input type="hidden" name="question_id" value="' + question.id + '"><button type="submit" name="remove_question" class="admin-btn admin-btn-sm admin-btn-danger"><i class="bi bi-trash"></i> Remove</button></form></td></tr>';
       });
-
       html += '</tbody></table></div>';
-
-      if (examQuestions.length === 0) {
-        html = '<div class="alert alert-info">No questions assigned to this exam yet.</div>';
-      }
-
+      if (examQuestions.length === 0) html = '<div class="admin-empty"><div class="admin-empty-icon"><i class="bi bi-question-circle admin-empty-icon-lg"></i></div><div class="admin-empty-title">No questions assigned</div></div>';
       document.getElementById('questionsModalBody').innerHTML = html;
       new bootstrap.Modal(document.getElementById('questionsModal')).show();
     }
 
-    // Show examiners in modal
     function showExaminers(examId) {
-      const examiners = <?= json_encode($examiners) ?>;
-      const examExaminers = <?= json_encode($exam_examiners) ?>[examId] || [];
-
-      let html = '<div class="table-responsive"><table class="table"><thead><tr><th>Examiner</th><th>Action</th></tr></thead><tbody>';
-
-      examExaminers.forEach(examinerId => {
-        const examiner = examiners.find(e => e.id == examinerId);
+      var examiners = <?= json_encode($examiners) ?>;
+      var examExaminers = <?= json_encode($exam_examiners) ?>[examId] || [];
+      var html = '<div class="table-responsive"><table class="admin-table"><thead><tr><th>Examiner</th><th class="actions-cell">Action</th></tr></thead><tbody>';
+      examExaminers.forEach(function(examinerId) {
+        var examiner = examiners.find(function(e) { return e.id == examinerId; });
         if (examiner) {
-          html += `<tr>
-            <td>${examiner.name}</td>
-            <td>
-              <form method="post" class="d-inline" onsubmit="return confirm('Remove this examiner from the exam?')">
-                <input type="hidden" name="exam_id" value="${examId}">
-                <input type="hidden" name="examiner_id" value="${examinerId}">
-                <button type="submit" name="remove_examiner" class="btn btn-sm btn-outline-danger">Remove</button>
-              </form>
-            </td>
-          </tr>`;
+          html += '<tr><td>' + examiner.name + '</td><td class="actions-cell"><form method="post" class="d-inline" data-swal="Remove this examiner from the exam?"><input type="hidden" name="exam_id" value="' + examId + '"><input type="hidden" name="examiner_id" value="' + examinerId + '"><button type="submit" name="remove_examiner" class="admin-btn admin-btn-sm admin-btn-danger"><i class="bi bi-trash"></i> Remove</button></form></td></tr>';
         }
       });
-
       html += '</tbody></table></div>';
-
-      if (examExaminers.length === 0) {
-        html = '<div class="alert alert-info">No examiners assigned to this exam yet.</div>';
-      }
-
+      if (examExaminers.length === 0) html = '<div class="admin-empty"><div class="admin-empty-icon"><i class="bi bi-person-badge admin-empty-icon-lg"></i></div><div class="admin-empty-title">No examiners assigned</div></div>';
       document.getElementById('examinersModalBody').innerHTML = html;
       new bootstrap.Modal(document.getElementById('examinersModal')).show();
     }
   </script>
-<!-- sweetalert_custom_injected_v1 -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Override global alert
-        window.alert = function(msg) {
-            Swal.fire({
-                title: 'Message',
-                text: msg,
-                icon: 'info',
-                confirmButtonColor: '#092c19'
-            });
-        };
-
-        // Intercept inline onsubmit confirms
-        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
-            let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
+  <script>
+        document.querySelectorAll('form[onsubmit*="return confirm"], form[data-swal]').forEach(function(el) {
+            let match = el.getAttribute('onsubmit') ? el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/) : null;
+            if (!match && el.hasAttribute('data-swal')) {
+                let msg = el.getAttribute('data-swal');
+                el.removeAttribute('data-swal');
+                el.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: msg,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#092c19',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes, proceed'
+                    }).then((result) => {
+                        if(result.isConfirmed) {
+                            let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover')
+                                      || el.querySelector('button[type="submit"], input[type="submit"]');
+                            if(btn && btn.name) {
+                                let hidden = document.createElement('input');
+                                hidden.type = 'hidden';
+                                hidden.name = btn.name;
+                                hidden.value = btn.value || '1';
+                                el.appendChild(hidden);
+                            }
+                            var activeTab = document.querySelector('#examTabs .nav-link.active');
+                            if (activeTab && !el.querySelector('input[name="current_tab"]')) {
+                                var th = document.createElement('input');
+                                th.type = 'hidden'; th.name = 'current_tab'; th.value = activeTab.id;
+                                el.appendChild(th);
+                            }
+                            HTMLFormElement.prototype.submit.call(el);
+                        }
+                    });
+                });
+                return;
+            }
+            if(!match) return;
+            let msg = match[1];
+            el.removeAttribute('onsubmit');
             if(match) {
                 let msg = match[1];
                 el.removeAttribute('onsubmit');
@@ -913,6 +1050,13 @@ foreach ($exams as $exam) {
                                 hidden.name = btn.name;
                                 hidden.value = btn.value || '1';
                                 el.appendChild(hidden);
+                            }
+                            // Inject current tab before native submit
+                            var activeTab = document.querySelector('#examTabs .nav-link.active');
+                            if (activeTab && !el.querySelector('input[name="current_tab"]')) {
+                                var th = document.createElement('input');
+                                th.type = 'hidden'; th.name = 'current_tab'; th.value = activeTab.id;
+                                el.appendChild(th);
                             }
                             HTMLFormElement.prototype.submit.call(el);
                         }
@@ -950,6 +1094,12 @@ foreach ($exams as $exam) {
                                         hidden.name = el.name;
                                         hidden.value = el.value || '1';
                                         el.form.appendChild(hidden);
+                                    }
+                                    var activeTab = document.querySelector('#examTabs .nav-link.active');
+                                    if (activeTab && !el.form.querySelector('input[name="current_tab"]')) {
+                                        var th = document.createElement('input');
+                                        th.type = 'hidden'; th.name = 'current_tab'; th.value = activeTab.id;
+                                        el.form.appendChild(th);
                                     }
                                     HTMLFormElement.prototype.submit.call(el.form);
                                 }

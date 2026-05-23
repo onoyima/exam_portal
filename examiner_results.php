@@ -3,22 +3,19 @@ require 'auth.php';
 check_auth('examiner');
 require 'db.php';
 $name = $_SESSION['user'] ?? 'Examiner';
-// Get examiner id
-$examiner = $db->prepare("SELECT id FROM examiners WHERE username=?");
+$back_url = 'assess';
+$examiner = $db->prepare("SELECT id FROM examiners WHERE username=? AND deleted_at IS NULL");
 $examiner->execute([$_SESSION['user']]);
 $examiner_id = $examiner->fetchColumn();
-// Get only active exams assigned to this examiner
-$exams = $db->prepare("SELECT e.* FROM exams e JOIN exam_examiners ee ON e.id=ee.exam_id WHERE ee.examiner_id=? AND e.is_active=1 ORDER BY e.created_at DESC");
+$exams = $db->prepare("SELECT e.* FROM exams e JOIN exam_examiners ee ON e.id=ee.exam_id WHERE ee.examiner_id=? AND e.is_active=1 AND e.deleted_at IS NULL ORDER BY e.created_at DESC");
 $exams->execute([$examiner_id]);
 $exams = $exams->fetchAll(PDO::FETCH_ASSOC);
-// For each exam, get students and their scores
 $exam_students = [];
 foreach ($exams as $exam) {
-  $students = $db->prepare("SELECT s.* FROM students s JOIN exam_students es ON s.id=es.student_id WHERE es.exam_id=? ORDER BY s.name");
+  $students = $db->prepare("SELECT s.* FROM students s JOIN exam_students es ON s.id=es.student_id WHERE es.exam_id=? AND s.deleted_at IS NULL ORDER BY s.name");
   $students->execute([$exam['id']]);
   $exam_students[$exam['id']] = $students->fetchAll(PDO::FETCH_ASSOC);
 }
-// For each student in each exam, get their scores
 $scores = [];
 foreach ($exams as $exam) {
   foreach ($exam_students[$exam['id']] as $stu) {
@@ -30,100 +27,114 @@ foreach ($exams as $exam) {
 ?>
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <title>Examiner Results - Assessment Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
+  <link href="assets/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
-  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
-
 <body>
-  <div class="exam-sidebar d-flex flex-column p-3" id="examSidebar">
-    <h4 class="fw-bold mb-4 text-center">Examiner Panel</h4>
-    <ul class="nav nav-pills flex-column mb-auto">
-      <li><a href="assess" class="nav-link">Assessment Dashboard</a></li>
-      <li><a href="examiner_results" class="nav-link active">View Results</a></li>
-      <li><a href="chat" class="nav-link">Chat</a></li>
-      <li><a href="logout" class="nav-link text-danger">Logout</a></li>
-    </ul>
-
-    <!-- System Status -->
-    <div class="mt-auto pt-3 border-top">
-      <div class="small text-muted">
-        <div class="d-flex align-items-center mb-1">
-          <span class="status-dot online me-2"></span>
-          System Online
-        </div>
-        <div class="d-flex align-items-center">
-          <span class="status-dot online me-2"></span>
-          Database Connected
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
-
+  <?php include 'examiner_sidebar.php'; ?>
   <div class="main-content">
-    <nav class="navbar navbar-light bg-white shadow-sm mb-4">
-      <div class="container-fluid d-flex justify-content-between align-items-center">
-        <div class="d-flex align-items-center gap-2">
-          <button class="btn btn-outline-primary d-lg-none me-2" id="sidebarToggle"><span
-              class="navbar-toggler-icon"></span></button>
-          <a href="assess" class="btn btn-outline-secondary me-2">&larr; Back</a>
-          <span class="navbar-brand fw-bold">Examiner Results</span>
+    <nav class="admin-navbar">
+      <div class="admin-navbar-inner">
+        <div class="admin-navbar-start">
+          <button class="admin-navbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
+            <i class="bi bi-list"></i>
+          </button>
+          <a href="<?= $back_url ?>" class="admin-back-btn" aria-label="Go back">
+            <i class="bi bi-arrow-left"></i>
+          </a>
+          <h1 class="admin-navbar-title">Examiner Results</h1>
         </div>
-        <div class="d-flex align-items-center gap-2">
-          <span class="profile-icon"><?= strtoupper(substr($name, 0, 1)) ?></span>
-          <span class="fw-semibold"><?= htmlspecialchars($name) ?></span>
-          <a href="logout" class="btn btn-outline-danger ms-2">Logout</a>
+        <div class="admin-navbar-end">
+          <div class="admin-user-badge">
+            <span class="admin-user-avatar"><?= strtoupper(substr($name, 0, 1)) ?></span>
+            <span class="admin-user-name"><?= htmlspecialchars($name) ?></span>
+          </div>
+          <a href="logout" class="admin-logout-btn" title="Logout">
+            <i class="bi bi-box-arrow-right"></i>
+          </a>
         </div>
       </div>
     </nav>
 
-    <div class="container-xl">
-      <div class="card p-4 shadow-sm mb-4">
-        <h4 class="mb-3">Assigned Exams & Results</h4>
-        <?php if (empty($exams)): ?>
-          <div class="alert alert-warning">No exams assigned to you.</div>
-        <?php else: ?>
-          <?php foreach ($exams as $exam): ?>
-            <div class="mb-4">
-              <h5 class="fw-bold text-primary mb-2"><?= htmlspecialchars($exam['name']) ?>
-                <?= $exam['is_active'] ? '<span class=\'badge bg-success ms-1\'>Active</span>' : '<span class=\'badge bg-secondary ms-1\'>Inactive</span>' ?>
-              </h5>
-              <?php if (empty($exam_students[$exam['id']])): ?>
-                <div class="alert alert-info">No students assigned to this exam.</div>
+    <div class="admin-content">
+      <nav class="admin-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="assess"><i class="bi bi-house"></i></a></li>
+          <li class="sep">/</li>
+          <li class="current" aria-current="page">Results</li>
+        </ol>
+      </nav>
+
+      <div class="admin-page-header">
+        <h2 class="admin-page-title"><i class="bi bi-clipboard-data"></i> Assigned Exams & Results</h2>
+      </div>
+
+      <?php if (empty($exams)): ?>
+        <div class="admin-card">
+          <div class="admin-card-body">
+            <div class="admin-empty">
+              <div class="admin-empty-icon"><i class="bi bi-inbox"></i></div>
+              <div class="admin-empty-title">No exams assigned</div>
+              <div class="admin-empty-desc">You have no active exams assigned to you yet.</div>
+            </div>
+          </div>
+        </div>
+      <?php else: ?>
+        <?php foreach ($exams as $exam): ?>
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <h3 class="admin-card-title">
+                <i class="bi bi-journal-check"></i> <?= htmlspecialchars($exam['name']) ?>
+              </h3>
+              <?php if ($exam['is_active']): ?>
+                <span class="admin-badge admin-badge-success"><i class="bi bi-circle-fill badge-xs"></i> Active</span>
               <?php else: ?>
+                <span class="admin-badge admin-badge-neutral">Inactive</span>
+              <?php endif; ?>
+            </div>
+            <?php if (empty($exam_students[$exam['id']])): ?>
+              <div class="admin-card-body">
+                <div class="admin-empty-sm">
+                  <i class="bi bi-people"></i>
+                  <div>No students assigned to this exam.</div>
+                </div>
+              </div>
+            <?php else: ?>
+              <div class="admin-card-body-flush">
                 <div class="table-responsive">
-                  <table class="table align-middle table-bordered">
+                  <table class="admin-table mb-0">
                     <thead>
                       <tr>
                         <th>Student</th>
                         <th>Matric No</th>
                         <th>Scores</th>
-                        <th>Total Score</th>
+                        <th class="text-center">Total</th>
                       </tr>
                     </thead>
                     <tbody>
                       <?php foreach ($exam_students[$exam['id']] as $stu): ?>
                         <tr>
-                          <td><?= htmlspecialchars($stu['name']) ?></td>
-                          <td><?= htmlspecialchars($stu['matric_no']) ?></td>
+                          <td class="fw-medium"><?= htmlspecialchars($stu['name']) ?></td>
+                          <td class="text-muted small"><?= htmlspecialchars($stu['matric_no']) ?></td>
                           <td>
                             <?php if (!empty($scores[$exam['id']][$stu['id']])): ?>
-                              <ul class="mb-0">
+                              <div class="d-flex flex-wrap gap-1">
                                 <?php foreach ($scores[$exam['id']][$stu['id']] as $sc): ?>
-                                  <li><?= htmlspecialchars($sc['text']) ?>: <span
-                                      class="fw-bold text-success"><?= htmlspecialchars($sc['score']) ?></span></li>
+                                  <span class="admin-badge admin-badge-primary badge-xs">
+                                    <?= htmlspecialchars($sc['text']) ?>: <?= htmlspecialchars($sc['score']) ?>
+                                  </span>
                                 <?php endforeach; ?>
-                              </ul>
+                              </div>
                             <?php else: ?>
-                              <span class="text-muted">No scores</span>
+                              <span class="text-muted small">No scores</span>
                             <?php endif; ?>
                           </td>
-                          <td>
+                          <td class="text-center fw-bold">
                             <?php
                             $total = 0;
                             if (!empty($scores[$exam['id']][$stu['id']])) {
@@ -131,7 +142,7 @@ foreach ($exams as $exam) {
                                 $total += floatval($sc['score']);
                               }
                             }
-                            echo '<span class="fw-bold">' . $total . '</span>';
+                            echo number_format($total, 1);
                             ?>
                           </td>
                         </tr>
@@ -139,121 +150,18 @@ foreach ($exams as $exam) {
                     </tbody>
                   </table>
                 </div>
-              <?php endif; ?>
-            </div>
-          <?php endforeach; ?>
-        <?php endif; ?>
-      </div>
+              </div>
+            <?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+      <?php endif; ?>
     </div>
   </div>
 
   <?php include 'footer.php'; ?>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    const sidebar = document.getElementById('examSidebar');
-    const sidebarBackdrop = document.getElementById('sidebarBackdrop');
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    if (sidebarToggle) {
-      sidebarToggle.onclick = function () {
-        sidebar.classList.toggle('show');
-        sidebarBackdrop.classList.toggle('show');
-      };
-      sidebarBackdrop.onclick = function () {
-        sidebar.classList.remove('show');
-        sidebarBackdrop.classList.remove('show');
-      };
-    }
-  </script>
-<!-- sweetalert_custom_injected_v1 -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Override global alert
-        window.alert = function(msg) {
-            Swal.fire({
-                title: 'Message',
-                text: msg,
-                icon: 'info',
-                confirmButtonColor: '#092c19'
-            });
-        };
-
-        // Intercept inline onsubmit confirms
-        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
-            let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
-            if(match) {
-                let msg = match[1];
-                el.removeAttribute('onsubmit');
-                el.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    Swal.fire({
-                        title: 'Are you sure?',
-                        text: msg,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#092c19',
-                        cancelButtonColor: '#d33',
-                        confirmButtonText: 'Yes, proceed'
-                    }).then((result) => {
-                        if(result.isConfirmed) {
-                            let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover') 
-                                      || el.querySelector('button[type="submit"], input[type="submit"]');
-                            if(btn && btn.name) {
-                                let hidden = document.createElement('input');
-                                hidden.type = 'hidden';
-                                hidden.name = btn.name;
-                                hidden.value = btn.value || '1';
-                                el.appendChild(hidden);
-                            }
-                            HTMLFormElement.prototype.submit.call(el);
-                        }
-                    });
-                });
-            }
-        });
-
-        // Intercept inline onclick confirms for anchors
-        document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
-            let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
-            if(match) {
-                let msg = match[1];
-                el.removeAttribute('onclick');
-                el.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    Swal.fire({
-                        title: 'Are you sure?',
-                        text: msg,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#092c19',
-                        cancelButtonColor: '#d33',
-                        confirmButtonText: 'Yes, proceed'
-                    }).then((result) => {
-                        if(result.isConfirmed) {
-                            if(el.tagName === 'A' && el.href) {
-                                window.location.href = el.href;
-                            } else if(el.tagName === 'BUTTON') {
-                                // if it's a submit button inside a form
-                                if(el.type === 'submit' && el.form) {
-                                    if(el.name) {
-                                        let hidden = document.createElement('input');
-                                        hidden.type = 'hidden';
-                                        hidden.name = el.name;
-                                        hidden.value = el.value || '1';
-                                        el.form.appendChild(hidden);
-                                    }
-                                    HTMLFormElement.prototype.submit.call(el.form);
-                                }
-                            }
-                        }
-                    });
-                });
-            }
-        });
-    });
-</script>
+  <script src="assets/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/admin-common.js"></script>
+  <script src="assets/js/admin-swal.js"></script>
 </body>
-
-
 </html>

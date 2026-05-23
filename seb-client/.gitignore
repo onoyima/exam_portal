@@ -11,3 +11,7 @@ src/config.local.json
 *.log
 .DS_Store
 Thumbs.db
+Models/
+
+# Ignore large SEB build files
+downloads/seb/*.exe

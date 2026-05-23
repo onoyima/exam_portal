@@ -81,74 +81,50 @@ if (is_dir($log_dir)) {
     ];
   }
 }
+$back_url = 'admin_dashboard';
 ?>
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
+  <meta charset="UTF-8">
   <title>Audit Trail - Assessment Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="icon" href="assets/favicon.ico">
+  <link href="assets/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
-  <style>
-    .profile-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: var(--primary-color);
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 1.2rem;
-    }
-
-    .audit-entry {
-      border-left: 4px solid var(--primary-color);
-      padding-left: 1rem;
-      margin-bottom: 1rem;
-    }
-
-    .audit-entry.insert {
-      border-left-color: var(--success-color);
-    }
-
-    .audit-entry.update {
-      border-left-color: var(--warning-color);
-    }
-
-    .audit-entry.delete {
-      border-left-color: var(--danger-color);
-    }
-
-    .audit-entry.login {
-      border-left-color: var(--info-color);
-    }
-  </style>
-  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
-
 <body>
   <?php include 'admin_sidebar.php'; ?>
   <div class="main-content">
-    <nav class="navbar navbar-light bg-white shadow-sm mb-4">
-      <div class="container-fluid d-flex justify-content-between align-items-center">
-        <div class="d-flex align-items-center gap-2">
-          <button class="btn btn-outline-primary d-lg-none me-2" id="sidebarToggle"><span
-              class="navbar-toggler-icon"></span></button>
-          <a href="admin_dashboard" class="btn btn-outline-secondary me-2">Back</a>
-          <span class="navbar-brand fw-bold">Audit Trail</span>
+    <nav class="admin-navbar">
+      <div class="admin-navbar-inner">
+        <div class="admin-navbar-start">
+          <button class="admin-navbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar"><i class="bi bi-list"></i></button>
+          <?php if (isset($back_url)): ?>
+            <a href="<?= $back_url ?>" class="admin-back-btn"><i class="bi bi-arrow-left"></i></a>
+          <?php endif; ?>
+          <h1 class="admin-navbar-title">Audit Trail</h1>
         </div>
-        <div class="d-flex align-items-center gap-2">
-          <span class="profile-icon"><?= strtoupper(substr($name, 0, 1)) ?></span>
-          <span class="fw-semibold"><?= htmlspecialchars($name) ?></span>
-          <a href="logout" class="btn btn-outline-danger ms-2">Logout</a>
+        <div class="admin-navbar-end">
+          <div class="admin-user-badge">
+            <span class="admin-user-avatar"><?= strtoupper(substr($name, 0, 1)) ?></span>
+            <span class="admin-user-name"><?= htmlspecialchars($name) ?></span>
+          </div>
+          <a href="logout" class="admin-logout-btn" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
         </div>
       </div>
     </nav>
 
-    <div class="container-xl">
+    <div class="admin-content">
+      <nav class="admin-breadcrumb">
+        <ol>
+          <li><a href="admin_dashboard"><i class="bi bi-house"></i></a></li>
+          <li class="sep">/</li>
+          <li class="current" aria-current="page">Audit Trail</li>
+        </ol>
+      </nav>
+
       <!-- Statistics Cards -->
       <div class="row g-4 mb-4">
         <div class="col-6 col-lg-3">
@@ -210,162 +186,157 @@ if (is_dir($log_dir)) {
       <?php endif; ?>
 
       <!-- Audit Trail -->
-      <div class="card p-4 shadow-sm mb-4">
-        <h4 class="mb-3">Recent Audit Trail</h4>
-        <div class="table-responsive">
-          <table class="table align-middle">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>User</th>
-                <th>Type</th>
-                <th>Action</th>
-                <th>Details</th>
-                <th>IP Address</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php if (empty($audit_trail)): ?>
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <h3 class="admin-card-title"><i class="bi bi-clock-history"></i> Recent Audit Trail</h3>
+        </div>
+        <div class="admin-card-body p-0">
+          <div class="table-responsive">
+            <table class="admin-table">
+              <thead>
                 <tr>
-                  <td colspan="6" class="text-center text-muted py-4">
-                    <i class="fas fa-info-circle me-2"></i>
-                    No audit trail entries found. System activity will be logged here.
-                  </td>
+                  <th>Time</th>
+                  <th>User</th>
+                  <th>Type</th>
+                  <th>Action</th>
+                  <th>Details</th>
+                  <th>IP Address</th>
                 </tr>
-              <?php else: ?>
-                <?php foreach ($audit_trail as $entry): ?>
+              </thead>
+              <tbody>
+                <?php if (empty($audit_trail)): ?>
                   <tr>
-                    <td><?= date('M j, Y H:i', strtotime($entry['created_at'])) ?></td>
-                    <td>
-                      <span class="fw-semibold"><?= htmlspecialchars($entry['username'] ?? 'System') ?></span>
-                      <br><small class="text-muted"><?= ucfirst($entry['user_type']) ?></small>
-                    </td>
-                    <td>
-                      <span
-                        class="badge bg-<?= $entry['user_type'] == 'admin' ? 'danger' : ($entry['user_type'] == 'examiner' ? 'primary' : 'success') ?>">
-                        <?= ucfirst($entry['user_type']) ?>
-                      </span>
-                    </td>
-                    <td>
-                      <span class="fw-semibold"><?= htmlspecialchars($entry['action']) ?></span>
-                      <?php if ($entry['table_name']): ?>
-                        <br><small class="text-muted"><?= htmlspecialchars($entry['table_name']) ?></small>
-                      <?php endif; ?>
-                    </td>
-                    <td>
-                      <?php if ($entry['new_values']): ?>
-                        <button class="btn btn-sm btn-outline-info"
-                          onclick="showDetails('<?= htmlspecialchars($entry['new_values']) ?>')">
-                          View Details
-                        </button>
-                      <?php endif; ?>
-                    </td>
-                    <td>
-                      <small class="text-muted"><?= htmlspecialchars($entry['ip_address'] ?? 'N/A') ?></small>
+                    <td colspan="6" class="text-center text-muted py-4">
+                      <i class="bi bi-info-circle me-2"></i>
+                      No audit trail entries found. System activity will be logged here.
                     </td>
                   </tr>
-                <?php endforeach; ?>
-              <?php endif; ?>
-            </tbody>
-          </table>
-        </div>
+                <?php else: ?>
+                  <?php foreach ($audit_trail as $entry): ?>
+                    <tr>
+                      <td><?= date('M j, Y H:i', strtotime($entry['created_at'])) ?></td>
+                      <td>
+                        <span class="fw-semibold"><?= htmlspecialchars($entry['username'] ?? 'System') ?></span>
+                        <br><small class="text-muted"><?= ucfirst($entry['user_type']) ?></small>
+                      </td>
+                      <td>
+                        <span
+                          class="badge bg-<?= $entry['user_type'] == 'admin' ? 'danger' : ($entry['user_type'] == 'examiner' ? 'primary' : 'success') ?>">
+                          <?= ucfirst($entry['user_type']) ?>
+                        </span>
+                      </td>
+                      <td>
+                        <span class="fw-semibold"><?= htmlspecialchars($entry['action']) ?></span>
+                        <?php if ($entry['table_name']): ?>
+                          <br><small class="text-muted"><?= htmlspecialchars($entry['table_name']) ?></small>
+                        <?php endif; ?>
+                      </td>
+                      <td>
+                        <?php if ($entry['new_values']): ?>
+                          <button class="btn btn-sm btn-outline-info"
+                            onclick="showDetails('<?= htmlspecialchars($entry['new_values']) ?>')">
+                            View Details
+                          </button>
+                        <?php endif; ?>
+                      </td>
+                      <td>
+                        <small class="text-muted"><?= htmlspecialchars($entry['ip_address'] ?? 'N/A') ?></small>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                <?php endif; ?>
+              </tbody>
+            </table>
+          </div>
 
-        <!-- Pagination -->
-        <?php if ($total_pages > 1): ?>
-          <nav aria-label="Audit trail pagination">
-            <ul class="pagination justify-content-center">
-              <?php for ($i = 1; $i <= $total_pages; $i++): ?>
-                <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-                  <a class="page-link" href="?page=<?= $i ?>"><?= $i ?></a>
-                </li>
-              <?php endfor; ?>
-            </ul>
-          </nav>
-        <?php endif; ?>
+          <!-- Pagination -->
+          <?php if ($total_pages > 1): ?>
+            <div class="p-3 border-top">
+              <nav aria-label="Audit trail pagination">
+                <ul class="pagination justify-content-center mb-0">
+                  <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                    <li class="page-item <?= $i == $page ? 'active' : '' ?>">
+                      <a class="page-link" href="?page=<?= $i ?>"><?= $i ?></a>
+                    </li>
+                  <?php endfor; ?>
+                </ul>
+              </nav>
+            </div>
+          <?php endif; ?>
+        </div>
       </div>
 
       <!-- Login History -->
-      <div class="card p-4 shadow-sm">
-        <h4 class="mb-3">Recent Login History</h4>
-        <div class="table-responsive">
-          <table class="table align-middle">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>User</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>IP Address</th>
-                <th>Duration</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php if (empty($login_history)): ?>
+      <div class="admin-card mt-4">
+        <div class="admin-card-header">
+          <h3 class="admin-card-title"><i class="bi bi-door-open"></i> Recent Login History</h3>
+        </div>
+        <div class="admin-card-body p-0">
+          <div class="table-responsive">
+            <table class="admin-table">
+              <thead>
                 <tr>
-                  <td colspan="6" class="text-center text-muted py-4">
-                    <i class="fas fa-info-circle me-2"></i>
-                    No login history found. User logins will be tracked here.
-                  </td>
+                  <th>Time</th>
+                  <th>User</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>IP Address</th>
+                  <th>Duration</th>
                 </tr>
-              <?php else: ?>
-                <?php foreach ($login_history as $login): ?>
+              </thead>
+              <tbody>
+                <?php if (empty($login_history)): ?>
                   <tr>
-                    <td><?= date('M j, Y H:i', strtotime($login['login_time'])) ?></td>
-                    <td>
-                      <span class="fw-semibold"><?= htmlspecialchars($login['username']) ?></span>
-                    </td>
-                    <td>
-                      <span
-                        class="badge bg-<?= $login['user_type'] == 'admin' ? 'danger' : ($login['user_type'] == 'examiner' ? 'primary' : 'success') ?>">
-                        <?= ucfirst($login['user_type']) ?>
-                      </span>
-                    </td>
-                    <td>
-                      <span class="badge bg-<?= $login['status'] == 'success' ? 'success' : 'danger' ?>">
-                        <?= ucfirst($login['status']) ?>
-                      </span>
-                    </td>
-                    <td>
-                      <small class="text-muted"><?= htmlspecialchars($login['ip_address'] ?? 'N/A') ?></small>
-                    </td>
-                    <td>
-                      <?php if ($login['logout_time']): ?>
-                        <?php
-                        $duration = strtotime($login['logout_time']) - strtotime($login['login_time']);
-                        $hours = floor($duration / 3600);
-                        $minutes = floor(($duration % 3600) / 60);
-                        echo "{$hours}h {$minutes}m";
-                        ?>
-                      <?php else: ?>
-                        <span class="badge bg-warning">Active</span>
-                      <?php endif; ?>
+                    <td colspan="6" class="text-center text-muted py-4">
+                      <i class="bi bi-info-circle me-2"></i>
+                      No login history found. User logins will be tracked here.
                     </td>
                   </tr>
-                <?php endforeach; ?>
-              <?php endif; ?>
-            </tbody>
-          </table>
+                <?php else: ?>
+                  <?php foreach ($login_history as $login): ?>
+                    <tr>
+                      <td><?= date('M j, Y H:i', strtotime($login['login_time'])) ?></td>
+                      <td>
+                        <span class="fw-semibold"><?= htmlspecialchars($login['username']) ?></span>
+                      </td>
+                      <td>
+                        <span
+                          class="badge bg-<?= $login['user_type'] == 'admin' ? 'danger' : ($login['user_type'] == 'examiner' ? 'primary' : 'success') ?>">
+                          <?= ucfirst($login['user_type']) ?>
+                        </span>
+                      </td>
+                      <td>
+                        <span class="badge bg-<?= $login['status'] == 'success' ? 'success' : 'danger' ?>">
+                          <?= ucfirst($login['status']) ?>
+                        </span>
+                      </td>
+                      <td>
+                        <small class="text-muted"><?= htmlspecialchars($login['ip_address'] ?? 'N/A') ?></small>
+                      </td>
+                      <td>
+                        <?php if ($login['logout_time']): ?>
+                          <?php
+                          $duration = strtotime($login['logout_time']) - strtotime($login['login_time']);
+                          $hours = floor($duration / 3600);
+                          $minutes = floor(($duration % 3600) / 60);
+                          echo "{$hours}h {$minutes}m";
+                          ?>
+                        <?php else: ?>
+                          <span class="badge bg-warning">Active</span>
+                        <?php endif; ?>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                <?php endif; ?>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- WhatsApp Chat Icon -->
-  <a href="https://wa.me/+2348168438930?text=Hi%20BMXcode%20Initiator,%20I%20need%20help%20with%20the%20Assessment%20Portal"
-    class="whatsapp-chat" target="_blank" title="Contact Developer"></a>
-
-  <!-- Footer -->
-  <footer class="footer">
-    <div class="footer-content">
-      <h5>Assessment Portal</h5>
-      <p>Comprehensive student assessment and examination management system</p>
-      <div class="developer-info">
-        <p class="mb-0"><strong>Developed by:</strong> BMXcode Initiator</p>
-        <p class="mb-0"><strong>Version:</strong> 2.0 Enhanced</p>
-        <p class="mb-0"><strong>Features:</strong> Responsive Design, Audit Trail, Real-time Chat</p>
-      </div>
-    </div>
-  </footer>
+  <?php include 'footer.php'; ?>
 
   <!-- Details Modal -->
   <div class="modal fade" id="detailsModal" tabindex="-1">
@@ -382,24 +353,10 @@ if (is_dir($log_dir)) {
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/admin-common.js"></script>
+  <script src="assets/js/admin-swal.js"></script>
   <script>
-    // Sidebar toggle
-    const sidebar = document.getElementById('sidebarMenu');
-    const sidebarBackdrop = document.getElementById('sidebarBackdrop');
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    if (sidebarToggle) {
-      sidebarToggle.onclick = function () {
-        sidebar.classList.toggle('show');
-        sidebarBackdrop.classList.toggle('show');
-      };
-      sidebarBackdrop.onclick = function () {
-        sidebar.classList.remove('show');
-        sidebarBackdrop.classList.remove('show');
-      };
-    }
-
-    // Show details modal
     function showDetails(data) {
       try {
         const parsed = JSON.parse(data);
@@ -410,95 +367,5 @@ if (is_dir($log_dir)) {
       new bootstrap.Modal(document.getElementById('detailsModal')).show();
     }
   </script>
-<!-- sweetalert_custom_injected_v1 -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Override global alert
-        window.alert = function(msg) {
-            Swal.fire({
-                title: 'Message',
-                text: msg,
-                icon: 'info',
-                confirmButtonColor: '#092c19'
-            });
-        };
-
-        // Intercept inline onsubmit confirms
-        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
-            let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
-            if(match) {
-                let msg = match[1];
-                el.removeAttribute('onsubmit');
-                el.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    Swal.fire({
-                        title: 'Are you sure?',
-                        text: msg,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#092c19',
-                        cancelButtonColor: '#d33',
-                        confirmButtonText: 'Yes, proceed'
-                    }).then((result) => {
-                        if(result.isConfirmed) {
-                            let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover') 
-                                      || el.querySelector('button[type="submit"], input[type="submit"]');
-                            if(btn && btn.name) {
-                                let hidden = document.createElement('input');
-                                hidden.type = 'hidden';
-                                hidden.name = btn.name;
-                                hidden.value = btn.value || '1';
-                                el.appendChild(hidden);
-                            }
-                            HTMLFormElement.prototype.submit.call(el);
-                        }
-                    });
-                });
-            }
-        });
-
-        // Intercept inline onclick confirms for anchors
-        document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
-            let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
-            if(match) {
-                let msg = match[1];
-                el.removeAttribute('onclick');
-                el.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    Swal.fire({
-                        title: 'Are you sure?',
-                        text: msg,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#092c19',
-                        cancelButtonColor: '#d33',
-                        confirmButtonText: 'Yes, proceed'
-                    }).then((result) => {
-                        if(result.isConfirmed) {
-                            if(el.tagName === 'A' && el.href) {
-                                window.location.href = el.href;
-                            } else if(el.tagName === 'BUTTON') {
-                                // if it's a submit button inside a form
-                                if(el.type === 'submit' && el.form) {
-                                    if(el.name) {
-                                        let hidden = document.createElement('input');
-                                        hidden.type = 'hidden';
-                                        hidden.name = el.name;
-                                        hidden.value = el.value || '1';
-                                        el.form.appendChild(hidden);
-                                    }
-                                    HTMLFormElement.prototype.submit.call(el.form);
-                                }
-                            }
-                        }
-                    });
-                });
-            }
-        });
-    });
-</script>
 </body>
-
-
 </html>

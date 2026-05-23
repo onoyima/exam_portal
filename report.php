@@ -4,12 +4,14 @@ require_once 'exam_logic.php';
 require 'auth.php';
 check_auth('admin');
 
+$back_url = 'admin_dashboard';
+
 $exam_id = isset($_GET['exam_id']) ? intval($_GET['exam_id']) : 0;
 
 // Fetch current exam details if specified
 $exam_info = null;
 if ($exam_id) {
-  $stmt = $db->prepare("SELECT * FROM exams WHERE id=?");
+  $stmt = $db->prepare("SELECT * FROM exams WHERE id=? AND deleted_at IS NULL");
   $stmt->execute([$exam_id]);
   $exam_info = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -27,21 +29,21 @@ if ($exam_id && $exam_info && isset($_GET['download'])) {
     $students = $db->prepare("SELECT DISTINCT s.* FROM students s 
         JOIN exam_students es ON s.id=es.student_id 
         JOIN objective_attempts oa ON s.id = oa.student_id 
-        WHERE es.exam_id=? AND oa.exam_id=? AND oa.finished_at IS NOT NULL 
+        WHERE s.deleted_at IS NULL AND es.exam_id=? AND oa.exam_id=? AND oa.finished_at IS NOT NULL 
         ORDER BY s.name");
     $students->execute([$exam_id, $exam_id]);
   } else {
     $students = $db->prepare("SELECT DISTINCT s.* FROM students s 
         JOIN exam_students es ON s.id=es.student_id 
         JOIN answers a ON s.id = a.student_id 
-        WHERE es.exam_id=? AND a.exam_id=? 
+        WHERE s.deleted_at IS NULL AND es.exam_id=? AND a.exam_id=? 
         ORDER BY s.name");
     $students->execute([$exam_id, $exam_id]);
   }
   $students = $students->fetchAll(PDO::FETCH_ASSOC);
 
   if ($is_objective) {
-    $questions = $db->prepare("SELECT id, correct_option, mark FROM objective_questions WHERE exam_id=? ORDER BY id");
+    $questions = $db->prepare("SELECT id, correct_option, mark FROM objective_questions WHERE exam_id=? AND deleted_at IS NULL ORDER BY id");
     $questions->execute([$exam_id]);
     $questions_data = $questions->fetchAll(PDO::FETCH_ASSOC);
     $question_ids = array_column($questions_data, 'id');
@@ -159,7 +161,13 @@ if ($exam_id && $exam_info && isset($_GET['download'])) {
 }
 
 // Fetch all exams for the list view
-$exams = $db->query("SELECT * FROM exams ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+$exams = $db->query("SELECT * FROM exams WHERE deleted_at IS NULL ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+
+// Global stats
+$total_students = $db->query("SELECT COUNT(*) FROM students WHERE deleted_at IS NULL")->fetchColumn();
+$total_exams = $db->query("SELECT COUNT(*) FROM exams WHERE deleted_at IS NULL")->fetchColumn();
+$active_exams_count = $db->query("SELECT COUNT(*) FROM exams WHERE is_active=1 AND deleted_at IS NULL")->fetchColumn();
+$total_questions = $db->query("SELECT COUNT(*) FROM questions WHERE deleted_at IS NULL")->fetchColumn();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -167,159 +175,163 @@ $exams = $db->query("SELECT * FROM exams ORDER BY created_at DESC")->fetchAll(PD
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Analytics & Reports - Admin Portal</title>
+  <title>Reports & Analytics - Admin Portal</title>
+  <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
-  <style>
-    body {
-      font-family: 'Outfit', sans-serif;
-      background: #f8fafc;
-    }
-
-    .report-card {
-      border-radius: 1.5rem;
-      border: 1px solid rgba(0, 0, 0, 0.05);
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.02);
-      overflow: hidden;
-    }
-
-    .table thead th {
-      background: #f1f5f9;
-      text-transform: uppercase;
-      font-size: 0.75rem;
-      letter-spacing: 1px;
-      padding: 1rem;
-      border: none;
-    }
-
-    .stat-card {
-      background: #fff;
-      border-radius: 1.25rem;
-      padding: 1.5rem;
-      border: 1px solid rgba(0, 0, 0, 0.05);
-    }
-
-    .badge-objective {
-      background: #e8f5e9;
-      color: #198754;
-      border: 1px solid #c8e6c9;
-    }
-
-    .badge-practical {
-      background: #f0fdfa;
-      color: #0d9488;
-      border: 1px solid #99f6e4;
-    }
-
-    .badge-viva {
-      background: #fff7ed;
-      color: #ea580c;
-      border: 1px solid #ffedd5;
-    }
-  </style>
-  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>
   <?php include 'admin_sidebar.php'; ?>
 
   <div class="main-content">
-    <div class="container-xl py-5 px-4">
+    <nav class="admin-navbar">
+      <div class="admin-navbar-inner">
+        <div class="admin-navbar-start">
+          <button class="admin-navbar-toggle d-lg-none" id="sidebarToggle" aria-label="Toggle sidebar">
+            <i class="bi bi-list"></i>
+          </button>
+          <a href="<?= $back_url ?>" class="admin-back-btn" title="Back to Dashboard">
+            <i class="bi bi-arrow-left"></i>
+          </a>
+          <h1 class="admin-navbar-title">Reports & Analytics</h1>
+        </div>
+        <div class="admin-navbar-end">
+          <div class="admin-user-badge">
+            <span class="admin-user-avatar"><?= strtoupper(substr($_SESSION['user'] ?? 'A', 0, 1)) ?></span>
+            <span class="admin-user-name"><?= htmlspecialchars($_SESSION['user'] ?? 'Admin') ?></span>
+          </div>
+          <a href="logout" class="admin-logout-btn" title="Logout">
+            <i class="bi bi-box-arrow-right"></i>
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <div class="admin-content">
 
       <?php if (!$exam_id): ?>
         <!-- List View: All Exams -->
-        <div class="d-flex justify-content-between align-items-center mb-4">
-          <div>
-            <h2 class="fw-bold mb-1">Analytics Reports</h2>
-            <p class="text-muted">Select an examination to view detailed performance metrics</p>
+        <nav class="admin-breadcrumb" aria-label="Breadcrumb">
+          <ol>
+            <li><a href="admin_dashboard"><i class="bi bi-house"></i></a></li>
+            <li class="sep">/</li>
+            <li class="current" aria-current="page">Reports</li>
+          </ol>
+        </nav>
+
+        <div class="admin-page-header">
+          <h2 class="admin-page-title">Reports & Analytics</h2>
+          <div class="admin-page-actions">
+            <p class="text-muted mb-0">Select an examination to view detailed performance metrics</p>
           </div>
         </div>
 
-        <div class="card report-card bg-white">
-          <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-              <thead>
-                <tr>
-                  <th class="ps-4">Examination Name</th>
-                  <th>Type</th>
-                  <th>Enrolled</th>
-                  <th>Status</th>
-                  <th class="text-end pe-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php foreach ($exams as $ex):
-                  $stmt = $db->prepare("SELECT COUNT(*) FROM exam_students WHERE exam_id=?");
-                  $stmt->execute([$ex['id']]);
-                  $enrolled = $stmt->fetchColumn();
-                  ?>
+        <!-- Global Stats -->
+        <div class="admin-stats-row mb-4">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value"><?= $total_students ?></div>
+            <div class="admin-stat-label">Total Students</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value"><?= $total_exams ?></div>
+            <div class="admin-stat-label">Total Exams</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value admin-stat-value-success"><?= $active_exams_count ?></div>
+            <div class="admin-stat-label">Active Exams</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value"><?= $total_questions ?></div>
+            <div class="admin-stat-label">Total Questions</div>
+          </div>
+        </div>
+
+        <div class="admin-card">
+          <div class="admin-card-header">
+            <h3 class="admin-card-title"><i class="bi bi-journal-check"></i> All Examinations</h3>
+          </div>
+          <div class="admin-card-body-flush">
+            <div class="table-responsive">
+              <table class="admin-table mb-0">
+                <thead>
                   <tr>
-                    <td class="ps-4">
-                      <div class="fw-bold text-dark"><?= htmlspecialchars($ex['name']) ?></div>
-                      <div class="small text-muted"><?= date('M d, Y', strtotime($ex['created_at'])) ?></div>
-                    </td>
-                    <td>
-                      <?php
-                        $badge_class = 'badge-practical';
-                        $icon_class = 'bi-laptop';
-                        if ($ex['type'] === 'objective') {
-                            $badge_class = 'badge-objective';
-                            $icon_class = 'bi-list-check';
-                        } elseif ($ex['type'] === 'viva') {
-                            $badge_class = 'badge-viva';
-                            $icon_class = 'bi-mic';
-                        }
-                      ?>
-                      <span class="badge rounded-pill <?= $badge_class ?>">
-                        <i class="bi <?= $icon_class ?> me-1"></i>
-                        <?= ucfirst($ex['type'] ?? 'practical') ?>
-                      </span>
-                    </td>
-                    <td>
-                      <div class="fw-medium"><?= $enrolled ?> Students</div>
-                    </td>
-                    <td>
-                      <?= $ex['is_active'] ? '<span class="text-success small fw-bold"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem"></i> Active</span>' : '<span class="text-muted small fw-bold">Inactive</span>' ?>
-                    </td>
-                    <td class="text-end pe-4">
-                      <a href="report?exam_id=<?= $ex['id'] ?>" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold">
-                        View Report
-                      </a>
-                    </td>
+                    <th>Examination Name</th>
+                    <th>Type</th>
+                    <th>Enrolled</th>
+                    <th>Status</th>
+                    <th class="text-end">Actions</th>
                   </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  <?php foreach ($exams as $ex):
+                    $stmt = $db->prepare("SELECT COUNT(*) FROM exam_students WHERE exam_id=?");
+                    $stmt->execute([$ex['id']]);
+                    $enrolled = $stmt->fetchColumn();
+                    $badge_class = 'admin-badge-success';
+                    $icon_class = 'bi-laptop';
+                    if ($ex['type'] === 'objective') {
+                        $badge_class = 'admin-badge-info';
+                        $icon_class = 'bi-list-check';
+                    } elseif ($ex['type'] === 'viva') {
+                        $badge_class = 'admin-badge-warning';
+                        $icon_class = 'bi-mic';
+                    }
+                  ?>
+                    <tr>
+                      <td>
+                        <div class="fw-semibold"><?= htmlspecialchars($ex['name']) ?></div>
+                        <div class="text-muted small"><?= date('M d, Y', strtotime($ex['created_at'])) ?></div>
+                      </td>
+                      <td>
+                        <span class="admin-badge <?= $badge_class ?>">
+                          <i class="bi <?= $icon_class ?>"></i> <?= ucfirst($ex['type'] ?? 'practical') ?>
+                        </span>
+                      </td>
+                      <td>
+                        <div class="fw-medium"><?= $enrolled ?> Students</div>
+                      </td>
+                      <td>
+                        <?php if ($ex['is_active']): ?>
+                          <span class="admin-badge admin-badge-success"><i class="bi bi-circle-fill"></i> Active</span>
+                        <?php else: ?>
+                          <span class="admin-badge admin-badge-neutral">Inactive</span>
+                        <?php endif; ?>
+                      </td>
+                      <td class="text-end">
+                        <a href="report?exam_id=<?= $ex['id'] ?>" class="admin-btn admin-btn-primary admin-btn-sm">
+                          <i class="bi bi-eye"></i> View Report
+                        </a>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
       <?php else: ?>
         <!-- Detailed View: Specific Exam -->
-        <nav aria-label="breadcrumb" class="mb-4">
-          <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="report" class="text-decoration-none">Reports</a></li>
-            <li class="breadcrumb-item active"><?= htmlspecialchars($exam_info['name']) ?></li>
+        <nav class="admin-breadcrumb" aria-label="Breadcrumb">
+          <ol>
+            <li><a href="admin_dashboard"><i class="bi bi-house"></i></a></li>
+            <li class="sep">/</li>
+            <li><a href="report">Reports</a></li>
+            <li class="sep">/</li>
+            <li class="current"><?= htmlspecialchars($exam_info['name']) ?></li>
           </ol>
         </nav>
 
-        <div
-          class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-5 gap-3">
-          <div>
-            <h2 class="fw-bold mb-1"><?= htmlspecialchars($exam_info['name']) ?></h2>
-            <span
-              class="badge rounded-pill <?= $exam_info['type'] === 'objective' ? 'badge-objective' : 'badge-practical' ?> px-3 py-2">
-              Detailed Performance Breakdown
-            </span>
-          </div>
-          <div class="d-flex gap-2">
-            <a href="report?exam_id=<?= $exam_id ?>&download=1"
-              class="btn btn-success rounded-pill px-4 fw-bold shadow-sm">
-              <i class="bi bi-file-earmark-spreadsheet me-2"></i> Download CSV
+        <div class="admin-page-header">
+          <h2 class="admin-page-title"><?= htmlspecialchars($exam_info['name']) ?></h2>
+          <div class="admin-page-actions">
+            <a href="report?exam_id=<?= $exam_id ?>&download=1" class="admin-btn admin-btn-primary admin-btn-sm">
+              <i class="bi bi-file-earmark-spreadsheet"></i> Download CSV
             </a>
-            <button onclick="window.print()" class="btn btn-outline-dark rounded-pill px-4 fw-bold border-2">
-              <i class="bi bi-printer me-2"></i> Print
+            <button onclick="window.print()" class="admin-btn admin-btn-outline admin-btn-sm">
+              <i class="bi bi-printer"></i> Print / PDF
             </button>
           </div>
         </div>
@@ -331,21 +343,21 @@ $exams = $db->query("SELECT * FROM exams ORDER BY created_at DESC")->fetchAll(PD
           $students = $db->prepare("SELECT DISTINCT s.* FROM students s 
               JOIN exam_students es ON s.id=es.student_id 
               JOIN objective_attempts oa ON s.id = oa.student_id 
-              WHERE es.exam_id=? AND oa.exam_id=? AND oa.finished_at IS NOT NULL 
+              WHERE s.deleted_at IS NULL AND es.exam_id=? AND oa.exam_id=? AND oa.finished_at IS NOT NULL 
               ORDER BY s.name");
           $students->execute([$exam_id, $exam_id]);
         } else {
           $students = $db->prepare("SELECT DISTINCT s.* FROM students s 
               JOIN exam_students es ON s.id=es.student_id 
               JOIN answers a ON s.id = a.student_id 
-              WHERE es.exam_id=? AND a.exam_id=? 
+              WHERE s.deleted_at IS NULL AND es.exam_id=? AND a.exam_id=? 
               ORDER BY s.name");
           $students->execute([$exam_id, $exam_id]);
         }
         $students_list = $students->fetchAll(PDO::FETCH_ASSOC);
 
         if ($is_obj) {
-          $q_stmt = $db->prepare("SELECT id, correct_option, mark FROM objective_questions WHERE exam_id=? ORDER BY id");
+          $q_stmt = $db->prepare("SELECT id, correct_option, mark FROM objective_questions WHERE exam_id=? AND deleted_at IS NULL ORDER BY id");
           $q_stmt->execute([$exam_id]);
           $questions_meta = $q_stmt->fetchAll(PDO::FETCH_ASSOC);
           $q_ids = array_column($questions_meta, 'id');
@@ -441,180 +453,121 @@ $exams = $db->query("SELECT * FROM exams ORDER BY created_at DESC")->fetchAll(PD
           $processed_rows[] = $row;
         }
         $avg_score = count($processed_rows) > 0 ? round($total_scores_sum / count($processed_rows), 2) : 0;
+
+        // compute max possible points for bars
+        $max_possible = 0;
+        if ($is_obj && isset($exam_info['total_mark']) && $exam_info['total_mark'] > 0) {
+          $max_possible = $exam_info['total_mark'];
+        } else {
+          foreach ($q_ids as $qid) {
+            if ($is_obj) {
+              foreach ($questions_meta as $qm) {
+                if ($qm['id'] == $qid)
+                  $max_possible += ($qm['mark'] ?? 1);
+              }
+            }
+          }
+        }
+        if ($max_possible <= 0) $max_possible = 100;
         ?>
 
         <!-- Stats Overview -->
-        <div class="row g-4 mb-5">
-          <div class="col-md-4">
-            <div class="stat-card">
-              <div class="small text-muted fw-bold mb-2">PARTICIPANTS</div>
-              <div class="h3 fw-bold mb-0 text-primary"><?= count($processed_rows) ?></div>
-            </div>
+        <div class="admin-stats-row mb-4">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value"><?= count($processed_rows) ?></div>
+            <div class="admin-stat-label">Participants</div>
           </div>
-          <div class="col-md-4">
-            <div class="stat-card">
-              <div class="small text-muted fw-bold mb-2">AVERAGE SCORE</div>
-              <?php
-              $total_pts = 0;
-              if ($is_obj && isset($exam_info['total_mark']) && $exam_info['total_mark'] > 0) {
-                $total_pts = $exam_info['total_mark'];
-              } else {
-                foreach ($q_ids as $qid) {
-                  if ($is_obj) {
-                    foreach ($questions_meta as $qm) {
-                      if ($qm['id'] == $qid)
-                        $total_pts += ($qm['mark'] ?? 1);
-                    }
-                  } else {
-                    // For practical exams, it's harder to get total possible here without more queries
-                    // but we can at least show the points.
-                  }
-                }
-              }
-              ?>
-              <div class="h3 fw-bold mb-0 text-success"><?= $avg_score ?> <small class="text-muted fs-6">/
-                  <?= $total_pts > 0 ? $total_pts : 'pts' ?></small></div>
-            </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value admin-stat-value-success"><?= $avg_score ?></div>
+            <div class="admin-stat-label">Average Score</div>
           </div>
-          <div class="col-md-4">
-            <div class="stat-card">
-              <div class="small text-muted fw-bold mb-2">TOTAL QUESTIONS</div>
-              <div class="h3 fw-bold mb-0 text-dark"><?= count($q_ids) ?></div>
-            </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value"><?= count($q_ids) ?></div>
+            <div class="admin-stat-label">Total Questions</div>
+          </div>
+          <?php
+          // Enrolled count
+          $enr_stmt = $db->prepare("SELECT COUNT(*) FROM exam_students WHERE exam_id=?");
+          $enr_stmt->execute([$exam_id]);
+          $enrolled_count = $enr_stmt->fetchColumn();
+          $submission_rate = $enrolled_count > 0 ? round((count($processed_rows) / $enrolled_count) * 100, 1) : 0;
+          ?>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value admin-stat-value-sm"><?= $submission_rate ?>%</div>
+            <div class="admin-stat-label">Submission Rate (<?= count($processed_rows) ?>/<?= $enrolled_count ?>)</div>
           </div>
         </div>
 
-        <div class="card report-card bg-white shadow-sm border-0">
-          <div class="table-responsive">
-            <table class="table table-bordered mb-0">
-              <thead>
-                <tr>
-                  <th class="ps-4">First Name</th>
-                  <th>Middle Name</th>
-                  <th>Last Name</th>
-                  <th>Matric No.</th>
-                  <?php for ($i = 1; $i <= count($q_ids); $i++): ?>
-                    <th class="text-center">Q<?= $i ?></th>
-                  <?php endfor; ?>
-                  <th class="text-center bg-light fw-bold pe-4">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php foreach ($processed_rows as $p_row): ?>
-                  <tr>
-                    <td class="ps-4 fw-medium text-dark"><?= htmlspecialchars($p_row['firstname']) ?></td>
-                    <td><?= htmlspecialchars($p_row['middlename'] ?? '') ?></td>
-                    <td><?= htmlspecialchars($p_row['lastname']) ?></td>
-                    <td class="text-muted small"><?= htmlspecialchars($p_row['matric']) ?></td>
-                    <?php foreach ($p_row['scores'] as $s_val): ?>
-                      <td class="text-center <?= $s_val > 0 ? 'text-success fw-bold' : 'text-danger' ?>">
-                        <?= $s_val ?>
-                      </td>
-                    <?php endforeach; ?>
-                    <td class="text-center bg-light fw-bold text-primary pe-4">
-                      <?= $p_row['total'] ?>
-                    </td>
-                  </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
+        <?php if (empty($processed_rows)): ?>
+          <div class="admin-empty">
+            <div class="admin-empty-icon"><i class="bi bi-inbox admin-empty-icon-lg"></i></div>
+            <div class="admin-empty-title">No Submissions Yet</div>
+            <div class="admin-empty-desc">No students have submitted this examination yet. Reports will be available once submissions are made.</div>
           </div>
-        </div>
+        <?php else: ?>
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <h3 class="admin-card-title"><i class="bi bi-table"></i> Performance Breakdown</h3>
+              <span class="admin-badge admin-badge-neutral"><?= count($processed_rows) ?> Students</span>
+            </div>
+            <div class="admin-card-body-flush">
+              <div class="table-responsive">
+                <table class="admin-table mb-0">
+                  <thead>
+                    <tr>
+                      <th>First Name</th>
+                      <th>Middle Name</th>
+                      <th>Last Name</th>
+                      <th>Matric No.</th>
+                      <?php for ($i = 1; $i <= count($q_ids); $i++): ?>
+                        <th class="text-center">Q<?= $i ?></th>
+                      <?php endfor; ?>
+                      <th class="text-center">Total</th>
+                      <th class="perf-th">Performance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <?php foreach ($processed_rows as $p_row):
+                      $pct = $max_possible > 0 ? round(($p_row['total'] / $max_possible) * 100, 1) : 0;
+                      $bar_class = $pct >= 70 ? 'excellent' : ($pct >= 40 ? 'average' : 'poor');
+                    ?>
+                      <tr>
+                        <td class="fw-medium"><?= htmlspecialchars($p_row['firstname']) ?></td>
+                        <td><?= htmlspecialchars($p_row['middlename'] ?? '') ?></td>
+                        <td><?= htmlspecialchars($p_row['lastname']) ?></td>
+                        <td class="text-muted small"><?= htmlspecialchars($p_row['matric']) ?></td>
+                        <?php foreach ($p_row['scores'] as $s_val): ?>
+                          <td class="text-center <?= is_numeric($s_val) && $s_val > 0 ? 'text-success fw-bold' : (is_numeric($s_val) && $s_val == 0 ? 'text-danger' : '') ?>">
+                            <?= $s_val ?>
+                          </td>
+                        <?php endforeach; ?>
+                        <td class="text-center fw-bold"><?= $p_row['total'] ?></td>
+                        <td>
+                          <div class="d-flex align-items-center gap-2">
+                            <div class="perf-bar-track">
+                              <div class="perf-bar-fill <?= $bar_class ?>" style="width:<?= min($pct, 100) ?>%;"></div>
+                            </div>
+                            <span class="perf-pct"><?= $pct ?>%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        <?php endif; ?>
       <?php endif; ?>
 
     </div>
   </div>
 
+  <?php include 'footer.php'; ?>
+
   <script src="assets/js/bootstrap.bundle.min.js"></script>
-  <!-- sweetalert_custom_injected_v1 -->
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      // Override global alert
-      window.alert = function (msg) {
-        Swal.fire({
-          title: 'Message',
-          text: msg,
-          icon: 'info',
-          confirmButtonColor: '#092c19'
-        });
-      };
-
-      // Intercept inline onsubmit confirms
-      document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
-        let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
-        if (match) {
-          let msg = match[1];
-          el.removeAttribute('onsubmit');
-          el.addEventListener('submit', function (e) {
-            e.preventDefault();
-            Swal.fire({
-              title: 'Are you sure?',
-              text: msg,
-              icon: 'warning',
-              showCancelButton: true,
-              confirmButtonColor: '#092c19',
-              cancelButtonColor: '#d33',
-              confirmButtonText: 'Yes, proceed'
-            }).then((result) => {
-              if (result.isConfirmed) {
-                let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover')
-                  || el.querySelector('button[type="submit"], input[type="submit"]');
-                if (btn && btn.name) {
-                  let hidden = document.createElement('input');
-                  hidden.type = 'hidden';
-                  hidden.name = btn.name;
-                  hidden.value = btn.value || '1';
-                  el.appendChild(hidden);
-                }
-                HTMLFormElement.prototype.submit.call(el);
-              }
-            });
-          });
-        }
-      });
-
-      // Intercept inline onclick confirms for anchors
-      document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
-        let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
-        if (match) {
-          let msg = match[1];
-          el.removeAttribute('onclick');
-          el.addEventListener('click', function (e) {
-            e.preventDefault();
-            Swal.fire({
-              title: 'Are you sure?',
-              text: msg,
-              icon: 'warning',
-              showCancelButton: true,
-              confirmButtonColor: '#092c19',
-              cancelButtonColor: '#d33',
-              confirmButtonText: 'Yes, proceed'
-            }).then((result) => {
-              if (result.isConfirmed) {
-                if (el.tagName === 'A' && el.href) {
-                  window.location.href = el.href;
-                } else if (el.tagName === 'BUTTON') {
-                  // if it's a submit button inside a form
-                  if (el.type === 'submit' && el.form) {
-                    if (el.name) {
-                      let hidden = document.createElement('input');
-                      hidden.type = 'hidden';
-                      hidden.name = el.name;
-                      hidden.value = el.value || '1';
-                      el.form.appendChild(hidden);
-                    }
-                    HTMLFormElement.prototype.submit.call(el.form);
-                  }
-                }
-              }
-            });
-          });
-        }
-      });
-    });
-  </script>
+  <script src="assets/js/admin-common.js"></script>
+  <script src="assets/js/admin-swal.js"></script>
 </body>
-
 
 </html>

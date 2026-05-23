@@ -2,14 +2,16 @@
 require 'auth.php';
 check_auth('admin');
 require 'db.php';
+$name = $_SESSION['user'] ?? 'Admin';
 $exam_id = isset($_GET['exam_id']) ? intval($_GET['exam_id']) : 0;
 if (!$exam_id)
   die('No exam selected.');
-$exam = $db->prepare("SELECT * FROM exams WHERE id=? AND type='objective'");
+$exam = $db->prepare("SELECT * FROM exams WHERE id=? AND type='objective' AND deleted_at IS NULL");
 $exam->execute([$exam_id]);
 $exam = $exam->fetch(PDO::FETCH_ASSOC);
 if (!$exam)
   die('Invalid exam.');
+$back_url = 'admin_objective_exams';
 
 // Handle Export CSV
 if (isset($_GET['export'])) {
@@ -17,7 +19,7 @@ if (isset($_GET['export'])) {
   header('Content-Disposition: attachment; filename="questions_' . str_replace(' ', '_', $exam['name']) . '.csv"');
   $out = fopen('php://output', 'w');
   fputcsv($out, ['Question', 'Question_Image', 'Option A', 'Option_A_Image', 'Option B', 'Option_B_Image', 'Option C', 'Option_C_Image', 'Option D', 'Option_D_Image', 'Correct Option (A-D)', 'Mark']);
-  $q_stmt = $db->prepare("SELECT question_text, question_image, option_a, option_a_image, option_b, option_b_image, option_c, option_c_image, option_d, option_d_image, correct_option, mark FROM objective_questions WHERE exam_id=? ORDER BY id");
+  $q_stmt = $db->prepare("SELECT question_text, question_image, option_a, option_a_image, option_b, option_b_image, option_c, option_c_image, option_d, option_d_image, correct_option, mark FROM objective_questions WHERE exam_id=? AND deleted_at IS NULL ORDER BY id");
   $q_stmt->execute([$exam_id]);
   while ($row = $q_stmt->fetch(PDO::FETCH_ASSOC)) {
     fputcsv($out, $row);
@@ -72,15 +74,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
   if (isset($_POST['delete']) && isset($_POST['id'])) {
     $id = intval($_POST['id']);
-    $db->prepare("DELETE FROM objective_answers WHERE question_id=? AND exam_id=?")->execute([$id, $exam_id]);
-    $db->prepare("DELETE FROM objective_questions WHERE id=? AND exam_id=?")->execute([$id, $exam_id]);
+    // Soft delete question (keep answers for audit)
+    $db->prepare("UPDATE objective_questions SET deleted_at=NOW() WHERE id=? AND exam_id=?")->execute([$id, $exam_id]);
     header("Location: admin_objective_questions?exam_id=$exam_id&success=deleted");
     exit;
   }
   if (isset($_POST['clear_all'])) {
-    $db->prepare("DELETE FROM objective_answers WHERE exam_id=?")->execute([$exam_id]);
-    $db->prepare("DELETE FROM objective_attempts WHERE exam_id=?")->execute([$exam_id]);
-    $db->prepare("DELETE FROM objective_questions WHERE exam_id=?")->execute([$exam_id]);
+    // Soft delete all questions for this exam (keep answers for audit)
+    $db->prepare("UPDATE objective_questions SET deleted_at=NOW() WHERE exam_id=?")->execute([$exam_id]);
     header("Location: admin_objective_questions?exam_id=$exam_id&success=cleared");
     exit;
   }
@@ -195,341 +196,322 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Fetch all questions
-$questions = $db->prepare("SELECT * FROM objective_questions WHERE exam_id=? ORDER BY id");
+$questions = $db->prepare("SELECT * FROM objective_questions WHERE exam_id=? AND deleted_at IS NULL ORDER BY id");
 $questions->execute([$exam_id]);
 $questions = $questions->fetchAll(PDO::FETCH_ASSOC);
+$page_actions = '<a href="admin_objective_exams" class="admin-btn admin-btn-outline"><i class="bi bi-arrow-left"></i> Back</a> <button class="admin-btn admin-btn-primary" data-bs-toggle="modal" data-bs-target="#addModal"><i class="bi bi-plus-lg"></i> Add Question</button>';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
-  <title>Manage Questions - <?= htmlspecialchars($exam['name']) ?></title>
+  <title>Manage Questions - <?= htmlspecialchars($exam['name']) ?> - Assessment Portal</title>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
   <script>
     window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }, svg: { fontCache: 'global' } };
   </script>
   <script type="text/javascript" id="MathJax-script" async
     src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>
   <?php include 'admin_sidebar.php'; ?>
   <div class="main-content">
-    <div class="container-xl py-4">
-      <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>Questions: <span class="text-primary"><?= htmlspecialchars($exam['name']) ?></span></h2>
-        <div>
-          <a href="admin_objective_exams" class="btn btn-outline-secondary rounded-pill px-4 me-2">Back</a>
-          <button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#addModal">+ Add
-            Question</button>
+
+    <!-- ═══ UNIFIED NAVBAR ═══ -->
+    <nav class="admin-navbar">
+      <div class="admin-navbar-inner">
+        <div class="admin-navbar-start">
+          <button class="admin-navbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
+            <i class="bi bi-list"></i>
+          </button>
+          <?php if (isset($back_url)): ?>
+            <a href="<?= $back_url ?>" class="admin-back-btn" aria-label="Go back">
+              <i class="bi bi-arrow-left"></i>
+            </a>
+          <?php endif; ?>
+          <h1 class="admin-navbar-title">Objective Questions</h1>
+        </div>
+        <div class="admin-navbar-end">
+          <div class="admin-user-badge">
+            <span class="admin-user-avatar"><?= strtoupper(substr($name, 0, 1)) ?></span>
+            <span class="admin-user-name"><?= htmlspecialchars($name) ?></span>
+          </div>
+          <a href="logout" class="admin-logout-btn" title="Logout">
+            <i class="bi bi-box-arrow-right"></i>
+          </a>
         </div>
       </div>
+    </nav>
 
+    <div class="admin-content">
+
+      <!-- ═══ BREADCRUMB ═══ -->
+      <nav class="admin-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="admin_dashboard"><i class="bi bi-house"></i></a></li>
+          <li class="sep">/</li>
+          <li><a href="admin_objective_exams">Objective Exams</a></li>
+          <li class="sep">/</li>
+          <li class="current" aria-current="page"><?= htmlspecialchars($exam['name']) ?></li>
+        </ol>
+      </nav>
+
+      <!-- ═══ FLASH MESSAGES ═══ -->
       <?php if (isset($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show rounded-4" role="alert">
-          <i class="bi bi-check-circle-fill me-2"></i> Success! Action completed.
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="admin-alert admin-alert-success">
+          <i class="bi bi-check-circle-fill"></i>
+          <span>Success! Action completed.</span>
+          <button class="admin-alert-close" onclick="this.parentElement.remove()">&times;</button>
         </div>
       <?php endif; ?>
 
+      <!-- ═══ PAGE HEADER ═══ -->
+      <div class="admin-page-header">
+        <h2 class="admin-page-title"><?= htmlspecialchars($exam['name']) ?> — Questions</h2>
+        <?php if (isset($page_actions)): ?>
+          <div class="admin-page-actions"><?= $page_actions ?></div>
+        <?php endif; ?>
+      </div>
+
+      <!-- ═══ BULK UPLOAD + IMAGE LIBRARY ═══ -->
       <div class="row g-4 mb-4">
         <div class="col-md-7">
-          <div class="card p-4 shadow-sm border-0 rounded-4 h-100">
-            <h5 class="fw-bold mb-3"><i class="bi bi-cloud-arrow-up me-2"></i>Bulk Question Upload</h5>
-            <p class="text-muted small">Upload <strong>.csv</strong> or <strong>.txt (Aiken)</strong> files. Formulas ($...$) and chemical symbols are supported.</p>
-            <div class="mb-3 small">
-              <span class="text-muted fw-bold me-2">Templates:</span>
-              <a href="download_template.php?type=objective_csv_simple" class="btn btn-sm btn-link p-0 text-success fw-bold me-3"><i class="bi bi-download me-1"></i>Simple CSV</a>
-              <a href="download_template.php?type=objective_csv_extended" class="btn btn-sm btn-link p-0 text-success fw-bold me-3"><i class="bi bi-download me-1"></i>Extended CSV</a>
-              <a href="download_template.php?type=objective_aiken" class="btn btn-sm btn-link p-0 text-success fw-bold"><i class="bi bi-download me-1"></i>Aiken TXT</a>
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <h3 class="admin-card-title"><i class="bi bi-cloud-arrow-up me-2"></i>Bulk Question Upload</h3>
             </div>
-            <form method="post" enctype="multipart/form-data" class="row g-2">
-              <div class="col">
-                <input type="file" name="file" accept=".csv,.txt" class="form-control rounded-pill" required>
+            <div class="admin-card-body">
+              <p class="text-muted small">Upload <strong>.csv</strong> or <strong>.txt (Aiken)</strong> files. Formulas ($...$) and chemical symbols are supported.</p>
+              <div class="mb-3 small">
+                <span class="text-muted fw-bold me-2">Templates:</span>
+                <a href="download_template.php?type=objective_csv_simple" class="fw-bold text-success me-3"><i class="bi bi-download me-1"></i>Simple CSV</a>
+                <a href="download_template.php?type=objective_csv_extended" class="fw-bold text-success me-3"><i class="bi bi-download me-1"></i>Extended CSV</a>
+                <a href="download_template.php?type=objective_aiken" class="fw-bold text-success"><i class="bi bi-download me-1"></i>Aiken TXT</a>
               </div>
-              <div class="col-auto">
-                <button type="submit" name="upload_file" class="btn btn-success rounded-pill px-4">Upload</button>
-              </div>
-            </form>
-            <div class="mt-3">
-              <a href="?exam_id=<?= $exam_id ?>&export=1"
-                class="btn btn-sm btn-outline-success rounded-pill me-2">Export CSV</a>
-              <form method="post" class="d-inline" onsubmit="return confirm('Clear ALL questions in this bank?')">
-                <button type="submit" name="clear_all" class="btn btn-sm btn-outline-danger rounded-pill">Clear
-                  Bank</button>
+              <form method="post" enctype="multipart/form-data" class="row g-2">
+                <div class="col">
+                  <input type="file" name="file" accept=".csv,.txt" class="admin-input" required>
+                </div>
+                <div class="col-auto">
+                  <button type="submit" name="upload_file" class="admin-btn admin-btn-primary">Upload</button>
+                </div>
               </form>
+              <div class="mt-3 d-flex gap-2">
+                <a href="?exam_id=<?= $exam_id ?>&export=1" class="admin-btn admin-btn-sm admin-btn-outline"><i class="bi bi-download"></i> Export CSV</a>
+                <form method="post" class="d-inline" data-swal="Clear ALL questions in this bank?">
+                  <button type="submit" name="clear_all" class="admin-btn admin-btn-sm admin-btn-danger"><i class="bi bi-trash"></i> Clear Bank</button>
+                </form>
+              </div>
             </div>
           </div>
         </div>
         <div class="col-md-5">
-          <div class="card p-4 shadow-sm border-0 rounded-4 h-100 text-white bg-primary">
-            <h5 class="fw-bold mb-3"><i class="bi bi-images me-2"></i>Image Library (.zip)</h5>
-            <p class="small opacity-75">Upload a ZIP of diagrams. Reference filenames in your CSV/TXT.</p>
-            <div class="mb-3 small">
-              <a href="download_template.php?type=objective_images_zip" class="btn btn-sm btn-link p-0 text-white fw-bold opacity-90"><i class="bi bi-download me-1"></i>Download Sample Image ZIP</a>
+          <div class="admin-card admin-card-primary">
+            <div class="admin-card-header">
+              <h3 class="admin-card-title"><i class="bi bi-images me-2"></i>Image Library (.zip)</h3>
             </div>
-            <form method="post" enctype="multipart/form-data" class="row g-2">
-              <div class="col">
-                <input type="file" name="zip" accept=".zip" class="form-control form-control-sm rounded-pill" required>
+            <div class="admin-card-body">
+              <p class="small opacity-75">Upload a ZIP of diagrams. Reference filenames in your CSV/TXT.</p>
+              <div class="mb-3 small">
+                <a href="download_template.php?type=objective_images_zip" class="fw-bold opacity-90"><i class="bi bi-download me-1"></i>Download Sample Image ZIP</a>
               </div>
-              <div class="col-auto">
-                <button type="submit" name="upload_images"
-                  class="btn btn-light btn-sm rounded-pill font-weight-bold">Upload ZIP</button>
-              </div>
-            </form>
+              <form method="post" enctype="multipart/form-data" class="row g-2">
+                <div class="col">
+                  <input type="file" name="zip" accept=".zip" class="admin-input" required>
+                </div>
+                <div class="col-auto">
+                  <button type="submit" name="upload_images" class="admin-btn admin-btn-light">Upload ZIP</button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="table-responsive">
-        <table class="table table-hover align-middle bg-white rounded-4 shadow-sm">
-          <thead class="bg-light">
-            <tr>
-              <th width="50">#</th>
-              <th>Question Content</th>
-              <th>Options (A-D)</th>
-              <th width="100">Correct</th>
-              <th width="80">Mark</th>
-              <th width="120">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php foreach ($questions as $i => $q): ?>
-              <tr>
-                <td><?= $i + 1 ?></td>
-                <td>
-                  <div class="fw-bold"><?= htmlspecialchars($q['question_text']) ?></div>
-                  <?php if ($q['question_image']): ?>
-                    <div class="mt-1 badge bg-info text-dark"><i
-                        class="bi bi-image me-1"></i><?= htmlspecialchars($q['question_image']) ?></div>
-                  <?php endif; ?>
-                </td>
-                <td class="small">
-                  <div>A: <?= htmlspecialchars($q['option_a']) ?>   <?php if ($q['option_a_image']): ?><i
-                        class="bi bi-image text-muted ms-1"></i><?php endif; ?></div>
-                  <div>B: <?= htmlspecialchars($q['option_b']) ?>   <?php if ($q['option_b_image']): ?><i
-                        class="bi bi-image text-muted ms-1"></i><?php endif; ?></div>
-                  <div>C: <?= htmlspecialchars($q['option_c']) ?>   <?php if ($q['option_c_image']): ?><i
-                        class="bi bi-image text-muted ms-1"></i><?php endif; ?></div>
-                  <div>D: <?= htmlspecialchars($q['option_d']) ?>   <?php if ($q['option_d_image']): ?><i
-                        class="bi bi-image text-muted ms-1"></i><?php endif; ?></div>
-                </td>
-                <td><span class="badge bg-success px-3"><?= strtoupper($q['correct_option']) ?></span></td>
-                <td><?= $q['mark'] ?></td>
-                <td>
-                  <button class="btn btn-sm btn-info text-white" data-bs-toggle="modal"
-                    data-bs-target="#editModal<?= $q['id'] ?>"><i class="bi bi-pencil"></i></button>
-                  <form method="post" class="d-inline" onsubmit="return confirm('Delete?')">
-                    <input type="hidden" name="id" value="<?= $q['id'] ?>">
-                    <button type="submit" name="delete" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i></button>
-                  </form>
-                </td>
-              </tr>
-
-              <!-- Edit Modal -->
-              <div class="modal fade" id="editModal<?= $q['id'] ?>" tabindex="-1">
-                <div class="modal-dialog modal-lg">
-                  <div class="modal-content rounded-4 border-0">
-                    <form method="post">
-                      <input type="hidden" name="id" value="<?= $q['id'] ?>">
-                      <div class="modal-header border-0 pb-0">
-                        <h5 class="fw-bold">Edit Question</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                      </div>
-                      <div class="modal-body">
-                        <div class="mb-3">
-                          <label class="form-label small fw-bold">Question Text (MathJax: $...$)</label>
-                          <textarea name="question_text" class="form-control mb-2" rows="3"
-                            required><?= htmlspecialchars($q['question_text']) ?></textarea>
-                          <input type="text" name="question_image" class="form-control form-control-sm"
-                            placeholder="Image filename (optional)"
-                            value="<?= htmlspecialchars($q['question_image'] ?? '') ?>">
-                        </div>
-                        <div class="row g-3">
-                          <?php foreach (['a', 'b', 'c', 'd'] as $opt): ?>
-                            <div class="col-md-6">
-                              <label class="form-label small fw-bold text-uppercase">Option <?= strtoupper($opt) ?></label>
-                              <input type="text" name="option_<?= $opt ?>" class="form-control mb-1"
-                                value="<?= htmlspecialchars($q['option_' . $opt]) ?>" required>
-                              <input type="text" name="option_<?= $opt ?>_image" class="form-control form-control-sm"
-                                placeholder="Option <?= strtoupper($opt) ?> Image"
-                                value="<?= htmlspecialchars($q['option_' . $opt . '_image'] ?? '') ?>">
-                            </div>
-                          <?php endforeach; ?>
-                          <div class="col-md-6">
-                            <label class="form-label small fw-bold">Correct Option</label>
-                            <select name="correct_option" class="form-select" required>
-                              <?php foreach (['A', 'B', 'C', 'D'] as $o): ?>
-                                <option value="<?= $o ?>" <?= $q['correct_option'] == $o ? 'selected' : '' ?>><?= $o ?>
-                                </option>
-                              <?php endforeach; ?>
-                            </select>
-                          </div>
-                          <div class="col-md-6">
-                            <label class="form-label small fw-bold">Mark</label>
-                            <input type="number" name="mark" class="form-control" step="0.01" value="<?= $q['mark'] ?>"
-                              required>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="modal-footer border-0">
-                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="edit" class="btn btn-success px-4">Save Changes</button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-              </div>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
+      <!-- ═══ QUESTIONS TABLE ═══ -->
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <h3 class="admin-card-title">Questions (<?= count($questions) ?>)</h3>
+        </div>
+        <?php if (empty($questions)): ?>
+          <div class="admin-card-body">
+            <div class="admin-empty">
+              <div class="admin-empty-icon"><i class="bi bi-inbox"></i></div>
+              <h4 class="admin-empty-title">No questions yet</h4>
+              <p class="admin-empty-desc">Add your first question using the form above or upload a CSV/TXT file.</p>
+            </div>
+          </div>
+        <?php else: ?>
+          <div class="admin-card-body-flush">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th width="50">#</th>
+                  <th>Question Content</th>
+                  <th>Options (A-D)</th>
+                  <th width="100">Correct</th>
+                  <th width="80">Mark</th>
+                  <th width="120" class="actions-cell">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($questions as $i => $q): ?>
+                  <tr>
+                    <td><?= $i + 1 ?></td>
+                    <td>
+                      <div class="fw-bold"><?= htmlspecialchars($q['question_text']) ?></div>
+                      <?php if ($q['question_image']): ?>
+                        <div class="mt-1 admin-badge admin-badge-info"><i class="bi bi-image me-1"></i><?= htmlspecialchars($q['question_image']) ?></div>
+                      <?php endif; ?>
+                    </td>
+                    <td class="small">
+                      <div>A: <?= htmlspecialchars($q['option_a']) ?>   <?php if ($q['option_a_image']): ?><i class="bi bi-image text-muted ms-1"></i><?php endif; ?></div>
+                      <div>B: <?= htmlspecialchars($q['option_b']) ?>   <?php if ($q['option_b_image']): ?><i class="bi bi-image text-muted ms-1"></i><?php endif; ?></div>
+                      <div>C: <?= htmlspecialchars($q['option_c']) ?>   <?php if ($q['option_c_image']): ?><i class="bi bi-image text-muted ms-1"></i><?php endif; ?></div>
+                      <div>D: <?= htmlspecialchars($q['option_d']) ?>   <?php if ($q['option_d_image']): ?><i class="bi bi-image text-muted ms-1"></i><?php endif; ?></div>
+                    </td>
+                    <td><span class="admin-badge admin-badge-success"><?= strtoupper($q['correct_option']) ?></span></td>
+                    <td><?= $q['mark'] ?></td>
+                    <td class="actions-cell">
+                      <button class="admin-btn admin-btn-sm admin-btn-outline" data-bs-toggle="modal" data-bs-target="#editModal<?= $q['id'] ?>"><i class="bi bi-pencil"></i></button>
+                      <form method="post" class="d-inline" data-swal="Delete this question?">
+                        <input type="hidden" name="id" value="<?= $q['id'] ?>">
+                        <button type="submit" name="delete" class="admin-btn admin-btn-sm admin-btn-danger"><i class="bi bi-trash"></i></button>
+                      </form>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php endif; ?>
       </div>
+
     </div>
   </div>
 
-  <!-- Add Modal -->
+  <!-- ═══ ADD MODAL ═══ -->
   <div class="modal fade" id="addModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
-      <div class="modal-content rounded-4 border-0">
+      <div class="modal-content">
         <form method="post">
-          <div class="modal-header border-0 pb-0">
-            <h5 class="fw-bold">Create New Question</h5>
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Create New Question</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body">
-            <div class="mb-3">
-              <label class="form-label small fw-bold">Question Text</label>
-              <textarea name="question_text" class="form-control mb-2" rows="3" placeholder="Ex: What is $\sqrt{16}$?"
-                required></textarea>
-              <input type="text" name="question_image" class="form-control form-control-sm"
-                placeholder="Image filename (e.g. diag1.png)">
+            <div class="admin-form-group">
+              <label class="admin-form-label">Question Text</label>
+              <textarea name="question_text" class="admin-input" rows="3" placeholder="Ex: What is $\sqrt{16}$?" required></textarea>
+            </div>
+            <div class="admin-form-group">
+              <label class="admin-form-label">Question Image (optional)</label>
+              <input type="text" name="question_image" class="admin-input" placeholder="Image filename (e.g. diag1.png)">
             </div>
             <div class="row g-3">
               <?php foreach (['a', 'b', 'c', 'd'] as $opt): ?>
                 <div class="col-md-6">
-                  <label class="form-label small fw-bold text-uppercase">Option <?= strtoupper($opt) ?></label>
-                  <input type="text" name="option_<?= $opt ?>" class="form-control mb-1" required>
-                  <input type="text" name="option_<?= $opt ?>_image" class="form-control form-control-sm"
-                    placeholder="Image filename (optional)">
+                  <div class="admin-form-group">
+                    <label class="admin-form-label text-uppercase">Option <?= strtoupper($opt) ?></label>
+                    <input type="text" name="option_<?= $opt ?>" class="admin-input mb-2" required>
+                    <input type="text" name="option_<?= $opt ?>_image" class="admin-input" placeholder="Image filename (optional)">
+                  </div>
                 </div>
               <?php endforeach; ?>
               <div class="col-md-6">
-                <label class="form-label small fw-bold">Correct Option</label>
-                <select name="correct_option" class="form-select" required>
-                  <option value="A">A</option>
-                  <option value="B">B</option>
-                  <option value="C">C</option>
-                  <option value="D">D</option>
-                </select>
+                <div class="admin-form-group">
+                  <label class="admin-form-label">Correct Option</label>
+                  <select name="correct_option" class="admin-input admin-select" required>
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="C">C</option>
+                    <option value="D">D</option>
+                  </select>
+                </div>
               </div>
               <div class="col-md-6">
-                <label class="form-label small fw-bold">Mark</label>
-                <input type="number" name="mark" class="form-control" step="0.01" value="1" required>
+                <div class="admin-form-group">
+                  <label class="admin-form-label">Mark</label>
+                  <input type="number" name="mark" class="admin-input" step="0.01" value="1" required>
+                </div>
               </div>
             </div>
           </div>
-          <div class="modal-footer border-0">
-            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" name="add" class="btn btn-primary px-4">Add Question</button>
+          <div class="modal-footer">
+            <button type="button" class="admin-btn" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" name="add" class="admin-btn admin-btn-primary"><i class="bi bi-check-lg"></i> Add Question</button>
           </div>
         </form>
       </div>
     </div>
   </div>
+
+  <!-- ═══ EDIT MODALS ═══ -->
+  <?php foreach ($questions as $q): ?>
+    <div class="modal fade" id="editModal<?= $q['id'] ?>" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <form method="post">
+            <input type="hidden" name="id" value="<?= $q['id'] ?>">
+            <div class="modal-header">
+              <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Edit Question</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <div class="admin-form-group">
+                <label class="admin-form-label">Question Text (MathJax: $...$)</label>
+                <textarea name="question_text" class="admin-input" rows="3" required><?= htmlspecialchars($q['question_text']) ?></textarea>
+              </div>
+              <div class="admin-form-group">
+                <label class="admin-form-label">Question Image (optional)</label>
+                <input type="text" name="question_image" class="admin-input" placeholder="Image filename" value="<?= htmlspecialchars($q['question_image'] ?? '') ?>">
+              </div>
+              <div class="row g-3">
+                <?php foreach (['a', 'b', 'c', 'd'] as $opt): ?>
+                  <div class="col-md-6">
+                    <div class="admin-form-group">
+                      <label class="admin-form-label text-uppercase">Option <?= strtoupper($opt) ?></label>
+                      <input type="text" name="option_<?= $opt ?>" class="admin-input mb-2" value="<?= htmlspecialchars($q['option_' . $opt]) ?>" required>
+                      <input type="text" name="option_<?= $opt ?>_image" class="admin-input" placeholder="Option <?= strtoupper($opt) ?> Image" value="<?= htmlspecialchars($q['option_' . $opt . '_image'] ?? '') ?>">
+                    </div>
+                  </div>
+                <?php endforeach; ?>
+                <div class="col-md-6">
+                  <div class="admin-form-group">
+                    <label class="admin-form-label">Correct Option</label>
+                    <select name="correct_option" class="admin-input admin-select" required>
+                      <?php foreach (['A', 'B', 'C', 'D'] as $o): ?>
+                        <option value="<?= $o ?>" <?= $q['correct_option'] == $o ? 'selected' : '' ?>><?= $o ?></option>
+                      <?php endforeach; ?>
+                    </select>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="admin-form-group">
+                    <label class="admin-form-label">Mark</label>
+                    <input type="number" name="mark" class="admin-input" step="0.01" value="<?= $q['mark'] ?>" required>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="admin-btn" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" name="edit" class="admin-btn admin-btn-primary"><i class="bi bi-check-lg"></i> Save Changes</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  <?php endforeach; ?>
+
   <script src="assets/js/bootstrap.bundle.min.js"></script>
-<!-- sweetalert_custom_injected_v1 -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Override global alert
-        window.alert = function(msg) {
-            Swal.fire({
-                title: 'Message',
-                text: msg,
-                icon: 'info',
-                confirmButtonColor: '#092c19'
-            });
-        };
-
-        // Intercept inline onsubmit confirms
-        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
-            let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
-            if(match) {
-                let msg = match[1];
-                el.removeAttribute('onsubmit');
-                el.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    Swal.fire({
-                        title: 'Are you sure?',
-                        text: msg,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#092c19',
-                        cancelButtonColor: '#d33',
-                        confirmButtonText: 'Yes, proceed'
-                    }).then((result) => {
-                        if(result.isConfirmed) {
-                            let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover') 
-                                      || el.querySelector('button[type="submit"], input[type="submit"]');
-                            if(btn && btn.name) {
-                                let hidden = document.createElement('input');
-                                hidden.type = 'hidden';
-                                hidden.name = btn.name;
-                                hidden.value = btn.value || '1';
-                                el.appendChild(hidden);
-                            }
-                            HTMLFormElement.prototype.submit.call(el);
-                        }
-                    });
-                });
-            }
-        });
-
-        // Intercept inline onclick confirms for anchors
-        document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
-            let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
-            if(match) {
-                let msg = match[1];
-                el.removeAttribute('onclick');
-                el.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    Swal.fire({
-                        title: 'Are you sure?',
-                        text: msg,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#092c19',
-                        cancelButtonColor: '#d33',
-                        confirmButtonText: 'Yes, proceed'
-                    }).then((result) => {
-                        if(result.isConfirmed) {
-                            if(el.tagName === 'A' && el.href) {
-                                window.location.href = el.href;
-                            } else if(el.tagName === 'BUTTON') {
-                                // if it's a submit button inside a form
-                                if(el.type === 'submit' && el.form) {
-                                    if(el.name) {
-                                        let hidden = document.createElement('input');
-                                        hidden.type = 'hidden';
-                                        hidden.name = el.name;
-                                        hidden.value = el.value || '1';
-                                        el.form.appendChild(hidden);
-                                    }
-                                    HTMLFormElement.prototype.submit.call(el.form);
-                                }
-                            }
-                        }
-                    });
-                });
-            }
-        });
-    });
-</script>
+  <script src="assets/js/admin-common.js"></script>
+  <script src="assets/js/admin-swal.js"></script>
 </body>
-
 
 </html>

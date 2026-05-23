@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'] ?? '';
 
     // Fetch by username only — never pass password to SQL
-    $stmt = $db->prepare("SELECT * FROM examiners WHERE username = ?");
+    $stmt = $db->prepare("SELECT * FROM examiners WHERE username = ? AND deleted_at IS NULL");
     $stmt->execute([$username]);
     $user = $stmt->fetch();
 

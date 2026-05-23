@@ -13,13 +13,13 @@ function finalize_objective_attempt($db, $exam_id, $student_id, $attempt_no)
         return false;
 
     // Get exam duration for time_taken fallback
-    $stmt_e = $db->prepare("SELECT duration_minutes FROM exams WHERE id=?");
+    $stmt_e = $db->prepare("SELECT duration_minutes FROM exams WHERE id=? AND deleted_at IS NULL");
     $stmt_e->execute([$exam_id]);
     $exam = $stmt_e->fetch(PDO::FETCH_ASSOC);
     $duration_sec = ($exam['duration_minutes'] ?? 0) * 60;
 
     // Calculate score
-    $qs_stmt = $db->prepare("SELECT id, correct_option, mark FROM objective_questions WHERE exam_id=? ORDER BY id");
+    $qs_stmt = $db->prepare("SELECT id, correct_option, mark FROM objective_questions WHERE exam_id=? AND deleted_at IS NULL ORDER BY id");
     $qs_stmt->execute([$exam_id]);
     $questions = $qs_stmt->fetchAll(PDO::FETCH_ASSOC);
 

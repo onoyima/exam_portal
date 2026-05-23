@@ -37,8 +37,8 @@ function render_cms_markdown($text) {
 $exam_count = 0;
 $student_count = 0;
 try {
-    $exam_count = $db->query("SELECT COUNT(*) FROM exams WHERE is_active = 1")->fetchColumn();
-    $student_count = $db->query("SELECT COUNT(*) FROM students")->fetchColumn();
+    $exam_count = $db->query("SELECT COUNT(*) FROM exams WHERE is_active = 1 AND deleted_at IS NULL")->fetchColumn();
+    $student_count = $db->query("SELECT COUNT(*) FROM students WHERE deleted_at IS NULL")->fetchColumn();
 } catch (Exception $e) {
 }
 ?>
@@ -273,6 +273,44 @@ try {
         .hero-carousel .carousel-item.active img {
             transform: scale(1);
         }
+
+        /* ── Responsive Navbar ── */
+        .navbar-toggler:focus { box-shadow: none; }
+        .navbar-toggler i { font-size: 1.5rem; transition: transform 0.2s; }
+        .navbar-toggler[aria-expanded="true"] i { transform: rotate(90deg); }
+
+        @media (max-width: 991.98px) {
+            .landing-navbar {
+                padding: 10px 16px !important;
+                width: 96%;
+                border-radius: 20px !important;
+                top: 12px;
+            }
+            .landing-navbar .navbar-collapse {
+                background: rgba(255,255,255,0.98);
+                backdrop-filter: blur(20px);
+                border-radius: 16px;
+                padding: 16px;
+                margin-top: 12px;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            }
+            .landing-navbar .navbar-nav { gap: 4px; }
+            .landing-navbar .nav-link {
+                padding: 10px 16px !important;
+                border-radius: 10px;
+                font-size: 0.95rem;
+            }
+            .landing-navbar .nav-link:hover { background: #f0fdf4; }
+            .landing-navbar .navbar-brand span { font-size: calc(1rem + 1vw) !important; }
+            .landing-navbar .d-flex.gap-3 { margin-top: 8px; }
+            .landing-navbar .btn { width: 100%; }
+        }
+
+        @media (max-width: 576px) {
+            .landing-navbar { padding: 8px 12px !important; top: 8px; }
+            .landing-navbar .navbar-brand img { max-height: 32px !important; }
+            .landing-navbar .navbar-brand span { font-size: 0.9rem !important; }
+        }
     </style>
     <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
@@ -298,7 +336,7 @@ try {
             </a>
             <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse"
                 data-bs-target="#navbarContent">
-                <span class="navbar-toggler-icon"></span>
+                <i class="bi bi-list"></i>
             </button>
             <div class="collapse navbar-collapse" id="navbarContent">
                 <ul class="navbar-nav mx-auto mb-3 mb-lg-0 text-center text-lg-start">
@@ -314,7 +352,6 @@ try {
                     <?php if (($settings['section_team_active'] ?? '1') === '1'): ?>
                         <li class="nav-item"><a class="nav-link fw-bold" href="#team">Team</a></li>
                     <?php endif; ?>
-                    <li class="nav-item"><a class="nav-link fw-bold text-success" href="downloads/seb/" ><i class="bi bi-download me-1"></i>Download SEB</a></li>
                 </ul>
                 <div class="d-flex flex-column flex-lg-row gap-3">
                     <a href="login" class="btn btn-outline-dark rounded-pill px-4 fw-bold">Staff Login</a>
@@ -942,94 +979,8 @@ try {
             });
         });
     </script>
-    <!-- sweetalert_custom_injected_v1 -->
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            // Override global alert
-            window.alert = function (msg) {
-                Swal.fire({
-                    title: 'Message',
-                    text: msg,
-                    icon: 'info',
-                    confirmButtonColor: '#092c19'
-                });
-            };
-
-            // Intercept inline onsubmit confirms
-            document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
-                let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
-                if (match) {
-                    let msg = match[1];
-                    el.removeAttribute('onsubmit');
-                    el.addEventListener('submit', function (e) {
-                        e.preventDefault();
-                        Swal.fire({
-                            title: 'Are you sure?',
-                            text: msg,
-                            icon: 'warning',
-                            showCancelButton: true,
-                            confirmButtonColor: '#092c19',
-                            cancelButtonColor: '#d33',
-                            confirmButtonText: 'Yes, proceed'
-                        }).then((result) => {
-                            if (result.isConfirmed) {
-                                let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover')
-                                    || el.querySelector('button[type="submit"], input[type="submit"]');
-                                if (btn && btn.name) {
-                                    let hidden = document.createElement('input');
-                                    hidden.type = 'hidden';
-                                    hidden.name = btn.name;
-                                    hidden.value = btn.value || '1';
-                                    el.appendChild(hidden);
-                                }
-                                HTMLFormElement.prototype.submit.call(el);
-                            }
-                        });
-                    });
-                }
-            });
-
-            // Intercept inline onclick confirms for anchors
-            document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
-                let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
-                if (match) {
-                    let msg = match[1];
-                    el.removeAttribute('onclick');
-                    el.addEventListener('click', function (e) {
-                        e.preventDefault();
-                        Swal.fire({
-                            title: 'Are you sure?',
-                            text: msg,
-                            icon: 'warning',
-                            showCancelButton: true,
-                            confirmButtonColor: '#092c19',
-                            cancelButtonColor: '#d33',
-                            confirmButtonText: 'Yes, proceed'
-                        }).then((result) => {
-                            if (result.isConfirmed) {
-                                if (el.tagName === 'A' && el.href) {
-                                    window.location.href = el.href;
-                                } else if (el.tagName === 'BUTTON') {
-                                    // if it's a submit button inside a form
-                                    if (el.type === 'submit' && el.form) {
-                                        if (el.name) {
-                                            let hidden = document.createElement('input');
-                                            hidden.type = 'hidden';
-                                            hidden.name = el.name;
-                                            hidden.value = el.value || '1';
-                                            el.form.appendChild(hidden);
-                                        }
-                                        HTMLFormElement.prototype.submit.call(el.form);
-                                    }
-                                }
-                            }
-                        });
-                    });
-                }
-            });
-        });
-    </script>
+  <script src="assets/js/admin-common.js"></script>
+  <script src="assets/js/admin-swal.js"></script>
 </body>
 
 </html>

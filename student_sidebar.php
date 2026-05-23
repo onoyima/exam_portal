@@ -14,37 +14,20 @@ if (isset($db)) {
     } catch (Exception $e) {}
 }
 ?>
-<div class="sidebar d-flex flex-column p-3" id="studentSidebar">
-    <div class="d-flex align-items-center justify-content-between mb-4 sidebar-header-container">
-        <div class="text-center sidebar-logo-section w-100">
-            <a href="student_dashboard" class="text-decoration-none">
-                <img src="<?= htmlspecialchars($student_logo) ?>" alt="Logo" width="40" style="max-height: 40px; width: auto; object-fit: contain;" class="mb-1 rounded-1">
-                <h4 class="fw-bold mb-0 small text-dark mt-1 text-truncate" style="max-width: 150px;" title="<?= htmlspecialchars($student_title) ?>"><?= htmlspecialchars($student_title) ?></h4>
-            </a>
-        </div>
-        <div class="d-flex gap-2">
-            <!-- Desktop Toggle -->
-            <button class="btn btn-sm btn-light border shadow-sm sidebar-toggle-btn d-none d-lg-block"
-                id="desktopStudentSidebarToggle">
-                <i class="bx bx-chevron-left"></i>
-            </button>
-            <!-- Mobile Close Button (Visible only on mobile when sidebar is shown) -->
-            <button class="btn btn-sm btn-danger d-lg-none" id="mobileSidebarClose">
-                <i class="bx bx-x"></i>
-            </button>
-        </div>
+<div class="sidebar student-sidebar d-flex flex-column p-3" id="studentSidebar">
+    <div class="sidebar-brand">
+        <a href="student_dashboard" class="text-decoration-none">
+            <img src="<?= htmlspecialchars($student_logo) ?>" alt="Logo">
+            <h4 class="fw-bold mb-0 small text-dark mt-1 text-truncate" title="<?= htmlspecialchars($student_title) ?>"><?= htmlspecialchars($student_title) ?></h4>
+        </a>
     </div>
 
-    <div class="profile-summary p-3 bg-light rounded-4 mb-4 text-center sidebar-profile-section">
-        <div class="profile-icon mx-auto mb-2" style="width: 50px; height: 50px; font-size: 1.5rem;">
+    <div class="student-info text-center">
+        <div class="profile-icon mx-auto mb-2">
             <?= strtoupper(substr($name ?? 'S', 0, 1)) ?>
         </div>
-        <div class="fw-bold small profile-name-text">
-            <?= htmlspecialchars($name ?? 'Student') ?>
-        </div>
-        <div class="text-muted profile-matric-text" style="font-size: 0.7rem;">
-            <?= htmlspecialchars($matric ?? '') ?>
-        </div>
+        <div class="student-name"><?= htmlspecialchars($name ?? 'Student') ?></div>
+        <div class="student-matric"><?= htmlspecialchars($matric ?? '') ?></div>
     </div>
 
     <ul class="nav nav-pills flex-column mb-auto">
@@ -68,10 +51,9 @@ if (isset($db)) {
                             <?= htmlspecialchars($exam['name']) ?>
                         </span>
                         <?php if ($exam['finished_attempts'] > 0): ?>
-                            <span class="badge bg-success rounded-pill sidebar-badge" style="font-size: 0.6rem;">Done</span>
+                            <span class="badge bg-success rounded-pill sidebar-badge">Done</span>
                         <?php elseif ($exam['total_attempts'] > 0): ?>
-                            <span class="badge bg-warning text-dark rounded-pill sidebar-badge"
-                                style="font-size: 0.6rem;">Started</span>
+                            <span class="badge bg-warning text-dark rounded-pill sidebar-badge">Started</span>
                         <?php else: ?>
                             <i class="bx bx-circle small opacity-50 sidebar-badge-dot"></i>
                         <?php endif; ?>
@@ -94,7 +76,7 @@ if (isset($db)) {
 
     <!-- System Status -->
     <div class="mt-auto pt-3 border-top sidebar-footer-status">
-        <div class="small text-muted" style="font-size: 0.75rem;">
+        <div class="small text-muted sidebar-status-text">
             <div class="d-flex align-items-center mb-1">
                 <span class="status-dot online me-2"></span>
                 <div class="status-text">Portal Online</div>
