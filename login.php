@@ -47,8 +47,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['user'] = $user['username'];
         $_SESSION['role'] = $user['role'];
 
-        $db->prepare("INSERT INTO login_history (username, user_type, ip_address, user_agent, status) VALUES (?, ?, ?, ?, 'success')")
-           ->execute([$username, $user['role'], $_SERVER['REMOTE_ADDR'], $_SERVER['HTTP_USER_AGENT'] ?? '']);
+        try {
+            $db->prepare("INSERT INTO login_history (username, user_type, ip_address, user_agent, status) VALUES (?, ?, ?, ?, 'success')")
+               ->execute([$username, $user['role'], $_SERVER['REMOTE_ADDR'] ?? '', $_SERVER['HTTP_USER_AGENT'] ?? '']);
+        } catch (Exception $e) {
+            error_log("Login history insert failed: " . $e->getMessage());
+        }
 
         header("Location: " . ($user['role'] === 'admin' ? 'admin_dashboard' : 'assess'));
         exit;

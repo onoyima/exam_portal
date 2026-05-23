@@ -20,6 +20,7 @@ try {
         DB_PASS
     );
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $db->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
 } catch (PDOException $e) {
     error_log("Database connection failed: " . $e->getMessage());
     http_response_code(503);
