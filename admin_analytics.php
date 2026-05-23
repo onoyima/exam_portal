@@ -3,12 +3,13 @@ require 'auth.php';
 check_auth('admin');
 require 'db.php';
 $name = $_SESSION['user'] ?? 'Admin';
+$back_url = 'admin_dashboard';
 
 // Basic statistics
-$total_students = $db->query("SELECT COUNT(*) FROM students")->fetchColumn();
-$total_exams = $db->query("SELECT COUNT(*) FROM exams")->fetchColumn();
-$active_exams = $db->query("SELECT COUNT(*) FROM exams WHERE is_active=1")->fetchColumn();
-$total_questions = $db->query("SELECT (SELECT COUNT(*) FROM questions) + (SELECT COUNT(*) FROM objective_questions)")->fetchColumn();
+$total_students = $db->query("SELECT COUNT(*) FROM students WHERE deleted_at IS NULL")->fetchColumn();
+$total_exams = $db->query("SELECT COUNT(*) FROM exams WHERE deleted_at IS NULL")->fetchColumn();
+$active_exams = $db->query("SELECT COUNT(*) FROM exams WHERE is_active=1 AND deleted_at IS NULL")->fetchColumn();
+$total_questions = $db->query("SELECT (SELECT COUNT(*) FROM questions WHERE deleted_at IS NULL) + (SELECT COUNT(*) FROM objective_questions WHERE deleted_at IS NULL)")->fetchColumn();
 
 // Fixed top scores query - properly join and aggregate (Combined)
 $top_scores = $db->query("
@@ -21,6 +22,7 @@ $top_scores = $db->query("
         UNION ALL
         SELECT student_id, exam_id, score FROM objective_attempts WHERE finished_at IS NOT NULL
     ) scores ON s.id = scores.student_id 
+    WHERE s.deleted_at IS NULL
     GROUP BY s.id, s.name, s.matric_no 
     ORDER BY total_score DESC 
     LIMIT 10
@@ -36,6 +38,7 @@ $exam_performance = $db->query("
     FROM exams e 
     LEFT JOIN answers a ON e.id = a.exam_id AND e.type='practical'
     LEFT JOIN objective_attempts oa ON e.id = oa.exam_id AND e.type='objective' AND oa.finished_at IS NOT NULL
+    WHERE e.deleted_at IS NULL
     GROUP BY e.id, e.name, e.type, e.created_at
     ORDER BY e.created_at DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
@@ -89,152 +92,170 @@ $avg_score = $avg_score_res ?: 0;
 <html lang="en">
 
 <head>
+  <meta charset="UTF-8">
   <title>Analytics - Assessment Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>
   <?php include 'admin_sidebar.php'; ?>
   <div class="main-content">
-    <nav class="navbar navbar-light bg-white shadow-sm mb-4">
-      <div class="container-fluid d-flex justify-content-between align-items-center">
-        <div class="d-flex align-items-center gap-2">
-          <button class="btn btn-outline-primary d-lg-none me-2" id="sidebarToggle"><span
-              class="navbar-toggler-icon"></span></button>
-          <a href="admin_dashboard" class="btn btn-outline-secondary me-2">Back</a>
-          <span class="navbar-brand fw-bold">Analytics Dashboard</span>
+    <nav class="admin-navbar">
+      <div class="admin-navbar-inner">
+        <div class="admin-navbar-start">
+          <button class="admin-navbar-toggle d-lg-none" id="sidebarToggle" aria-label="Toggle sidebar">
+            <i class="bi bi-list"></i>
+          </button>
+          <a href="<?= $back_url ?>" class="admin-back-btn">
+            <i class="bi bi-arrow-left"></i>
+          </a>
+          <h1 class="admin-navbar-title">Analytics Dashboard</h1>
         </div>
-        <div class="d-flex align-items-center gap-2">
-          <span class="profile-icon"><?= strtoupper(substr($name, 0, 1)) ?></span>
-          <span class="fw-semibold"><?= htmlspecialchars($name) ?></span>
-          <a href="logout" class="btn btn-outline-danger ms-2">Logout</a>
+        <div class="admin-navbar-end">
+          <div class="admin-user-badge">
+            <span class="admin-user-avatar"><?= strtoupper(substr($name, 0, 1)) ?></span>
+            <span class="admin-user-name"><?= htmlspecialchars($name) ?></span>
+          </div>
+          <a href="logout" class="admin-logout-btn" title="Logout">
+            <i class="bi bi-box-arrow-right"></i>
+          </a>
         </div>
       </div>
     </nav>
-    <div class="container-xl">
-      <!-- Key Metrics -->
+
+    <div class="admin-content">
+      <nav class="admin-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="admin_dashboard"><i class="bi bi-house"></i></a></li>
+          <li class="sep">/</li>
+          <li class="current" aria-current="page">Analytics</li>
+        </ol>
+      </nav>
+
+      <div class="admin-page-header">
+        <h2 class="admin-page-title">Analytics Dashboard</h2>
+      </div>
       <div class="row g-4 mb-4">
         <div class="col-6 col-lg-3">
-          <div class="card p-3 text-center shadow-sm">
-            <h5 class="fw-bold mb-1">Total Students</h5>
-            <div class="display-6 fw-bold text-primary"><?= $total_students ?></div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value"><?= $total_students ?></div>
+            <div class="admin-stat-label">Total Students</div>
           </div>
         </div>
         <div class="col-6 col-lg-3">
-          <div class="card p-3 text-center shadow-sm">
-            <h5 class="fw-bold mb-1">Total Exams</h5>
-            <div class="display-6 fw-bold text-primary"><?= $total_exams ?></div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value"><?= $total_exams ?></div>
+            <div class="admin-stat-label">Total Exams</div>
           </div>
         </div>
         <div class="col-6 col-lg-3">
-          <div class="card p-3 text-center shadow-sm">
-            <h5 class="fw-bold mb-1">Active Exams</h5>
-            <div class="display-6 fw-bold text-success"><?= $active_exams ?></div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value"><?= $active_exams ?></div>
+            <div class="admin-stat-label">Active Exams</div>
           </div>
         </div>
         <div class="col-6 col-lg-3">
-          <div class="card p-3 text-center shadow-sm">
-            <h5 class="fw-bold mb-1">Total Questions</h5>
-            <div class="display-6 fw-bold text-primary"><?= $total_questions ?></div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value"><?= $total_questions ?></div>
+            <div class="admin-stat-label">Total Questions</div>
           </div>
         </div>
       </div>
 
-      <!-- Additional Metrics -->
       <div class="row g-4 mb-4">
         <div class="col-6 col-lg-3">
-          <div class="card p-3 text-center shadow-sm">
-            <h5 class="fw-bold mb-1">Assessments Completed</h5>
-            <div class="display-6 fw-bold text-info"><?= $total_assessments ?></div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value"><?= $total_assessments ?></div>
+            <div class="admin-stat-label">Assessments Completed</div>
           </div>
         </div>
         <div class="col-6 col-lg-3">
-          <div class="card p-3 text-center shadow-sm">
-            <h5 class="fw-bold mb-1">Average Score</h5>
-            <div class="display-6 fw-bold text-warning"><?= number_format($avg_score, 1) ?></div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value"><?= number_format($avg_score, 1) ?></div>
+            <div class="admin-stat-label">Average Score</div>
           </div>
         </div>
         <div class="col-6 col-lg-3">
-          <div class="card p-3 text-center shadow-sm">
-            <h5 class="fw-bold mb-1">Students with Scores</h5>
-            <div class="display-6 fw-bold text-success"><?= count($top_scores) ?></div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value"><?= count($top_scores) ?></div>
+            <div class="admin-stat-label">Students with Scores</div>
           </div>
         </div>
         <div class="col-6 col-lg-3">
-          <div class="card p-3 text-center shadow-sm">
-            <h5 class="fw-bold mb-1">Exams with Data</h5>
-            <div class="display-6 fw-bold text-info">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value">
               <?= count(array_filter($exam_performance, function ($e) {
                 return $e['students_assessed'] > 0;
               })) ?>
             </div>
+            <div class="admin-stat-label">Exams with Data</div>
           </div>
         </div>
       </div>
 
-      <!-- Charts Row 1 -->
       <div class="row g-4 mb-4">
         <div class="col-12 col-lg-6">
-          <div class="card p-4 shadow-sm">
-            <h4 class="mb-3">Exam Performance</h4>
-            <div class="chart-container">
+          <div class="admin-card">
+            <div class="admin-card-header"><h3 class="admin-card-title">Exam Performance</h3></div>
+            <div class="admin-card-body">
               <canvas id="examChart"></canvas>
             </div>
           </div>
         </div>
         <div class="col-12 col-lg-6">
-          <div class="card p-4 shadow-sm">
-            <h4 class="mb-3">Score Distribution</h4>
-            <div class="chart-container">
+          <div class="admin-card">
+            <div class="admin-card-header"><h3 class="admin-card-title">Score Distribution</h3></div>
+            <div class="admin-card-body">
               <canvas id="scoreChart"></canvas>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Charts Row 2 -->
       <div class="row g-4 mb-4">
         <div class="col-12 col-lg-6">
-          <div class="card p-4 shadow-sm">
-            <h4 class="mb-3">Recent Activity (Last 7 Days)</h4>
-            <div class="chart-container">
+          <div class="admin-card">
+            <div class="admin-card-header"><h3 class="admin-card-title">Recent Activity (Last 7 Days)</h3></div>
+            <div class="admin-card-body">
               <canvas id="activityChart"></canvas>
             </div>
           </div>
         </div>
         <div class="col-12 col-lg-6">
-          <div class="card p-4 shadow-sm">
-            <h4 class="mb-3">Top Performing Students</h4>
-            <div class="table-responsive">
-              <table class="table table-sm">
-                <thead>
-                  <tr>
-                    <th>Rank</th>
-                    <th>Student</th>
-                    <th>Matric No</th>
-                    <th>Total Score</th>
-                    <th>Exams Taken</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <?php foreach ($top_scores as $index => $student): ?>
+          <div class="admin-card">
+            <div class="admin-card-header"><h3 class="admin-card-title">Top Performing Students</h3></div>
+            <div class="admin-card-body">
+              <div class="table-responsive">
+                <table class="admin-table">
+                  <thead>
                     <tr>
-                      <td>
-                        <span class="badge bg-<?= $index < 3 ? 'warning' : 'secondary' ?>"><?= $index + 1 ?></span>
-                      </td>
-                      <td><?= htmlspecialchars($student['name']) ?></td>
-                      <td><?= htmlspecialchars($student['matric_no']) ?></td>
-                      <td><strong><?= number_format($student['total_score'], 1) ?></strong></td>
-                      <td><?= $student['exams_taken'] ?></td>
+                      <th>Rank</th>
+                      <th>Student</th>
+                      <th>Matric No</th>
+                      <th>Total Score</th>
+                      <th>Exams Taken</th>
                     </tr>
-                  <?php endforeach; ?>
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    <?php foreach ($top_scores as $index => $student): ?>
+                      <tr>
+                        <td>
+                          <span class="admin-badge <?= $index < 3 ? 'admin-badge-warning' : 'admin-badge-neutral' ?>"><?= $index + 1 ?></span>
+                        </td>
+                        <td><?= htmlspecialchars($student['name']) ?></td>
+                        <td><?= htmlspecialchars($student['matric_no']) ?></td>
+                        <td><strong><?= number_format($student['total_score'], 1) ?></strong></td>
+                        <td><?= $student['exams_taken'] ?></td>
+                      </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -246,21 +267,6 @@ $avg_score = $avg_score_res ?: 0;
 
   <script src="assets/js/bootstrap.bundle.min.js"></script>
   <script>
-    // Sidebar toggle
-    const sidebar = document.getElementById('sidebarMenu');
-    const sidebarBackdrop = document.getElementById('sidebarBackdrop');
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    if (sidebarToggle) {
-      sidebarToggle.onclick = function () {
-        sidebar.classList.toggle('show');
-        sidebarBackdrop.classList.toggle('show');
-      };
-      sidebarBackdrop.onclick = function () {
-        sidebar.classList.remove('show');
-        sidebarBackdrop.classList.remove('show');
-      };
-    }
-
     // Chart.js configurations
     const examData = <?= json_encode($exam_performance) ?>;
     const scoreData = <?= json_encode($score_distribution) ?>;
@@ -356,95 +362,7 @@ $avg_score = $avg_score_res ?: 0;
       });
     }
   </script>
-<!-- sweetalert_custom_injected_v1 -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Override global alert
-        window.alert = function(msg) {
-            Swal.fire({
-                title: 'Message',
-                text: msg,
-                icon: 'info',
-                confirmButtonColor: '#092c19'
-            });
-        };
-
-        // Intercept inline onsubmit confirms
-        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
-            let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
-            if(match) {
-                let msg = match[1];
-                el.removeAttribute('onsubmit');
-                el.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    Swal.fire({
-                        title: 'Are you sure?',
-                        text: msg,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#092c19',
-                        cancelButtonColor: '#d33',
-                        confirmButtonText: 'Yes, proceed'
-                    }).then((result) => {
-                        if(result.isConfirmed) {
-                            let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover') 
-                                      || el.querySelector('button[type="submit"], input[type="submit"]');
-                            if(btn && btn.name) {
-                                let hidden = document.createElement('input');
-                                hidden.type = 'hidden';
-                                hidden.name = btn.name;
-                                hidden.value = btn.value || '1';
-                                el.appendChild(hidden);
-                            }
-                            HTMLFormElement.prototype.submit.call(el);
-                        }
-                    });
-                });
-            }
-        });
-
-        // Intercept inline onclick confirms for anchors
-        document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
-            let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
-            if(match) {
-                let msg = match[1];
-                el.removeAttribute('onclick');
-                el.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    Swal.fire({
-                        title: 'Are you sure?',
-                        text: msg,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#092c19',
-                        cancelButtonColor: '#d33',
-                        confirmButtonText: 'Yes, proceed'
-                    }).then((result) => {
-                        if(result.isConfirmed) {
-                            if(el.tagName === 'A' && el.href) {
-                                window.location.href = el.href;
-                            } else if(el.tagName === 'BUTTON') {
-                                // if it's a submit button inside a form
-                                if(el.type === 'submit' && el.form) {
-                                    if(el.name) {
-                                        let hidden = document.createElement('input');
-                                        hidden.type = 'hidden';
-                                        hidden.name = el.name;
-                                        hidden.value = el.value || '1';
-                                        el.form.appendChild(hidden);
-                                    }
-                                    HTMLFormElement.prototype.submit.call(el.form);
-                                }
-                            }
-                        }
-                    });
-                });
-            }
-        });
-    });
-</script>
+  <script src="assets/js/admin-common.js"></script>
+  <script src="assets/js/admin-swal.js"></script>
 </body>
-
-
 </html>

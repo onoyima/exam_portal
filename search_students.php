@@ -9,7 +9,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] != 'examiner') {
     exit;
 }
 
-$examiner = $db->prepare("SELECT id FROM examiners WHERE username=?");
+$examiner = $db->prepare("SELECT id FROM examiners WHERE username=? AND deleted_at IS NULL");
 $examiner->execute([$_SESSION['user']]);
 $examiner_id = $examiner->fetchColumn();
 
@@ -34,7 +34,7 @@ $stmt = $db->prepare("
     SELECT s.id, s.name, s.username, s.matric_no 
     FROM students s 
     JOIN exam_students es ON s.id = es.student_id
-    WHERE es.exam_id = ? 
+    WHERE s.deleted_at IS NULL AND es.exam_id = ? 
       AND (s.name LIKE ? OR s.username LIKE ? OR s.matric_no LIKE ?)
     ORDER BY s.name
     LIMIT 10

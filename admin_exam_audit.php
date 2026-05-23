@@ -6,7 +6,7 @@ require 'db.php';
 $name = $_SESSION['user'] ?? 'Admin';
 
 // Fetch all objective exams for filter
-$exams = $db->query("SELECT id, name FROM exams WHERE type='objective' ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+$exams = $db->query("SELECT id, name FROM exams WHERE type='objective' AND deleted_at IS NULL ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 
 $exam_id = isset($_GET['exam_id']) ? intval($_GET['exam_id']) : 0;
 $student_query = isset($_GET['student']) ? trim($_GET['student']) : '';
@@ -14,8 +14,8 @@ $student_query = isset($_GET['student']) ? trim($_GET['student']) : '';
 // Base query for auditing
 $query_parts = "
     FROM objective_attempts oa
-    JOIN students s ON oa.student_id = s.id
-    JOIN exams e ON oa.exam_id = e.id
+    JOIN students s ON oa.student_id = s.id AND s.deleted_at IS NULL
+    JOIN exams e ON oa.exam_id = e.id AND e.deleted_at IS NULL
     LEFT JOIN login_history lh ON oa.login_id = lh.id
     WHERE 1=1
 ";
@@ -69,351 +69,259 @@ function formatInterval($seconds)
     $s = $seconds % 60;
     return sprintf('%02d:%02d:%02d', $h, $m, $s);
 }
+$back_url = 'admin_dashboard';
 ?>
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <title>Exam Audit Log - Admin Console</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
-    <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="style_enhanced.css" rel="stylesheet">
-    <style>
-        .audit-card {
-            border-radius: 1.25rem;
-            border: none;
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.05);
-        }
-
-        .status-badge {
-            font-size: 0.75rem;
-            padding: 0.35rem 0.65rem;
-            border-radius: 50px;
-        }
-    </style>
-  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+  <meta charset="UTF-8">
+  <title>Exam Audit Log - Assessment Portal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="assets/favicon.ico">
+  <link href="assets/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="style_enhanced.css" rel="stylesheet">
 </head>
-
 <body>
-    <?php include 'admin_sidebar.php'; ?>
-    <div class="main-content">
-        <nav class="navbar navbar-light bg-white shadow-sm mb-4">
-            <div class="container-fluid d-flex justify-content-between align-items-center">
-                <div class="d-flex align-items-center gap-2">
-                    <button class="btn btn-outline-primary d-lg-none me-2" id="sidebarToggle"><i
-                            class="bi bi-list"></i></button>
-                    <span class="navbar-brand fw-bold">Exam Audit Trail</span>
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                    <span class="fw-semibold">
-                        <?= htmlspecialchars($name) ?>
-                    </span>
-                    <a href="logout" class="btn btn-sm btn-outline-danger ms-2 rounded-pill">Logout</a>
-                </div>
-            </div>
-        </nav>
-
-        <div class="container-xl">
-            <!-- Summary Stats -->
-            <div class="row g-4 mb-4">
-                <div class="col-md-4">
-                    <div class="card audit-card bg-primary text-white p-3">
-                        <div class="d-flex justify-content-between">
-                            <div>
-                                <h6 class="text-white-50">Total Attempts</h6>
-                                <h3 class="fw-bold mb-0">
-                                    <?= number_format($total_records) ?>
-                                </h3>
-                            </div>
-                            <div class="fs-1"><i class="bi bi-person-workspace"></i></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <?php
-                    $on_stmt = $db->query("SELECT COUNT(*) FROM objective_attempts WHERE finished_at IS NULL AND started_at > DATE_SUB(NOW(), INTERVAL 2 HOUR)");
-                    $ongoing = $on_stmt->fetchColumn();
-                    ?>
-                    <div class="card audit-card bg-success text-white p-3">
-                        <div class="d-flex justify-content-between">
-                            <div>
-                                <h6 class="text-white-50">Ongoing Exams</h6>
-                                <h3 class="fw-bold mb-0">
-                                    <?= number_format($ongoing) ?>
-                                </h3>
-                            </div>
-                            <div class="fs-1"><i class="bi bi-play-circle-fill"></i></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card audit-card bg-info text-white p-3">
-                        <div class="d-flex justify-content-between">
-                            <div>
-                                <h6 class="text-white-50">Avg. Time Taken</h6>
-                                <?php
-                                $avg_stmt = $db->query("SELECT AVG(time_taken) FROM objective_attempts WHERE finished_at IS NOT NULL");
-                                $avg = $avg_stmt->fetchColumn();
-                                ?>
-                                <h3 class="fw-bold mb-0">
-                                    <?= formatInterval($avg ?: 0) ?>
-                                </h3>
-                            </div>
-                            <div class="fs-1"><i class="bi bi-stopwatch"></i></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Filters -->
-            <div class="card audit-card p-4 mb-4">
-                <form method="get" class="row g-3 align-items-end">
-                    <div class="col-md-4">
-                        <label class="form-label fw-bold small">Filter by Exam</label>
-                        <select name="exam_id" class="form-select rounded-pill">
-                            <option value="">All Objective Exams</option>
-                            <?php foreach ($exams as $ex): ?>
-                                <option value="<?= $ex['id'] ?>" <?= $exam_id == $ex['id'] ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($ex['name']) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label fw-bold small">Search Student</label>
-                        <input type="text" name="student" class="form-control rounded-pill"
-                            value="<?= htmlspecialchars($student_query) ?>" placeholder="Name or Matric No...">
-                    </div>
-                    <div class="col-md-4 d-flex gap-2">
-                        <button type="submit" class="btn btn-primary rounded-pill px-4 px-md-5 w-100">
-                            <i class="bi bi-search me-1"></i> Apply Filters
-                        </button>
-                        <a href="admin_exam_audit" class="btn btn-outline-secondary rounded-pill w-100">Reset</a>
-                    </div>
-                </form>
-            </div>
-
-            <!-- Log Table -->
-            <div class="card audit-card overflow-hidden">
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                        <thead class="bg-light">
-                            <tr>
-                                <th>Student & Exam</th>
-                                <th>Portal Login</th>
-                                <th>Exam Started</th>
-                                <th>Exam Finished</th>
-                                <th>Duration</th>
-                                <th>Violations</th>
-                                <th>Score</th>
-                                <th>IP Log</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (empty($logs)): ?>
-                                <tr>
-                                    <td colspan="7" class="text-center py-5">
-                                        <div class="text-muted">No exam attempts found for the given criteria.</div>
-                                    </td>
-                                </tr>
-                            <?php else: ?>
-                                <?php foreach ($logs as $log): ?>
-                                    <tr>
-                                        <td>
-                                            <div class="fw-bold">
-                                                <?= htmlspecialchars($log['student_name']) ?>
-                                            </div>
-                                            <div class="small text-primary">
-                                                <?= htmlspecialchars($log['matric_no']) ?>
-                                            </div>
-                                            <div class="badge bg-light text-dark fw-normal mt-1">
-                                                <?= htmlspecialchars($log['exam_name']) ?>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <?php if ($log['portal_login_time']): ?>
-                                                <div class="small"><i class="bi bi-door-open me-1"></i>
-                                                    <?= date('H:i:s', strtotime($log['portal_login_time'])) ?>
-                                                </div>
-                                                <div class="text-muted" style="font-size: 0.7rem;">
-                                                    <?= date('d M, Y', strtotime($log['portal_login_time'])) ?>
-                                                </div>
-                                            <?php else: ?>
-                                                <span class="text-muted italic small">No sync login</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td>
-                                            <div class="small">
-                                                <?= date('H:i:s', strtotime($log['started_at'])) ?>
-                                            </div>
-                                            <div class="text-muted" style="font-size: 0.7rem;">
-                                                <?= date('d M, Y', strtotime($log['started_at'])) ?>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <?php if ($log['finished_at']): ?>
-                                                <div class="small">
-                                                    <?= date('H:i:s', strtotime($log['finished_at'])) ?>
-                                                </div>
-                                                <div class="text-muted" style="font-size: 0.7rem;">
-                                                    <?= date('d M, Y', strtotime($log['finished_at'])) ?>
-                                                </div>
-                                            <?php else: ?>
-                                                <span class="badge bg-warning text-dark">Ongoing</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td class="fw-bold font-monospace">
-                                            <?= formatInterval($log['time_taken']) ?>
-                                        </td>
-                                        <td>
-                                            <?php if ($log['violation_count'] > 0): ?>
-                                                <span class="badge rounded-pill bg-danger">
-                                                    <i class="bi bi-shield-exclamation me-1"></i> <?= $log['violation_count'] ?>
-                                                </span>
-                                            <?php else: ?>
-                                                <span class="text-muted small">None</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td>
-                                            <?php if ($log['finished_at']): ?>
-                                                <span class="fw-bold <?= $log['score'] > 0 ? 'text-success' : 'text-danger' ?>">
-                                                    <?= number_format($log['score'], 2) ?>
-                                                </span>
-                                            <?php else: ?>
-                                                <span class="text-muted">-</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td>
-                                            <div class="small text-muted">
-                                                <?= htmlspecialchars($log['login_ip'] ?: 'Unknown') ?>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Pagination -->
-            <?php if ($total_pages > 1): ?>
-                <nav class="mt-4">
-                    <ul class="pagination justify-content-center">
-                        <?php for ($i = 1; $i <= $total_pages; $i++): ?>
-                            <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-                                <a class="page-link shadow-sm border-0 rounded-pill mx-1"
-                                    href="?<?= http_build_query(array_merge($_GET, ['page' => $i])) ?>">
-                                    <?= $i ?>
-                                </a>
-                            </li>
-                        <?php endfor; ?>
-                    </ul>
-                </nav>
-            <?php endif; ?>
+  <?php include 'admin_sidebar.php'; ?>
+  <div class="main-content">
+    <nav class="admin-navbar">
+      <div class="admin-navbar-inner">
+        <div class="admin-navbar-start">
+          <button class="admin-navbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar"><i class="bi bi-list"></i></button>
+          <?php if (isset($back_url)): ?>
+            <a href="<?= $back_url ?>" class="admin-back-btn"><i class="bi bi-arrow-left"></i></a>
+          <?php endif; ?>
+          <h1 class="admin-navbar-title">Exam Audit Trail</h1>
         </div>
+        <div class="admin-navbar-end">
+          <div class="admin-user-badge">
+            <span class="admin-user-avatar"><?= strtoupper(substr($name, 0, 1)) ?></span>
+            <span class="admin-user-name"><?= htmlspecialchars($name) ?></span>
+          </div>
+          <a href="logout" class="admin-logout-btn" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+        </div>
+      </div>
+    </nav>
+
+    <div class="admin-content">
+      <nav class="admin-breadcrumb">
+        <ol>
+          <li><a href="admin_dashboard"><i class="bi bi-house"></i></a></li>
+          <li class="sep">/</li>
+          <li class="current" aria-current="page">Exam Audit</li>
+        </ol>
+      </nav>
+
+      <!-- Summary Stats -->
+      <div class="row g-4 mb-4">
+        <div class="col-md-4">
+          <div class="card border-0 shadow-sm rounded-4 bg-primary text-white p-3">
+            <div class="d-flex justify-content-between">
+              <div>
+                <h6 class="text-white-50">Total Attempts</h6>
+                <h3 class="fw-bold mb-0">
+                  <?= number_format($total_records) ?>
+                </h3>
+              </div>
+              <div class="fs-1"><i class="bi bi-person-workspace"></i></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <?php
+          $on_stmt = $db->query("SELECT COUNT(*) FROM objective_attempts WHERE finished_at IS NULL AND started_at > DATE_SUB(NOW(), INTERVAL 2 HOUR)");
+          $ongoing = $on_stmt->fetchColumn();
+          ?>
+          <div class="card border-0 shadow-sm rounded-4 bg-success text-white p-3">
+            <div class="d-flex justify-content-between">
+              <div>
+                <h6 class="text-white-50">Ongoing Exams</h6>
+                <h3 class="fw-bold mb-0">
+                  <?= number_format($ongoing) ?>
+                </h3>
+              </div>
+              <div class="fs-1"><i class="bi bi-play-circle-fill"></i></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card border-0 shadow-sm rounded-4 bg-info text-white p-3">
+            <div class="d-flex justify-content-between">
+              <div>
+                <h6 class="text-white-50">Avg. Time Taken</h6>
+                <?php
+                $avg_stmt = $db->query("SELECT AVG(time_taken) FROM objective_attempts WHERE finished_at IS NOT NULL");
+                $avg = $avg_stmt->fetchColumn();
+                ?>
+                <h3 class="fw-bold mb-0">
+                  <?= formatInterval($avg ?: 0) ?>
+                </h3>
+              </div>
+              <div class="fs-1"><i class="bi bi-stopwatch"></i></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="admin-card mb-4">
+        <div class="admin-card-body">
+          <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+              <label class="form-label fw-bold small">Filter by Exam</label>
+              <select name="exam_id" class="form-select rounded-pill">
+                <option value="">All Objective Exams</option>
+                <?php foreach ($exams as $ex): ?>
+                  <option value="<?= $ex['id'] ?>" <?= $exam_id == $ex['id'] ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($ex['name']) ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-bold small">Search Student</label>
+              <input type="text" name="student" class="form-control rounded-pill"
+                value="<?= htmlspecialchars($student_query) ?>" placeholder="Name or Matric No...">
+            </div>
+            <div class="col-md-4 d-flex gap-2">
+              <button type="submit" class="btn btn-primary rounded-pill px-4 px-md-5 w-100">
+                <i class="bi bi-search me-1"></i> Apply Filters
+              </button>
+              <a href="admin_exam_audit" class="btn btn-outline-secondary rounded-pill w-100">Reset</a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Log Table -->
+      <div class="admin-card">
+        <div class="admin-card-body p-0">
+          <div class="table-responsive">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Student & Exam</th>
+                  <th>Portal Login</th>
+                  <th>Exam Started</th>
+                  <th>Exam Finished</th>
+                  <th>Duration</th>
+                  <th>Violations</th>
+                  <th>Score</th>
+                  <th>IP Log</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if (empty($logs)): ?>
+                  <tr>
+                    <td colspan="8" class="text-center py-5">
+                      <div class="text-muted">No exam attempts found for the given criteria.</div>
+                    </td>
+                  </tr>
+                <?php else: ?>
+                  <?php foreach ($logs as $log): ?>
+                    <tr>
+                      <td>
+                        <div class="fw-bold">
+                          <?= htmlspecialchars($log['student_name']) ?>
+                        </div>
+                        <div class="small text-primary">
+                          <?= htmlspecialchars($log['matric_no']) ?>
+                        </div>
+                        <div class="badge bg-light text-dark fw-normal mt-1">
+                          <?= htmlspecialchars($log['exam_name']) ?>
+                        </div>
+                      </td>
+                      <td>
+                        <?php if ($log['portal_login_time']): ?>
+                          <div class="small"><i class="bi bi-door-open me-1"></i>
+                            <?= date('H:i:s', strtotime($log['portal_login_time'])) ?>
+                          </div>
+                          <small class="text-muted">
+                            <?= date('d M, Y', strtotime($log['portal_login_time'])) ?>
+                          </small>
+                        <?php else: ?>
+                          <span class="text-muted fst-italic small">No sync login</span>
+                        <?php endif; ?>
+                      </td>
+                      <td>
+                        <div class="small">
+                          <?= date('H:i:s', strtotime($log['started_at'])) ?>
+                        </div>
+                        <small class="text-muted">
+                          <?= date('d M, Y', strtotime($log['started_at'])) ?>
+                        </small>
+                      </td>
+                      <td>
+                        <?php if ($log['finished_at']): ?>
+                          <div class="small">
+                            <?= date('H:i:s', strtotime($log['finished_at'])) ?>
+                          </div>
+                          <small class="text-muted">
+                            <?= date('d M, Y', strtotime($log['finished_at'])) ?>
+                          </small>
+                        <?php else: ?>
+                          <span class="badge bg-warning text-dark">Ongoing</span>
+                        <?php endif; ?>
+                      </td>
+                      <td class="fw-bold font-monospace">
+                        <?= formatInterval($log['time_taken']) ?>
+                      </td>
+                      <td>
+                        <?php if ($log['violation_count'] > 0): ?>
+                          <span class="badge rounded-pill bg-danger">
+                            <i class="bi bi-shield-exclamation me-1"></i> <?= $log['violation_count'] ?>
+                          </span>
+                        <?php else: ?>
+                          <span class="text-muted small">None</span>
+                        <?php endif; ?>
+                      </td>
+                      <td>
+                        <?php if ($log['finished_at']): ?>
+                          <span class="fw-bold <?= $log['score'] > 0 ? 'text-success' : 'text-danger' ?>">
+                            <?= number_format($log['score'], 2) ?>
+                          </span>
+                        <?php else: ?>
+                          <span class="text-muted">-</span>
+                        <?php endif; ?>
+                      </td>
+                      <td>
+                        <div class="small text-muted">
+                          <?= htmlspecialchars($log['login_ip'] ?: 'Unknown') ?>
+                        </div>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                <?php endif; ?>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination -->
+          <?php if ($total_pages > 1): ?>
+            <div class="p-3 border-top">
+              <nav>
+                <ul class="pagination justify-content-center mb-0">
+                  <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                    <li class="page-item <?= $i == $page ? 'active' : '' ?>">
+                      <a class="page-link rounded-pill mx-1"
+                        href="?<?= http_build_query(array_merge($_GET, ['page' => $i])) ?>">
+                        <?= $i ?>
+                      </a>
+                    </li>
+                  <?php endfor; ?>
+                </ul>
+              </nav>
+            </div>
+          <?php endif; ?>
+        </div>
+      </div>
     </div>
-    <script src="assets/js/bootstrap.bundle.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const toggle = document.getElementById('sidebarToggle');
-            const sidebar = document.getElementById('sidebarMenu');
-            if (toggle && sidebar) {
-                toggle.addEventListener('click', () => sidebar.classList.toggle('show'));
-            }
-        });
-    </script>
-<!-- sweetalert_custom_injected_v1 -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Override global alert
-        window.alert = function(msg) {
-            Swal.fire({
-                title: 'Message',
-                text: msg,
-                icon: 'info',
-                confirmButtonColor: '#092c19'
-            });
-        };
+  </div>
 
-        // Intercept inline onsubmit confirms
-        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
-            let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
-            if(match) {
-                let msg = match[1];
-                el.removeAttribute('onsubmit');
-                el.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    Swal.fire({
-                        title: 'Are you sure?',
-                        text: msg,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#092c19',
-                        cancelButtonColor: '#d33',
-                        confirmButtonText: 'Yes, proceed'
-                    }).then((result) => {
-                        if(result.isConfirmed) {
-                            let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover') 
-                                      || el.querySelector('button[type="submit"], input[type="submit"]');
-                            if(btn && btn.name) {
-                                let hidden = document.createElement('input');
-                                hidden.type = 'hidden';
-                                hidden.name = btn.name;
-                                hidden.value = btn.value || '1';
-                                el.appendChild(hidden);
-                            }
-                            HTMLFormElement.prototype.submit.call(el);
-                        }
-                    });
-                });
-            }
-        });
-
-        // Intercept inline onclick confirms for anchors
-        document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
-            let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
-            if(match) {
-                let msg = match[1];
-                el.removeAttribute('onclick');
-                el.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    Swal.fire({
-                        title: 'Are you sure?',
-                        text: msg,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#092c19',
-                        cancelButtonColor: '#d33',
-                        confirmButtonText: 'Yes, proceed'
-                    }).then((result) => {
-                        if(result.isConfirmed) {
-                            if(el.tagName === 'A' && el.href) {
-                                window.location.href = el.href;
-                            } else if(el.tagName === 'BUTTON') {
-                                // if it's a submit button inside a form
-                                if(el.type === 'submit' && el.form) {
-                                    if(el.name) {
-                                        let hidden = document.createElement('input');
-                                        hidden.type = 'hidden';
-                                        hidden.name = el.name;
-                                        hidden.value = el.value || '1';
-                                        el.form.appendChild(hidden);
-                                    }
-                                    HTMLFormElement.prototype.submit.call(el.form);
-                                }
-                            }
-                        }
-                    });
-                });
-            }
-        });
-    });
-</script>
+  <?php include 'footer.php'; ?>
+  <script src="assets/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/admin-common.js"></script>
+  <script src="assets/js/admin-swal.js"></script>
 </body>
-
-
 </html>

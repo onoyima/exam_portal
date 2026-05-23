@@ -8,7 +8,7 @@ $role = $_SESSION['role'] ?? 'examiner';
 $dashboard = ($role == 'admin') ? 'admin_dashboard.php' : 'assess.php';
 
 // Fetch all examiners/staff for private chat
-$examiners = $db->query("SELECT id, name, username, role FROM examiners ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+$examiners = $db->query("SELECT id, name, username, role FROM examiners WHERE deleted_at IS NULL ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch current sender's ID
 $stmt = $db->prepare("SELECT id FROM examiners WHERE username=?");
@@ -251,7 +251,7 @@ $sender_id = $stmt->fetchColumn() ?: 0;
 </head>
 
 <body class="bg-light">
-  <?php include 'admin_sidebar.php'; ?>
+  <?php include ($_SESSION['role'] ?? '') === 'examiner' ? 'examiner_sidebar.php' : 'admin_sidebar.php'; ?>
   
   <div class="main-content">
     <!-- Premium Header Navbar -->
@@ -265,25 +265,25 @@ $sender_id = $stmt->fetchColumn() ?: 0;
         
         <!-- Premium Profile Badge with Dropdown -->
         <div class="dropdown">
-          <div class="d-flex align-items-center gap-3" id="profileDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="cursor: pointer;">
+          <div class="d-flex align-items-center gap-3 chat-clickable" id="profileDropdown" data-bs-toggle="dropdown" aria-expanded="false">
             <div class="text-end d-none d-md-block">
               <div class="fw-bold small mb-0 text-dark"><?= htmlspecialchars($name) ?></div>
-              <div class="text-muted small" style="font-size:0.7rem"><?= strtoupper($role) ?></div>
+              <div class="text-muted small chat-timestamp"><?= strtoupper($role) ?></div>
             </div>
             <span class="profile-icon me-0"><?= strtoupper(substr($name, 0, 1)) ?></span>
           </div>
           <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-3 mt-2 animate slideIn" aria-labelledby="profileDropdown">
             <li>
               <div class="px-3 py-2">
-                <span class="fw-bold text-dark d-block" style="font-size:0.85rem;"><?= htmlspecialchars($name) ?></span>
-                <span class="text-muted small d-block text-truncate" style="font-size:0.75rem; max-width: 160px;"><?= htmlspecialchars($_SESSION['user'] ?? '') ?></span>
+                <span class="fw-bold text-dark d-block chat-name"><?= htmlspecialchars($name) ?></span>
+                <span class="text-muted small d-block text-truncate chat-last-msg"><?= htmlspecialchars($_SESSION['user'] ?? '') ?></span>
               </div>
             </li>
             <li><hr class="dropdown-divider my-1"></li>
             <li>
               <a class="dropdown-item text-danger d-flex align-items-center gap-2 py-2" href="logout">
                 <i class="bx bx-log-out fs-5"></i>
-                <span style="font-size:0.85rem; font-weight: 500;">Logout</span>
+                <span class="chat-logout-text">Logout</span>
               </a>
             </li>
           </ul>
@@ -294,14 +294,14 @@ $sender_id = $stmt->fetchColumn() ?: 0;
     <!-- Sub-page Chat Application Panel -->
     <div class="container-xl px-4">
       <div class="card chat-card border-0 shadow-sm rounded-4 overflow-hidden">
-        <div class="row g-0 h-100 flex-nowrap" style="height: 100% !important;">
+        <div class="row g-0 flex-nowrap chat-full-height">
           
           <!-- Column 1: Sub-panel Contacts List -->
           <div class="col-12 col-md-4 col-lg-3 chat-contacts-panel d-flex flex-column">
             <div class="p-3 border-bottom bg-white">
               <h5 class="fw-bold mb-3 d-flex align-items-center justify-content-between">
                 <span>Conversations</span>
-                <span class="badge bg-primary-subtle text-primary rounded-pill px-2 py-1" style="font-size:0.65rem" id="onlineCounter">Staff List</span>
+                <span class="badge bg-primary-subtle text-primary rounded-pill px-2 py-1 chat-badge-text" id="onlineCounter">Staff List</span>
               </h5>
               <div class="contacts-search-container">
                 <i class="bx bx-search contacts-search-icon"></i>
@@ -336,7 +336,7 @@ $sender_id = $stmt->fetchColumn() ?: 0;
                     <div class="d-flex justify-content-between align-items-center">
                       <span class="fw-bold text-dark text-truncate"><?= htmlspecialchars($ex['name']) ?></span>
                     </div>
-                    <small class="text-muted text-truncate d-block" style="font-size:0.75rem"><?= strtoupper($ex['role'] ?? 'Examiner') ?></small>
+                    <small class="text-muted text-truncate d-block chat-small"><?= strtoupper($ex['role'] ?? 'Examiner') ?></small>
                   </div>
                 </a>
               <?php endforeach; ?>
@@ -353,7 +353,7 @@ $sender_id = $stmt->fetchColumn() ?: 0;
                 <div>
                   <h6 class="fw-bold mb-0 text-dark" id="activeChatName">Group Channel</h6>
                   <small class="text-muted d-flex align-items-center gap-1" id="activeChatStatus">
-                    <span class="status-dot online" style="width:8px; height:8px;"></span> Active Group
+                    <span class="status-dot online chat-status-dot"></span> Active Group
                   </small>
                 </div>
               </div>
@@ -370,14 +370,14 @@ $sender_id = $stmt->fetchColumn() ?: 0;
                 <i class="bx bx-paperclip text-primary fs-4"></i>
                 <span class="small text-dark text-truncate fw-semibold" id="mediaPreviewName">Attached file.png</span>
               </div>
-              <button type="button" class="btn-close" style="font-size:0.7rem;" id="clearMediaPreview" title="Remove Attachment"></button>
+              <button type="button" class="btn-close chat-btn-sm" id="clearMediaPreview" title="Remove Attachment"></button>
             </div>
 
             <!-- Message Typing Form Footer -->
             <div class="p-3 bg-white border-top">
               <form id="chatForm" enctype="multipart/form-data" class="d-flex align-items-center gap-2">
                 <!-- Attachment Button -->
-                <label class="btn btn-outline-secondary btn-icon rounded-circle mb-0" style="width:42px; height:42px; cursor:pointer;" title="Attach diagram (Image, Audio, Video)">
+                <label class="btn btn-outline-secondary btn-icon rounded-circle mb-0 chat-avatar-label" title="Attach diagram (Image, Audio, Video)">
                   <i class="bx bx-paperclip fs-5"></i>
                   <input type="file" name="media" id="mediaInput" accept="image/*,audio/*,video/*" class="d-none">
                 </label>
@@ -386,7 +386,7 @@ $sender_id = $stmt->fetchColumn() ?: 0;
                 <input type="text" name="message" id="messageInput" autocomplete="off" class="form-control rounded-pill p-2 px-3 chat-input" placeholder="Write your message here...">
 
                 <!-- Send Button -->
-                <button type="submit" class="btn btn-primary rounded-circle btn-icon" style="width:42px; height:42px;">
+                <button type="submit" class="btn btn-primary rounded-circle btn-icon chat-avatar-btn">
                   <i class="bx bxs-send fs-5"></i>
                 </button>
               </form>
@@ -556,7 +556,7 @@ $sender_id = $stmt->fetchColumn() ?: 0;
           activeChatAvatar.className = 'chat-header-avatar user-avatar';
           activeChatAvatar.textContent = avatarText || contactName.charAt(0).toUpperCase();
           activeChatName.textContent = contactName;
-          activeChatStatus.innerHTML = '<span class="status-dot offline" id="headerStatusDot" style="width:8px; height:8px;"></span> Checking Status...';
+          activeChatStatus.innerHTML = '<span class="status-dot offline chat-status-dot" id="headerStatusDot"></span> Checking Status...';
           
           markAsRead(currentUser);
         } else {
@@ -566,7 +566,7 @@ $sender_id = $stmt->fetchColumn() ?: 0;
           activeChatAvatar.className = 'chat-header-avatar group-avatar';
           activeChatAvatar.innerHTML = '<i class="bi bi-people-fill"></i>';
           activeChatName.textContent = 'Group Channel';
-          activeChatStatus.innerHTML = '<span class="status-dot online" style="width:8px; height:8px;"></span> Active Group';
+          activeChatStatus.innerHTML = '<span class="status-dot online chat-status-dot"></span> Active Group';
         }
         
         chatMessages.innerHTML = '<div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Loading messages...</div>';
@@ -596,7 +596,7 @@ $sender_id = $stmt->fetchColumn() ?: 0;
             if (headerDot) {
               headerDot.className = 'status-dot ' + (hasActiveUserOnline ? 'online' : 'offline');
             }
-            activeChatStatus.innerHTML = `<span class="status-dot ${hasActiveUserOnline ? 'online' : 'offline'}" style="width:8px; height:8px;"></span> ${hasActiveUserOnline ? 'Online' : 'Offline'}`;
+            activeChatStatus.innerHTML = `<span class="status-dot ${hasActiveUserOnline ? 'online' : 'offline'} chat-status-dot"></span> ${hasActiveUserOnline ? 'Online' : 'Offline'}`;
           }
         });
     }
@@ -608,21 +608,8 @@ $sender_id = $stmt->fetchColumn() ?: 0;
     setInterval(fetchStatus, 5000);
   </script>
 
-  <!-- sweetalert_custom_injected_v1 -->
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <script>
-      document.addEventListener('DOMContentLoaded', function() {
-          // Override global alert
-          window.alert = function(msg) {
-              Swal.fire({
-                  title: 'Message',
-                  text: msg,
-                  icon: 'info',
-                  confirmButtonColor: '#092c19'
-              });
-          };
-      });
-  </script>
+  <script src="assets/js/admin-common.js"></script>
+  <script src="assets/js/admin-swal.js"></script>
 </body>
 
 </html>

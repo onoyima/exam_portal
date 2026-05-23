@@ -10,7 +10,7 @@ if (!$exam_id)
   die('No exam selected.');
 
 // Check if exam is assigned and active
-$stmt = $db->prepare("SELECT * FROM exams e JOIN exam_students es ON e.id=es.exam_id WHERE e.id=? AND es.student_id=? AND e.type='objective' AND e.is_active=1");
+$stmt = $db->prepare("SELECT * FROM exams e JOIN exam_students es ON e.id=es.exam_id WHERE e.id=? AND es.student_id=? AND e.type='objective' AND e.is_active=1 AND e.deleted_at IS NULL");
 $stmt->execute([$exam_id, $student_id]);
 $exam = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$exam)
@@ -43,7 +43,7 @@ if (isset($_POST['confirm_final_submit'])) {
   $attempt_no = intval($_POST['current_attempt_no'] ?? 1);
 
   // Calculate score logic (duplicated here for immediate storage)
-  $qs_check = $db->prepare("SELECT id, correct_option, mark FROM objective_questions WHERE exam_id=? ORDER BY id");
+  $qs_check = $db->prepare("SELECT id, correct_option, mark FROM objective_questions WHERE exam_id=? AND deleted_at IS NULL ORDER BY id");
   $qs_check->execute([$exam_id]);
   $questions_check = $qs_check->fetchAll(PDO::FETCH_ASSOC);
 
@@ -161,7 +161,7 @@ if ($view_result) {
   $atmpt_stmt->execute([$exam_id, $student_id]);
   $all_attempts = $atmpt_stmt->fetchAll(PDO::FETCH_ASSOC);
 
-  $qs = $db->prepare("SELECT id, correct_option, mark FROM objective_questions WHERE exam_id=? ORDER BY id");
+  $qs = $db->prepare("SELECT id, correct_option, mark FROM objective_questions WHERE exam_id=? AND deleted_at IS NULL ORDER BY id");
   $qs->execute([$exam_id]);
   $questions = $qs->fetchAll(PDO::FETCH_ASSOC);
 
@@ -255,13 +255,13 @@ if ($view_result) {
         (SELECT COUNT(*) FROM objective_attempts oa WHERE oa.exam_id = e.id AND oa.student_id = ? AND oa.finished_at IS NOT NULL) as finished_attempts,
         (SELECT COUNT(*) FROM objective_attempts oa WHERE oa.exam_id = e.id AND oa.student_id = ?) as total_attempts
         FROM exams e JOIN exam_students es ON e.id=es.exam_id 
-        WHERE es.student_id=? AND e.type='objective' AND e.is_active=1 ORDER BY e.created_at DESC");
+        WHERE es.student_id=? AND e.type='objective' AND e.is_active=1 AND e.deleted_at IS NULL ORDER BY e.created_at DESC");
     $stmt_sb->execute([$student_id, $student_id, $student_id]);
     $active_exams = $stmt_sb->fetchAll(PDO::FETCH_ASSOC);
 
     // Populate $practical_exams as expected by student_sidebar.php
     $stmt_prac = $db->prepare("SELECT e.* FROM exams e JOIN exam_students es ON e.id=es.exam_id 
-        WHERE es.student_id=? AND e.type != 'objective' AND e.is_active=1 ORDER BY e.created_at DESC");
+        WHERE es.student_id=? AND e.type != 'objective' AND e.is_active=1 AND e.deleted_at IS NULL ORDER BY e.created_at DESC");
     $stmt_prac->execute([$student_id]);
     $practical_exams = $stmt_prac->fetchAll(PDO::FETCH_ASSOC);
 
@@ -397,95 +397,10 @@ if ($view_result) {
         };
       }
     </script>
-    <!-- sweetalert_custom_injected_v1 -->
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script>
-      document.addEventListener('DOMContentLoaded', function () {
-        // Override global alert
-        window.alert = function (msg) {
-          Swal.fire({
-            title: 'Message',
-            text: msg,
-            icon: 'info',
-            confirmButtonColor: '#092c19'
-          });
-        };
-
-        // Intercept inline onsubmit confirms
-        document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
-          let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
-          if (match) {
-            let msg = match[1];
-            el.removeAttribute('onsubmit');
-            el.addEventListener('submit', function (e) {
-              e.preventDefault();
-              Swal.fire({
-                title: 'Are you sure?',
-                text: msg,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#092c19',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Yes, proceed'
-              }).then((result) => {
-                if (result.isConfirmed) {
-                  let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover')
-                    || el.querySelector('button[type="submit"], input[type="submit"]');
-                  if (btn && btn.name) {
-                    let hidden = document.createElement('input');
-                    hidden.type = 'hidden';
-                    hidden.name = btn.name;
-                    hidden.value = btn.value || '1';
-                    el.appendChild(hidden);
-                  }
-                  HTMLFormElement.prototype.submit.call(el);
-                }
-              });
-            });
-          }
-        });
-
-        // Intercept inline onclick confirms for anchors
-        document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
-          let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
-          if (match) {
-            let msg = match[1];
-            el.removeAttribute('onclick');
-            el.addEventListener('click', function (e) {
-              e.preventDefault();
-              Swal.fire({
-                title: 'Are you sure?',
-                text: msg,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#092c19',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Yes, proceed'
-              }).then((result) => {
-                if (result.isConfirmed) {
-                  if (el.tagName === 'A' && el.href) {
-                    window.location.href = el.href;
-                  } else if (el.tagName === 'BUTTON') {
-                    // if it's a submit button inside a form
-                    if (el.type === 'submit' && el.form) {
-                      if (el.name) {
-                        let hidden = document.createElement('input');
-                        hidden.type = 'hidden';
-                        hidden.name = el.name;
-                        hidden.value = el.value || '1';
-                        el.form.appendChild(hidden);
-                      }
-                      HTMLFormElement.prototype.submit.call(el.form);
-                    }
-                  }
-                }
-              });
-            });
-          }
-        });
-      });
-    </script>
-  </body>
+    
+      <script src="assets/js/admin-common.js"></script>
+    <script src="assets/js/admin-swal.js"></script>
+</body>
 
 
   </html>
@@ -501,7 +416,7 @@ $db_elapsed = isset($att_data['elapsed']) ? intval($att_data['elapsed']) : 0;
 
 if (!$stored_order) {
   // Generate new order
-  $all_qs = $db->prepare("SELECT id FROM objective_questions WHERE exam_id=? ORDER BY id");
+  $all_qs = $db->prepare("SELECT id FROM objective_questions WHERE exam_id=? AND deleted_at IS NULL ORDER BY id");
   $all_qs->execute([$exam_id]);
   $ids = $all_qs->fetchAll(PDO::FETCH_COLUMN);
 
@@ -524,7 +439,7 @@ if (!$stored_order) {
 $questions = [];
 if (!empty($stored_order)) {
   // MySQL ORDER BY FIELD ensures the exact ordering from the CSV list
-  $qs = $db->prepare("SELECT id, exam_id, question_text, question_image, option_a, option_b, option_c, option_d, option_a_image, option_b_image, option_c_image, option_d_image, mark FROM objective_questions WHERE id IN ($stored_order) ORDER BY FIELD(id, $stored_order)");
+  $qs = $db->prepare("SELECT id, exam_id, question_text, question_image, option_a, option_b, option_c, option_d, option_a_image, option_b_image, option_c_image, option_d_image, mark FROM objective_questions WHERE id IN ($stored_order) AND deleted_at IS NULL ORDER BY FIELD(id, $stored_order)");
   $qs->execute();
   $questions = $qs->fetchAll(PDO::FETCH_ASSOC);
 }
@@ -547,7 +462,7 @@ $finished_answers = $ans_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 // Create correct answer map if student can view scores
 $correct_answers_map = [];
 if ($exam['student_can_view_score'] && $is_review_mode) {
-  $all_qs_full = $db->prepare("SELECT id, correct_option FROM objective_questions WHERE exam_id=?");
+  $all_qs_full = $db->prepare("SELECT id, correct_option FROM objective_questions WHERE exam_id=? AND deleted_at IS NULL");
   $all_qs_full->execute([$exam_id]);
   $correct_answers_map = $all_qs_full->fetchAll(PDO::FETCH_KEY_PAIR);
 }
@@ -1565,96 +1480,11 @@ $current_index = 0;
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.1.0/dist/blazeface.min.js"></script>
   <script src="assets/js/ai_proctor.js"></script>
   <?php endif; ?>
-  <!-- sweetalert_custom_injected_v1 -->
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      // Override global alert
-      window.alert = function (msg) {
-        Swal.fire({
-          title: 'Message',
-          text: msg,
-          icon: 'info',
-          confirmButtonColor: '#092c19'
-        });
-      };
-
-      // Intercept inline onsubmit confirms
-      document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
-        let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
-        if (match) {
-          let msg = match[1];
-          el.removeAttribute('onsubmit');
-          el.addEventListener('submit', function (e) {
-            e.preventDefault();
-            Swal.fire({
-              title: 'Are you sure?',
-              text: msg,
-              icon: 'warning',
-              showCancelButton: true,
-              confirmButtonColor: '#092c19',
-              cancelButtonColor: '#d33',
-              confirmButtonText: 'Yes, proceed'
-            }).then((result) => {
-              if (result.isConfirmed) {
-                let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover')
-                  || el.querySelector('button[type="submit"], input[type="submit"]');
-                if (btn && btn.name) {
-                  let hidden = document.createElement('input');
-                  hidden.type = 'hidden';
-                  hidden.name = btn.name;
-                  hidden.value = btn.value || '1';
-                  el.appendChild(hidden);
-                }
-                HTMLFormElement.prototype.submit.call(el);
-              }
-            });
-          });
-        }
-      });
-
-      // Intercept inline onclick confirms for anchors
-      document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
-        let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
-        if (match) {
-          let msg = match[1];
-          el.removeAttribute('onclick');
-          el.addEventListener('click', function (e) {
-            e.preventDefault();
-            Swal.fire({
-              title: 'Are you sure?',
-              text: msg,
-              icon: 'warning',
-              showCancelButton: true,
-              confirmButtonColor: '#092c19',
-              cancelButtonColor: '#d33',
-              confirmButtonText: 'Yes, proceed'
-            }).then((result) => {
-              if (result.isConfirmed) {
-                if (el.tagName === 'A' && el.href) {
-                  window.location.href = el.href;
-                } else if (el.tagName === 'BUTTON') {
-                  // if it's a submit button inside a form
-                  if (el.type === 'submit' && el.form) {
-                    if (el.name) {
-                      let hidden = document.createElement('input');
-                      hidden.type = 'hidden';
-                      hidden.name = el.name;
-                      hidden.value = el.value || '1';
-                      el.form.appendChild(hidden);
-                    }
-                    HTMLFormElement.prototype.submit.call(el.form);
-                  }
-                }
-              }
-            });
-          });
-        }
-      });
-    });
-  </script>
+  
   <!-- Aggressive Global Lockdown -->
   <script src="assets/js/student_lockdown.js"></script>
+    <script src="assets/js/admin-common.js"></script>
+    <script src="assets/js/admin-swal.js"></script>
 </body>
 
 

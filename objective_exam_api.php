@@ -20,7 +20,7 @@ try {
     // Shared scheduling check for API actions
     $exam_id_check = isset($_REQUEST['exam_id']) ? intval($_REQUEST['exam_id']) : 0;
     if ($exam_id_check > 0) {
-        $stmt = $db->prepare("SELECT start_time, end_time FROM exams WHERE id = ?");
+        $stmt = $db->prepare("SELECT start_time, end_time FROM exams WHERE id = ? AND deleted_at IS NULL");
         $stmt->execute([$exam_id_check]);
         $exam_data = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($exam_data) {

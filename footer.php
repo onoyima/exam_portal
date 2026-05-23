@@ -8,8 +8,8 @@
       <span>Enhanced Edition</span>
       <span>•</span>
       <span>© <?= date('Y') ?> All rights reserved</span>
-      <span style="margin-left:2rem;">
-        <button id="themeToggle" class="btn btn-sm btn-outline-secondary" style="margin-left:1rem;">🌙 Dark
+      <span class="footer-theme-wrapper">
+        <button id="themeToggle" class="btn btn-sm btn-outline-secondary footer-theme-btn"><i class="bi bi-moon"></i> Dark
           Mode</button>
       </span>
     </div>
@@ -22,8 +22,7 @@
 
 <!-- User Chat Icon -->
 <div class="user-chat-icon position-relative" id="userChatIcon" title="User Chat">
-  <span id="userChatNotification"
-    style="display:none;position:absolute;top:8px;right:8px;background:#dc3545;color:#fff;border-radius:50%;padding:2px 7px;font-size:13px;z-index:1100;min-width:22px;text-align:center;"></span>
+  <span id="userChatNotification" class="user-chat-notification-badge"></span>
 </div>
 
 <!-- User Chat Modal (fixed, improved, full-featured) -->
@@ -31,9 +30,9 @@
   <div class="user-chat-content">
     <div class="user-chat-sidebar">
       <div class="user-chat-sidebar-header d-flex justify-content-between align-items-center">
-        <h5>👥 Chat</h5>
+        <h5><i class="bi bi-people"></i> Chat</h5>
         <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
-          <button class="btn btn-sm btn-danger" id="clearChatsBtn" title="Clear All Chats">🗑️</button>
+          <button class="btn btn-sm btn-danger" id="clearChatsBtn" title="Clear All Chats"><i class="bi bi-trash"></i></button>
         <?php endif; ?>
       </div>
       <div class="user-chat-contacts" id="userChatContacts">
@@ -50,7 +49,7 @@
       </div>
       <div class="user-chat-input">
         <input type="text" id="userChatInput" placeholder="Type a message..." maxlength="500">
-        <button id="userChatSend">➤</button>
+        <button id="userChatSend"><i class="bi bi-send"></i></button>
       </div>
     </div>
   </div>
@@ -65,14 +64,102 @@
     z-index: 9999 !important;
     display: flex !important;
   }
+  .user-chat-notification-badge {
+    display: none;
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #dc3545;
+    color: #fff;
+    border-radius: 50%;
+    padding: 2px 7px;
+    font-size: 13px;
+    z-index: 1100;
+    min-width: 22px;
+    text-align: center;
+  }
+  .navbar-chat-dropdown {
+    display: none;
+    position: absolute;
+    top: 48px;
+    right: 0;
+    min-width: 320px;
+    max-width: 400px;
+    z-index: 99999;
+    background: #fff;
+    border-radius: 1rem;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    padding: 0.5rem 0;
+    overflow: hidden;
+  }
+  .navbar-chat-dropdown-footer {
+    text-align: center;
+    padding: 0.5rem 0;
+    border-top: 1px solid #dee2e6;
+    background: #f8f9fa;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 15px;
+  }
+  .footer-theme-wrapper {
+    margin-left: 2rem;
+  }
+  .footer-theme-btn {
+    margin-left: 1rem;
+  }
+  .back-button-inline {
+    margin: 0.5rem;
+  }
+  .navbar-chat-item {
+    cursor: pointer;
+  }
+  .navbar-chat-avatar {
+    background: var(--primary-color);
+    color: #fff;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .navbar-chat-content {
+    flex: 1;
+    min-width: 0;
+  }
+  .navbar-chat-name {
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .navbar-chat-preview {
+    font-size: 13px;
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+  }
+  .navbar-chat-time {
+    font-size: 12px;
+    color: #888;
+    flex-shrink: 0;
+  }
+  .navbar-chat-unread {
+    background: #f8f9fa;
+  }
+  .user-chat-contact-role {
+    font-size: 12px;
+    color: #888;
+  }
 </style>
 
 <!-- Notification Dropdown for Navbar Bell -->
-<div id="navbarChatDropdown"
-  style="display:none;position:absolute;top:48px;right:0;min-width:320px;max-width:400px;z-index:99999;background:#fff;border-radius:1rem;box-shadow:0 8px 32px rgba(0,0,0,0.15);padding:0.5rem 0;overflow:hidden;">
+<div id="navbarChatDropdown" class="navbar-chat-dropdown">
   <div id="navbarChatDropdownContent"></div>
-  <div id="navbarChatDropdownFooter" class="text-center py-2 border-top bg-light"
-    style="cursor:pointer;font-weight:500;font-size:15px;">Show all</div>
+  <div id="navbarChatDropdownFooter" class="navbar-chat-dropdown-footer">Show all</div>
 </div>
 
 <script>
@@ -172,7 +259,7 @@
       const groupChat = document.createElement('div');
       groupChat.className = 'user-chat-contact' + (currentChatUser === 'group' ? ' active' : '');
       groupChat.innerHTML = `
-      <div class="user-chat-contact-avatar">👥</div>
+      <div class="user-chat-contact-avatar"><i class="bi bi-people"></i></div>
       <div class="user-chat-contact-info">
         <div class="user-chat-contact-name">Group Chat</div>
         <div class="user-chat-contact-status online">Online</div>
@@ -189,7 +276,7 @@
         contactDiv.innerHTML = `
         <div class="user-chat-contact-avatar">${contact.name.charAt(0).toUpperCase()}</div>
         <div class="user-chat-contact-info">
-          <div class="user-chat-contact-name">${contact.name} <span style='font-size:12px;color:#888;'>(${role})</span></div>
+          <div class="user-chat-contact-name">${contact.name} <span class="user-chat-contact-role">(${role})</span></div>
           <div class="user-chat-contact-status ${contact.online ? 'online' : ''}">${contact.online ? 'Online' : 'Offline'}</div>
         </div>
       `;
@@ -294,7 +381,7 @@
     const backButton = document.createElement('button');
     backButton.className = 'btn btn-sm btn-outline-secondary d-md-none';
     backButton.innerHTML = '← Back';
-    backButton.style.margin = '0.5rem';
+    backButton.className += ' back-button-inline';
     backButton.addEventListener('click', () => {
       userChatMain.classList.remove('show');
       currentChatUser = null;
@@ -374,15 +461,14 @@
               var preview = msg.message.length > 40 ? msg.message.substring(0, 40) + '…' : msg.message;
               var time = new Date(msg.created_at.replace(' ', 'T')).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
               var item = document.createElement('div');
-              item.className = 'dropdown-item d-flex align-items-start gap-2 px-3 py-2';
-              item.style.cursor = 'pointer';
+              item.className = 'dropdown-item d-flex align-items-start gap-2 px-3 py-2 navbar-chat-item';
               item.innerHTML = `
-              <div style=\"background:var(--primary-color);color:#fff;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:15px;\">${msg.sender_name.charAt(0).toUpperCase()}</div>
-              <div style=\"flex:1;min-width:0;\">
-                <div style=\"font-weight:600;font-size:15px;\">${msg.sender_name}</div>
-                <div style=\"font-size:13px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;\">${preview}</div>
+              <div class="navbar-chat-avatar">${msg.sender_name.charAt(0).toUpperCase()}</div>
+              <div class="navbar-chat-content">
+                <div class="navbar-chat-name">${msg.sender_name}</div>
+                <div class="navbar-chat-preview">${preview}</div>
               </div>
-              <div style=\"font-size:12px;color:#888;\">${time}</div>
+              <div class="navbar-chat-time">${time}</div>
             `;
               item.onclick = function () {
                 markAllAsRead(msg.sender_id);
@@ -424,18 +510,17 @@
               var preview = msg.message.length > 40 ? msg.message.substring(0, 40) + '…' : msg.message;
               var time = new Date(msg.created_at.replace(' ', 'T')).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
               var item = document.createElement('div');
-              item.className = 'dropdown-item d-flex align-items-start gap-2 px-3 py-2';
-              item.style.cursor = 'pointer';
+              item.className = 'dropdown-item d-flex align-items-start gap-2 px-3 py-2 navbar-chat-item';
               if (!msg.is_read || msg.is_read === '0') {
-                item.style.background = '#f8f9fa';
+                item.classList.add('navbar-chat-unread');
               }
               item.innerHTML = `
-              <div style="background:var(--primary-color);color:#fff;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:15px;">${msg.sender_name.charAt(0).toUpperCase()}</div>
-              <div style="flex:1;min-width:0;">
-                <div style="font-weight:600;font-size:15px;">${msg.sender_name}</div>
-                <div style="font-size:13px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;">${preview}</div>
+              <div class="navbar-chat-avatar">${msg.sender_name.charAt(0).toUpperCase()}</div>
+              <div class="navbar-chat-content">
+                <div class="navbar-chat-name">${msg.sender_name}</div>
+                <div class="navbar-chat-preview">${preview}</div>
               </div>
-              <div style="font-size:12px;color:#888;">${time}</div>
+              <div class="navbar-chat-time">${time}</div>
             `;
               item.onclick = function () {
                 markAllAsRead(msg.sender_id);
@@ -512,12 +597,12 @@
       document.body.classList.add('dark-mode');
       document.querySelectorAll('.footer').forEach(f => f.classList.add('dark-mode'));
       localStorage.setItem('theme', 'dark');
-      document.getElementById('themeToggle').innerHTML = '☀️ Light Mode';
+      document.getElementById('themeToggle').innerHTML = '<i class="bi bi-sun"></i> Light Mode';
     } else {
       document.body.classList.remove('dark-mode');
       document.querySelectorAll('.footer').forEach(f => f.classList.remove('dark-mode'));
       localStorage.setItem('theme', 'light');
-      document.getElementById('themeToggle').innerHTML = '🌙 Dark Mode';
+      document.getElementById('themeToggle').innerHTML = '<i class="bi bi-moon"></i> Dark Mode';
     }
   }
   document.addEventListener('DOMContentLoaded', function () {

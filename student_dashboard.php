@@ -17,7 +17,7 @@ $stmt = $db->prepare("SELECT e.*,
     (SELECT COUNT(*) FROM objective_attempts oa WHERE oa.exam_id = e.id AND oa.student_id = ?) as total_attempts,
     (SELECT COUNT(*) FROM objective_attempts oa WHERE oa.exam_id = e.id AND oa.student_id = ? AND oa.is_locked = 1) as locked_attempts
     FROM exams e JOIN exam_students es ON e.id=es.exam_id 
-    WHERE es.student_id=? AND e.is_active=1 ORDER BY e.created_at DESC");
+    WHERE es.student_id=? AND e.is_active=1 AND e.deleted_at IS NULL ORDER BY e.created_at DESC");
 $stmt->execute([$student_id, $student_id, $student_id, $student_id]);
 $all_exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -37,130 +37,65 @@ foreach($active_exams as $e) {
 <html lang="en">
 
 <head>
+  <meta charset="UTF-8">
   <title>Student Dashboard - Assessment Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
+  <link rel="icon" href="assets/favicon.ico">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
-  <style>
-    .exam-card-student {
-      border-radius: 1.5rem;
-      border: 1px solid rgba(0, 0, 0, 0.05);
-      transition: all 0.3s ease;
-      background: #fff;
-      overflow: hidden;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .exam-card-student:hover {
-      transform: translateY(-8px);
-      box-shadow: 0 15px 35px rgba(9, 44, 25, 0.1);
-      border-color: var(--primary-light);
-    }
-
-    .exam-status-overlay {
-      position: absolute;
-      top: 15px;
-      right: 15px;
-      z-index: 2;
-    }
-
-    .card-exam-header {
-      background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
-      padding: 2rem 1.5rem;
-      position: relative;
-      color: white;
-    }
-
-    .card-exam-body {
-      padding: 1.5rem;
-      flex-grow: 1;
-    }
-
-    .stat-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.5rem 1rem;
-      background: var(--secondary-color);
-      border-radius: 2rem;
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--primary-color);
-    }
-
-    .exam-card-student.highlighted {
-      animation: highlightPulse 2s ease-in-out;
-      border: 2px solid var(--accent-color);
-    }
-
-    @keyframes highlightPulse {
-      0% {
-        box-shadow: 0 0 0 0 rgba(52, 208, 88, 0.4);
-        transform: scale(1);
-      }
-
-      50% {
-        box-shadow: 0 0 0 15px rgba(52, 208, 88, 0);
-        transform: scale(1.02);
-      }
-
-      100% {
-        box-shadow: 0 0 0 0 rgba(52, 208, 88, 0);
-        transform: scale(1);
-      }
-    }
-  </style>
-  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>
   <?php include 'student_sidebar.php'; ?>
 
   <div class="main-content">
-    <!-- Top Nav -->
-    <nav class="navbar navbar-light bg-white shadow-sm mb-4 d-lg-none">
-      <div class="container-fluid d-flex justify-content-between align-items-center">
-        <div class="d-flex align-items-center gap-2">
-          <button class="btn btn-outline-primary d-lg-none me-2" id="sidebarToggle"><i
-              class="bi bi-list fs-4"></i></button>
-          <span class="navbar-brand fw-bold">Student Portal</span>
+    <nav class="admin-navbar">
+      <div class="admin-navbar-inner">
+        <div class="admin-navbar-start">
+          <button class="admin-navbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar"><i class="bi bi-list"></i></button>
+          <h1 class="admin-navbar-title">Student Portal</h1>
         </div>
-        <a href="student_logout" class="btn btn-sm btn-outline-danger rounded-pill"><i
-            class="bi bi-box-arrow-right"></i> Logout</a>
+        <div class="admin-navbar-end">
+          <div class="admin-user-badge">
+            <span class="admin-user-avatar"><?= strtoupper(substr($name, 0, 1)) ?></span>
+            <span class="admin-user-name"><?= htmlspecialchars($name) ?></span>
+          </div>
+          <a href="student_logout" class="admin-logout-btn" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+        </div>
       </div>
     </nav>
 
-    <div class="container-xl">
-      <div class="row align-items-center mb-4">
-        <div class="col-md-8">
-          <h2 class="fw-bold mb-1">Your Objective Examinations</h2>
-          <p class="text-muted">Review and attempt your active assigned exams below.</p>
-        </div>
-        <div class="col-md-4 text-md-end">
-          <div class="stat-badge shadow-sm">
-            <i class="bi bi-award text-warning"></i>
-            <span>Active Objective: <?= count($active_exams) ?></span>
-            <span class="ms-2">Practical: <?= count($practical_exams) ?></span>
-          </div>
+    <div class="admin-content">
+      <nav class="admin-breadcrumb">
+        <ol>
+          <li class="current" aria-current="page"><i class="bi bi-house"></i> Dashboard</li>
+        </ol>
+      </nav>
+
+      <div class="admin-page-header">
+        <h2 class="admin-page-title">Your Objective Examinations</h2>
+        <div class="admin-page-actions">
+          <span class="admin-badge admin-badge-primary"><i class="bi bi-award"></i> Active: <?= count($active_exams) ?> Objective &bull; <?= count($practical_exams) ?> Practical</span>
         </div>
       </div>
+
+      <p class="text-muted mb-4">Review and attempt your active assigned exams below.</p>
 
       <?php display_auth_errors(); ?>
 
       <div class="row g-4">
         <?php if (empty($active_exams)): ?>
           <div class="col-12 mt-5">
-            <div class="card p-5 text-center border-0 shadow-sm bg-white rounded-5">
-              <i class="bi bi-journal-x text-muted mb-3" style="font-size: 4rem;"></i>
+            <div class="admin-card">
+              <div class="admin-card-body text-center py-5">
+              <i class="bi bi-journal-x text-muted mb-3 exam-empty-icon"></i>
               <h3 class="fw-bold">No Active Exams</h3>
-              <p class="text-muted mx-auto" style="max-width: 400px;">
+              <p class="text-muted mx-auto exam-empty-text">
                 You don't have any active objective exams assigned to you at the moment. Please check back later.
               </p>
             </div>
+          </div>
           </div>
         <?php else: ?>
           <?php foreach ($active_exams as $exam):
@@ -208,7 +143,7 @@ foreach($active_exams as $e) {
                 </div>
 
                 <div class="card-exam-body">
-                  <p class="text-muted small mb-4" style="min-height: 48px; border-bottom: 1px dashed #eee; padding-bottom: 15px;">
+                  <p class="text-muted small mb-4 exam-desc">
                     <?= htmlspecialchars($exam['description'] ?: 'No description provided.') ?>
                   </p>
 
@@ -216,7 +151,7 @@ foreach($active_exams as $e) {
                   <div class="mb-3">
                     <div class="d-flex flex-wrap gap-1">
                       <?php foreach ($sec_features as $sf): ?>
-                      <span class="badge bg-light text-dark fw-normal px-2 py-1 small" style="font-size: 0.6rem; border: 1px solid #dee2e6;">
+                      <span class="badge bg-light text-dark fw-normal px-2 py-1 small sec-feature-badge">
                         <i class="bi <?= $sf['icon'] ?> me-1 text-primary"></i><?= $sf['label'] ?>
                       </span>
                       <?php endforeach; ?>
@@ -254,8 +189,6 @@ foreach($active_exams as $e) {
         <?php endif; ?>
       </div>
 
-      <!-- Practical Examinations Section hidden from student view -->
-      </div>
     </div>
   </div>
 
@@ -299,10 +232,6 @@ foreach($active_exams as $e) {
       document.getElementById('confirmStartBtn').href = url;
       startModal.show();
     }
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    if (sidebarToggle) {
-      // Logic handled by student_sidebar.php
-    }
 
     // Hash-based highlighting
     function checkHash() {
@@ -325,94 +254,7 @@ foreach($active_exams as $e) {
     window.addEventListener('load', checkHash);
 
   </script>
-  <!-- sweetalert_custom_injected_v1 -->
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      // Override global alert
-      window.alert = function (msg) {
-        Swal.fire({
-          title: 'Message',
-          text: msg,
-          icon: 'info',
-          confirmButtonColor: '#092c19'
-        });
-      };
-
-      // Intercept inline onsubmit confirms
-      document.querySelectorAll('form[onsubmit*="return confirm"]').forEach(el => {
-        let match = el.getAttribute('onsubmit').match(/return confirm\(['"`](.*?)['"`]\)/);
-        if (match) {
-          let msg = match[1];
-          el.removeAttribute('onsubmit');
-          el.addEventListener('submit', function (e) {
-            e.preventDefault();
-            Swal.fire({
-              title: 'Are you sure?',
-              text: msg,
-              icon: 'warning',
-              showCancelButton: true,
-              confirmButtonColor: '#092c19',
-              cancelButtonColor: '#d33',
-              confirmButtonText: 'Yes, proceed'
-            }).then((result) => {
-              if (result.isConfirmed) {
-                let btn = el.querySelector('button[type="submit"]:hover, input[type="submit"]:hover')
-                  || el.querySelector('button[type="submit"], input[type="submit"]');
-                if (btn && btn.name) {
-                  let hidden = document.createElement('input');
-                  hidden.type = 'hidden';
-                  hidden.name = btn.name;
-                  hidden.value = btn.value || '1';
-                  el.appendChild(hidden);
-                }
-                HTMLFormElement.prototype.submit.call(el);
-              }
-            });
-          });
-        }
-      });
-
-      // Intercept inline onclick confirms for anchors
-      document.querySelectorAll('a[onclick*="return confirm"], button[onclick*="return confirm"]').forEach(el => {
-        let match = el.getAttribute('onclick').match(/return confirm\(['"`](.*?)['"`]\)/);
-        if (match) {
-          let msg = match[1];
-          el.removeAttribute('onclick');
-          el.addEventListener('click', function (e) {
-            e.preventDefault();
-            Swal.fire({
-              title: 'Are you sure?',
-              text: msg,
-              icon: 'warning',
-              showCancelButton: true,
-              confirmButtonColor: '#092c19',
-              cancelButtonColor: '#d33',
-              confirmButtonText: 'Yes, proceed'
-            }).then((result) => {
-              if (result.isConfirmed) {
-                if (el.tagName === 'A' && el.href) {
-                  window.location.href = el.href;
-                } else if (el.tagName === 'BUTTON') {
-                  // if it's a submit button inside a form
-                  if (el.type === 'submit' && el.form) {
-                    if (el.name) {
-                      let hidden = document.createElement('input');
-                      hidden.type = 'hidden';
-                      hidden.name = el.name;
-                      hidden.value = el.value || '1';
-                      el.form.appendChild(hidden);
-                    }
-                    HTMLFormElement.prototype.submit.call(el.form);
-                  }
-                }
-              }
-            });
-          });
-        }
-      });
-    });
-  </script>
+  
 
 <?php if ($requires_media): ?>
   <script>
@@ -458,6 +300,8 @@ foreach($active_exams as $e) {
   </script>
 <?php endif; ?>
 
+  <script src="assets/js/admin-common.js"></script>
+  <script src="assets/js/admin-swal.js"></script>
 </body>
 
 
