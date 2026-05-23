@@ -192,7 +192,7 @@ if ($exeat2_db) {
             <a href="admin_upload" class="btn btn-outline-primary btn-sm">Upload CSV</a>
           </div>
           <?php if (!$exeat2_db): ?>
-            <span class="small text-danger"><i class="bi bi-exclamation-triangle"></i> School Portal DB not reachable</span>
+            <span class="small text-danger"><i class="bi bi-exclamation-triangle"></i> <?= htmlspecialchars($exeat2_error ?: 'School Portal DB not reachable') ?></span>
           <?php endif; ?>
         </div>
       </div>

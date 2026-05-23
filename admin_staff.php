@@ -117,7 +117,7 @@ $staff = $db->query("SELECT * FROM examiners WHERE role = 'examiner' AND deleted
                   <label class="btn btn-outline-primary" for="staff_src_exeat2">School Portal (exeat2)</label>
                 </div>
                 <?php if (!$exeat2_db): ?>
-                  <span class="small text-danger"><i class="bi bi-exclamation-triangle"></i> School Portal DB not reachable</span>
+                  <span class="small text-danger"><i class="bi bi-exclamation-triangle"></i> <?= htmlspecialchars($exeat2_error ?: 'School Portal DB not reachable') ?></span>
                 <?php endif; ?>
               </div>
             </div>

@@ -300,7 +300,7 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
             <?php if (!$exeat2_db): ?>
               <div class="admin-alert admin-alert-warning">
                 <i class="bi bi-exclamation-triangle"></i>
-                <span>School Portal database is not reachable. Configure EXEAT2_DB_* in .env to enable import.</span>
+                <span><?= htmlspecialchars($exeat2_error ?: 'School Portal database not reachable.') ?></span>
               </div>
             <?php else: ?>
               <!-- Filters -->

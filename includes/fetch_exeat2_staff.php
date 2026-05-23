@@ -5,7 +5,7 @@ require_once __DIR__ . '/../db.php';
 header('Content-Type: application/json');
 
 if (!$exeat2_db) {
-    echo json_encode(['error' => 'School Portal database not reachable.']);
+    echo json_encode(['error' => $exeat2_error ?: 'School Portal database not reachable.']);
     exit;
 }
 
