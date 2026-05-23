@@ -8,6 +8,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'student') {
 }
 require 'db.php';
 
+// Fetch settings early — needed by AJAX handlers below
+$settings = $db->query("SELECT setting_key, setting_value FROM system_settings")->fetchAll(PDO::FETCH_KEY_PAIR);
+$require_password = ($settings['require_student_password'] ?? 'false') === 'true';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   validate_csrf();
 }
@@ -28,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   $student = $stmt->fetch(PDO::FETCH_ASSOC);
 
   if ($student) {
-    echo json_encode(['found' => true, 'name' => $student['name'], 'matric_no' => $student['matric_no']]);
+    echo json_encode(['found' => true, 'name' => $student['name'], 'matric_no' => $student['matric_no'], 'require_password' => $require_password]);
   } else {
     echo json_encode(['found' => false]);
   }
@@ -50,7 +54,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   $stmt->execute([$cleanIdentity, $cleanIdentity, $identity, $identity]);
   $student = $stmt->fetch(PDO::FETCH_ASSOC);
 
-  if ($student) {
+  if (!$student) {
+    echo json_encode(['success' => false, 'error' => 'Student not found.']);
+    exit;
+  }
+
+  if ($require_password) {
+    $input_password = $_POST['password'] ?? '';
+    if (!password_verify($input_password, $student['password'])) {
+      if ($input_password === $student['password']) {
+        $new_hash = password_hash($input_password, PASSWORD_DEFAULT);
+        $db->prepare("UPDATE students SET password=? WHERE id=?")->execute([$new_hash, $student['id']]);
+      } else {
+        echo json_encode(['success' => false, 'error' => 'Invalid credentials.']);
+        exit;
+      }
+    }
+  }
+
     session_regenerate_id(true);
     $newSessionId = session_id();
 
@@ -70,9 +91,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     } catch (Exception $e) { /* login_history may not exist yet */ }
 
     echo json_encode(['success' => true]);
-  } else {
-    echo json_encode(['success' => false, 'error' => 'Student not found.']);
-  }
   exit;
 }
 
@@ -85,9 +103,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   echo json_encode(['success' => true]);
   exit;
 }
-
-// Fetch dynamic settings
-$settings = $db->query("SELECT setting_key, setting_value FROM system_settings")->fetchAll(PDO::FETCH_KEY_PAIR);
 $portal_title = $settings['portal_title'] ?? 'Veritas Exam Portal';
 $portal_logo = $settings['portal_logo'] ?? '';
 $portal_favicon = $settings['portal_favicon'] ?? 'assets/favicon.ico';
@@ -634,7 +649,15 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
       <div class="identity-avatar"><i class="bi bi-person-fill"></i></div>
       <div class="identity-name" id="confirmName">Student Name</div>
       <div class="identity-matric" id="confirmMatric">MATRIC/NUMBER</div>
-      <p class="identity-question">Is this your identity? Please confirm before proceeding to the examination portal.</p>
+      <div id="passwordFieldWrapper" class="d-none mt-3" style="width:100%;max-width:320px">
+        <div class="position-relative">
+          <input type="password" id="confirmPassword" class="form-control form-control-lg text-center rounded-3" placeholder="Enter your password" autocomplete="off" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;font-size:1rem;padding-right:2.5rem">
+          <button type="button" id="togglePassword" class="btn p-0 position-absolute top-50 end-0 translate-middle-y me-2" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:1.1rem;line-height:1" tabindex="-1" onclick="togglePasswordVisibility()">
+            <i class="bi bi-eye-slash" id="togglePasswordIcon"></i>
+          </button>
+        </div>
+      </div>
+      <p class="identity-question mt-3">Is this your identity? Please confirm before proceeding to the examination portal.</p>
       <button class="btn-confirm" id="confirmYesBtn" onclick="confirmLogin()">
         <i class="bi bi-check-circle-fill me-2"></i> Yes, this is me — Continue
       </button>
@@ -664,6 +687,7 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
   <script>
     // ── Store pending matric for confirm step ──
     let pendingMatric = '';
+    let requirePassword = false;
 
     // ── Lookup Matric Number ──
     async function doLookup() {
@@ -684,8 +708,18 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
 
         if (data.found) {
           pendingMatric = matric;
+          requirePassword = data.require_password || false;
           document.getElementById('confirmName').textContent = data.name;
           document.getElementById('confirmMatric').textContent = data.matric_no;
+          var pwdWrapper = document.getElementById('passwordFieldWrapper');
+          var pwdInput = document.getElementById('confirmPassword');
+          if (requirePassword) {
+            pwdWrapper.classList.remove('d-none');
+            pwdInput.value = '';
+            pwdInput.focus();
+          } else {
+            pwdWrapper.classList.add('d-none');
+          }
           showIdentityOverlay();
         } else {
           showError('Matric number not found. Please check and try again.');
@@ -707,6 +741,9 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
       fd.append('action', 'confirm_login');
       fd.append('matric_no', pendingMatric);
       fd.append('csrf_token', '<?= generate_csrf_token() ?>');
+      if (requirePassword) {
+        fd.append('password', document.getElementById('confirmPassword').value);
+      }
 
       try {
         const res = await fetch('student_login', { method: 'POST', body: fd });
@@ -727,9 +764,30 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
       }
     }
 
+    function togglePasswordVisibility() {
+      var pwd = document.getElementById('confirmPassword');
+      var icon = document.getElementById('togglePasswordIcon');
+      if (pwd.type === 'password') {
+        pwd.type = 'text';
+        icon.className = 'bi bi-eye';
+      } else {
+        pwd.type = 'password';
+        icon.className = 'bi bi-eye-slash';
+      }
+    }
+
+    // Allow Enter key to submit from password field
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && document.getElementById('identityOverlay').classList.contains('active')) {
+        e.preventDefault();
+        confirmLogin();
+      }
+    });
+
     function cancelIdentity() {
       hideIdentityOverlay();
       pendingMatric = '';
+      document.getElementById('confirmPassword').value = '';
     }
 
     // ── Overlay helpers ──

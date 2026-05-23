@@ -58,7 +58,11 @@ foreach($active_exams as $e) {
         </div>
         <div class="admin-navbar-end">
           <div class="admin-user-badge">
-            <span class="admin-user-avatar"><?= strtoupper(substr($name, 0, 1)) ?></span>
+            <img src="passport_image.php?type=student&id=<?= $student_id ?? 0 ?>"
+                 class="admin-user-avatar rounded-circle" style="width:32px;height:32px;object-fit:cover"
+                 alt="<?= htmlspecialchars($name) ?>"
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">
+            <span class="admin-user-avatar d-none"><?= strtoupper(substr($name, 0, 1)) ?></span>
             <span class="admin-user-name"><?= htmlspecialchars($name) ?></span>
           </div>
           <a href="student_logout" class="admin-logout-btn" title="Logout"><i class="bi bi-box-arrow-right"></i></a>

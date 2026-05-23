@@ -640,8 +640,12 @@ $current_index = 0;
               <div class="fw-bold text-success animate-pulse" style="font-size: 0.6rem; letter-spacing: 1px;">• LIVE
                 SESSION</div>
             </div>
+          <img src="passport_image.php?type=student&id=<?= $_SESSION['student_id'] ?? 0 ?>"
+               class="rounded shadow-sm" style="width:38px;height:38px;border-radius:12px;object-fit:cover"
+               alt="<?= htmlspecialchars($_SESSION['user'] ?? 'S') ?>"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
           <div
-            class="profile-avatar bg-primary shadow-sm d-flex align-items-center justify-content-center text-white fw-bold"
+            class="profile-avatar bg-primary shadow-sm d-flex align-items-center justify-content-center text-white fw-bold d-none"
             style="width: 38px; height: 38px; border-radius: 12px;">
             <?= strtoupper(substr($_SESSION['user'] ?? 'S', 0, 1)) ?>
           </div>

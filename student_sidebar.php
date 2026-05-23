@@ -23,7 +23,11 @@ if (isset($db)) {
     </div>
 
     <div class="student-info text-center">
-        <div class="profile-icon mx-auto mb-2">
+        <img src="passport_image.php?type=student&id=<?= $_SESSION['student_id'] ?? 0 ?>"
+             class="profile-icon mx-auto mb-2 rounded-circle" style="width:50px;height:50px;object-fit:cover"
+             alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="profile-icon mx-auto mb-2 d-none"
+             style="width:50px;height:50px;border-radius:50%;background:#e9ecef;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:1.2rem;">
             <?= strtoupper(substr($name ?? 'S', 0, 1)) ?>
         </div>
         <div class="student-name"><?= htmlspecialchars($name ?? 'Student') ?></div>

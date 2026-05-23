@@ -521,10 +521,17 @@ $score_pct = $max_score > 0 ? round(($total_score / $max_score) * 100, 1) : 0;
         <?php if ($stu): ?>
           <div class="admin-card">
             <div class="admin-card-header">
-              <h3 class="admin-card-title">
-                <i class="bi bi-person-badge"></i> <?= htmlspecialchars($stu['name']) ?>
-              </h3>
-              <span class="text-muted small">ID: #<?= $stu['id'] ?></span>
+              <div class="d-flex align-items-center gap-3">
+                <img src="passport_image.php?type=student&id=<?= $stu['student_id'] ?? $stu['id'] ?>"
+                     class="rounded-circle border border-2 border-success"
+                     style="width:48px;height:48px;object-fit:cover;object-position:center top;">
+                <div>
+                  <h3 class="admin-card-title mb-0">
+                    <i class="bi bi-person-badge"></i> <?= htmlspecialchars($stu['name']) ?>
+                  </h3>
+                  <span class="text-muted small">ID: #<?= $stu['id'] ?></span>
+                </div>
+              </div>
             </div>
             <div class="admin-card-body">
               <div class="row g-3">

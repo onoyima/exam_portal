@@ -2,7 +2,20 @@
 require 'auth.php';
 check_auth('admin');
 require 'db.php';
+require 'db_exeat2.php';
 $name = $_SESSION['user'] ?? 'Admin';
+
+// Fetch exeat2 filter options
+$exeat2_departments = [];
+$exeat2_levels = [];
+if ($exeat2_db) {
+  try {
+    $exeat2_departments = $exeat2_db->query("SELECT id, name FROM departments WHERE name IS NOT NULL AND name != '' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+    $exeat2_levels = $exeat2_db->query("SELECT id, level FROM levels ORDER BY CAST(level AS UNSIGNED)")->fetchAll(PDO::FETCH_ASSOC);
+  } catch (Exception $e) {
+    $exeat2_db = null;
+  }
+}
 
 // ── AJAX: Get student details and exam history ──
 if (isset($_GET['action']) && $_GET['action'] === 'get_student_exams' && isset($_GET['student_id'])) {
@@ -153,8 +166,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
 }
 
-// Get all students
-$students = $db->query("SELECT * FROM students WHERE deleted_at IS NULL ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+// Paginated students list — avoid loading 3500+ rows at once
+$per_page = 50;
+$page = max(1, intval($_GET['page'] ?? 1));
+$offset = ($page - 1) * $per_page;
+$search = trim($_GET['search'] ?? '');
+
+if ($search) {
+    $search_term = "%{$search}%";
+    $total_students = $db->prepare("SELECT COUNT(*) FROM students WHERE deleted_at IS NULL AND (name LIKE ? OR matric_no LIKE ? OR email LIKE ?)");
+    $total_students->execute([$search_term, $search_term, $search_term]);
+    $total_students = $total_students->fetchColumn();
+    $stmt = $db->prepare("SELECT id, name, firstname, middlename, lastname, email, matric_no, source, external_id FROM students WHERE deleted_at IS NULL AND (name LIKE ? OR matric_no LIKE ? OR email LIKE ?) ORDER BY name ASC LIMIT ? OFFSET ?");
+    $stmt->bindValue(1, $search_term, PDO::PARAM_STR);
+    $stmt->bindValue(2, $search_term, PDO::PARAM_STR);
+    $stmt->bindValue(3, $search_term, PDO::PARAM_STR);
+    $stmt->bindValue(4, (int)$per_page, PDO::PARAM_INT);
+    $stmt->bindValue(5, (int)$offset, PDO::PARAM_INT);
+    $stmt->execute();
+    $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    $total_students = $db->query("SELECT COUNT(*) FROM students WHERE deleted_at IS NULL")->fetchColumn();
+    $stmt = $db->prepare("SELECT id, name, firstname, middlename, lastname, email, matric_no, source, external_id FROM students WHERE deleted_at IS NULL ORDER BY name ASC LIMIT ? OFFSET ?");
+    $stmt->bindValue(1, (int)$per_page, PDO::PARAM_INT);
+    $stmt->bindValue(2, (int)$offset, PDO::PARAM_INT);
+    $stmt->execute();
+    $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+$total_pages = ceil($total_students / $per_page);
 // Get all exams for enrollment modal
 $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NULL ORDER BY type DESC, created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 ?>
@@ -248,13 +287,89 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
         </div>
       </div>
 
+      <!-- Import from School Portal (exeat2) -->
+      <div class="admin-card mb-3">
+        <div class="admin-section-toggle p-4 pb-0" data-bs-toggle="collapse" data-bs-target="#exeat2ImportSection" aria-expanded="false">
+          <h3 class="admin-card-title mb-0 outfit text-success"><i class="bi bi-database"></i> Import from School Portal (exeat2)</h3>
+          <i class="bi bi-chevron-down ms-auto admin-section-chevron"></i>
+        </div>
+        <div class="collapse" id="exeat2ImportSection">
+          <div class="p-4 pt-3">
+            <?php if (!$exeat2_db): ?>
+              <div class="admin-alert admin-alert-warning">
+                <i class="bi bi-exclamation-triangle"></i>
+                <span>School Portal database is not reachable. Configure EXEAT2_DB_* in .env to enable import.</span>
+              </div>
+            <?php else: ?>
+              <!-- Filters -->
+              <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
+                <span class="fw-semibold small text-secondary">FILTERS:</span>
+                <select id="exeat2Dept" class="admin-filter-input" style="width:auto;min-width:200px">
+                  <option value="">All Departments</option>
+                  <?php foreach ($exeat2_departments as $d): ?>
+                    <option value="<?= $d['id'] ?>"><?= htmlspecialchars($d['name']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+                <select id="exeat2Level" class="admin-filter-input" style="width:auto;min-width:120px">
+                  <option value="">All Levels</option>
+                  <?php foreach ($exeat2_levels as $l): ?>
+                    <option value="<?= $l['id'] ?>"><?= htmlspecialchars($l['level']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+                <select id="exeat2Prog" class="admin-filter-input" style="width:auto;min-width:200px">
+                  <option value="">All Programmes</option>
+                </select>
+                <button type="button" id="exeat2RefreshBtn" class="admin-btn admin-btn-primary admin-btn-sm">
+                  <i class="bi bi-arrow-repeat"></i> Load Students
+                </button>
+                <span id="exeat2LoadMsg" class="small text-secondary d-none"><i class="bi bi-hourglass-split"></i> Loading...</span>
+              </div>
+
+              <!-- Results -->
+              <div id="exeat2Empty" class="admin-empty d-none">
+                <div class="admin-empty-icon"><i class="bi bi-inbox"></i></div>
+                <div class="admin-empty-title">No Students Loaded</div>
+                <div class="admin-empty-desc">Select filters above and click Load Students to fetch students from the school portal.</div>
+              </div>
+              <div id="exeat2Error" class="admin-empty d-none">
+                <div class="admin-empty-icon"><i class="bi bi-exclamation-triangle text-danger"></i></div>
+                <div class="admin-empty-title">Error Loading Students</div>
+                <div id="exeat2ErrorMsg" class="admin-empty-desc"></div>
+              </div>
+              <div id="exeat2TableWrapper" class="table-responsive d-none">
+                <table class="admin-table" id="exeat2Table">
+                  <thead>
+                    <tr>
+                      <th width="40"><input type="checkbox" id="exeat2MasterCb" class="form-check-input"></th>
+                      <th>Matric No</th>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="exeat2TableBody"></tbody>
+                </table>
+              </div>
+              <div class="d-flex flex-wrap gap-2 align-items-center mt-3 <?= $exeat2_db ? '' : 'd-none' ?>" id="exeat2Actions">
+                <button type="button" id="exeat2ImportSelectedBtn" class="admin-btn admin-btn-primary admin-btn-sm" disabled>
+                  <i class="bi bi-person-check"></i> Import Selected
+                </button>
+                <button type="button" id="exeat2ImportAllBtn" class="admin-btn admin-btn-success admin-btn-sm" disabled>
+                  <i class="bi bi-person-plus-fill"></i> Import All
+                </button>
+              </div>
+            <?php endif; ?>
+          </div>
+        </div>
+      </div>
+
       <!-- Students List -->
       <div class="admin-card">
         <div class="admin-card-header">
           <h3 class="admin-card-title"><i class="bi bi-people"></i> Students List</h3>
           <div class="d-flex align-items-center gap-2">
-            <span class="admin-badge admin-badge-primary"><?= count($students) ?> total</span>
-            <input type="text" id="studentSearch" class="admin-filter-input admin-filter-input-wide" placeholder="Search students..." oninput="filterStudents()">
+            <span class="admin-badge admin-badge-primary"><?= $search ? count($students).' matched' : $total_students.' total' ?></span>
+            <input type="text" id="studentSearch" class="admin-filter-input admin-filter-input-wide" placeholder="Search students..." oninput="filterStudents()" value="<?= htmlspecialchars($search) ?>">
           </div>
         </div>
         <div class="admin-card-body-flush">
@@ -278,6 +393,11 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
                 <tbody>
                   <?php foreach ($students as $student): ?>
                     <tr>
+                      <td class="text-center" style="width:42px">
+                        <img src="passport_image.php?type=student&id=<?= $student['id'] ?>"
+                             class="rounded-circle" style="width:32px;height:32px;object-fit:cover"
+                             alt="" onerror="this.style.display='none'">
+                      </td>
                       <td><a href="#" class="text-decoration-none fw-medium student-name-link" data-student-id="<?= $student['id'] ?>"><?= htmlspecialchars($student['name']) ?></a></td>
                       <td><?= htmlspecialchars($student['matric_no']) ?></td>
                       <td><?= htmlspecialchars($student['email'] ?? '') ?></td>
@@ -304,6 +424,30 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
                 </tbody>
               </table>
             </div>
+            <?php if ($total_pages > 1): ?>
+            <nav class="d-flex align-items-center justify-content-center gap-3 my-3 px-3">
+              <span class="small text-muted">Page <?= $page ?> of <?= $total_pages ?></span>
+              <div class="d-flex gap-1">
+                <?php if ($page > 1): ?>
+                <a href="?page=<?= $page-1 ?><?= $search ? '&search='.urlencode($search) : '' ?>" class="admin-btn admin-btn-sm admin-btn-outline">‹ Prev</a>
+                <?php endif; ?>
+                <?php
+                  $range_start = max(1, $page - 2);
+                  $range_end = min($total_pages, $page + 2);
+                  for ($i = $range_start; $i <= $range_end; $i++):
+                ?>
+                  <?php if ($i === $page): ?>
+                    <span class="admin-btn admin-btn-sm admin-btn-primary" style="cursor:default"><?= $i ?></span>
+                  <?php else: ?>
+                    <a href="?page=<?= $i ?><?= $search ? '&search='.urlencode($search) : '' ?>" class="admin-btn admin-btn-sm admin-btn-outline"><?= $i ?></a>
+                  <?php endif; ?>
+                <?php endfor; ?>
+                <?php if ($page < $total_pages): ?>
+                <a href="?page=<?= $page+1 ?><?= $search ? '&search='.urlencode($search) : '' ?>" class="admin-btn admin-btn-sm admin-btn-outline">Next ›</a>
+                <?php endif; ?>
+              </div>
+            </nav>
+            <?php endif; ?>
           <?php endif; ?>
         </div>
       </div>
@@ -393,6 +537,22 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
     </div>
   </div>
 
+  <!-- Import Result Modal -->
+  <div class="modal fade" id="exeat2ImportResultModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-check-circle text-success"></i> Import Complete</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="exeat2ImportResultBody"></div>
+        <div class="modal-footer">
+          <button type="button" class="admin-btn admin-btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Student Detail Modal -->
   <div class="modal fade" id="studentDetailModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -422,14 +582,31 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
       if (!table) return;
       var tr = table.getElementsByTagName('tr');
       for (var i = 1; i < tr.length; i++) {
-        var tdName = tr[i].getElementsByTagName('td')[0];
-        var tdMatric = tr[i].getElementsByTagName('td')[1];
+        var tdName = tr[i].getElementsByTagName('td')[1];
+        var tdMatric = tr[i].getElementsByTagName('td')[2];
         if (tdName || tdMatric) {
           var txt = (tdName ? tdName.textContent : '') + ' ' + (tdMatric ? tdMatric.textContent : '');
           tr[i].style.display = txt.toLowerCase().indexOf(filter) > -1 ? '' : 'none';
         }
       }
     }
+
+    document.getElementById('studentSearch').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        var q = this.value.trim();
+        var url = 'admin_students?page=1' + (q ? '&search=' + encodeURIComponent(q) : '');
+        window.location.href = url;
+      }
+    });
+
+    // If there's a search term, put cursor in search input on load
+    <?php if ($search): ?>
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('studentSearch').focus();
+      document.getElementById('studentSearch').setSelectionRange(document.getElementById('studentSearch').value.length, document.getElementById('studentSearch').value.length);
+    });
+    <?php endif; ?>
 
     function editStudent(id, fname, mname, lname, email, matric) {
       document.getElementById('edit_id').value = id;
@@ -466,7 +643,10 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
               }
               var s = data.student;
               document.getElementById('detailModalTitle').textContent = s.name;
-              var html = '<div class="row mb-4">' +
+              var html = '<div class="text-center mb-3">' +
+                  '<img src="passport_image.php?type=student&id=' + s.id + '" class="rounded-circle border" style="width:80px;height:80px;object-fit:cover" alt="Photo" onerror="this.style.display=\'none\'">' +
+                '</div>' +
+                '<div class="row mb-4">' +
                 '<div class="col-md-6">' +
                   '<div class="admin-card border"><div class="admin-card-body">' +
                     '<h6 class="fw-bold mb-3"><i class="bi bi-person-vcard"></i> Student Information</h6>' +
@@ -519,6 +699,203 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
         });
       });
     });
+
+    // ─── exeat2: programme cascading dropdown ───
+    var exeat2Dept = document.getElementById('exeat2Dept');
+    if (exeat2Dept) {
+      exeat2Dept.addEventListener('change', function () {
+        var deptId = this.value;
+        var progSelect = document.getElementById('exeat2Prog');
+        progSelect.innerHTML = '<option value="">All Programmes</option>';
+        if (!deptId) return;
+        fetch('includes/fetch_exeat2_programmes.php?department_id=' + deptId)
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            data.forEach(function (p) {
+              var opt = document.createElement('option');
+              opt.value = p.id;
+              opt.textContent = p.name;
+              progSelect.appendChild(opt);
+            });
+          })
+          .catch(function () {});
+      });
+    }
+
+    // ─── exeat2: fetch and render students ───
+    var exeat2Students = [];
+
+    document.getElementById('exeat2RefreshBtn').addEventListener('click', function () {
+      var dept = document.getElementById('exeat2Dept').value;
+      var level = document.getElementById('exeat2Level').value;
+      var prog = document.getElementById('exeat2Prog').value;
+
+      if (!dept && !level) {
+        Swal.fire({ title: 'Filter Required', text: 'Please select at least a Department or Level to narrow results.', icon: 'warning', confirmButtonColor: '#198754' });
+        return;
+      }
+
+      var url = 'includes/fetch_exeat2_students.php';
+      if (dept) url += '?department_id=' + dept;
+      if (level) url += (dept ? '&' : '?') + 'level_id=' + level;
+      if (prog) url += (dept || level ? '&' : '?') + 'course_study_id=' + prog;
+
+      var msgEl = document.getElementById('exeat2LoadMsg');
+      msgEl.classList.remove('d-none');
+
+      fetch(url)
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          msgEl.classList.add('d-none');
+          if (data.error) {
+            showExeat2Error(data.error);
+            return;
+          }
+          exeat2Students = data;
+          renderExeat2Table(data);
+        })
+        .catch(function (err) {
+          msgEl.classList.add('d-none');
+          showExeat2Error('Failed to fetch students: ' + err.message);
+        });
+    });
+
+    function showExeat2Error(msg) {
+      document.getElementById('exeat2Empty').classList.add('d-none');
+      document.getElementById('exeat2TableWrapper').classList.add('d-none');
+      document.getElementById('exeat2ErrorMsg').textContent = msg;
+      document.getElementById('exeat2Error').classList.remove('d-none');
+      document.getElementById('exeat2ImportSelectedBtn').disabled = true;
+      document.getElementById('exeat2ImportAllBtn').disabled = true;
+    }
+
+    function renderExeat2Table(data) {
+      document.getElementById('exeat2Error').classList.add('d-none');
+      var tbody = document.getElementById('exeat2TableBody');
+      tbody.innerHTML = '';
+
+      if (!data || data.length === 0) {
+        document.getElementById('exeat2Empty').classList.remove('d-none');
+        document.getElementById('exeat2TableWrapper').classList.add('d-none');
+        document.getElementById('exeat2ImportSelectedBtn').disabled = true;
+        document.getElementById('exeat2ImportAllBtn').disabled = true;
+        return;
+      }
+
+      document.getElementById('exeat2Empty').classList.add('d-none');
+      document.getElementById('exeat2TableWrapper').classList.remove('d-none');
+      document.getElementById('exeat2ImportSelectedBtn').disabled = false;
+      document.getElementById('exeat2ImportAllBtn').disabled = false;
+
+      var statusLabels = {
+        'new': '<span class="admin-badge admin-badge-primary"><i class="bi bi-plus-circle"></i> New</span>',
+        'exists_exeat2': '<span class="admin-badge admin-badge-info"><i class="bi bi-arrow-repeat"></i> Exists (exeat2)</span>',
+        'exists_upload': '<span class="admin-badge admin-badge-warning"><i class="bi bi-exclamation-circle"></i> Exists (upload)</span>',
+        'exists_manual': '<span class="admin-badge admin-badge-warning"><i class="bi bi-exclamation-circle"></i> Exists (manual)</span>',
+        'assigned': '<span class="admin-badge admin-badge-success"><i class="bi bi-check-circle"></i> Already Assigned</span>'
+      };
+
+      data.forEach(function (stu) {
+        var tr = document.createElement('tr');
+        var label = statusLabels[stu.status] || '<span class="admin-badge admin-badge-neutral">Unknown</span>';
+        var canSelect = (stu.status !== 'assigned');
+        tr.innerHTML =
+          '<td><input type="checkbox" class="exeat2-checkbox form-check-input" value="' + stu.exeat2_id + '"' + (canSelect ? '' : ' disabled') + '></td>' +
+          '<td>' + escHtml(stu.matric_no) + '</td>' +
+          '<td>' + escHtml(stu.name) + '</td>' +
+          '<td>' + escHtml(stu.email || '') + '</td>' +
+          '<td>' + label + '</td>';
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ─── exeat2 master checkbox ───
+    var exeat2MasterCb = document.getElementById('exeat2MasterCb');
+    if (exeat2MasterCb) {
+      exeat2MasterCb.addEventListener('change', function () {
+        document.querySelectorAll('.exeat2-checkbox:not(:disabled)').forEach(function (cb) {
+          cb.checked = this.checked;
+        }.bind(this));
+      });
+    }
+
+    // ─── exeat2: Import Selected ───
+    document.getElementById('exeat2ImportSelectedBtn').addEventListener('click', function () {
+      var checked = document.querySelectorAll('.exeat2-checkbox:checked');
+      if (checked.length === 0) {
+        Swal.fire({ title: 'No Selection', text: 'Select at least one student.', icon: 'warning', confirmButtonColor: '#198754' });
+        return;
+      }
+      var ids = [];
+      checked.forEach(function (cb) { ids.push(parseInt(cb.value)); });
+      doExeat2Import(ids);
+    });
+
+    // ─── exeat2: Import All ───
+    document.getElementById('exeat2ImportAllBtn').addEventListener('click', function () {
+      var ids = exeat2Students.map(function (s) { return s.exeat2_id; });
+      Swal.fire({
+        title: 'Import All?',
+        text: 'This will import ' + ids.length + ' student(s) from the school portal.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#198754',
+        confirmButtonText: 'Yes, import all'
+      }).then(function (result) {
+        if (result.isConfirmed) doExeat2Import(ids);
+      });
+    });
+
+    function doExeat2Import(ids) {
+      var btn = document.getElementById('exeat2ImportSelectedBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="btn-spinner"></span> Importing...';
+      document.getElementById('exeat2ImportAllBtn').disabled = true;
+
+      fetch('includes/import_exeat2_student.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'student_ids=' + encodeURIComponent(JSON.stringify(ids))
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-person-check"></i> Import Selected';
+        document.getElementById('exeat2ImportAllBtn').disabled = false;
+
+        var html = '';
+        html += '<div class="mb-3">';
+        html += '<div class="d-flex justify-content-around text-center">';
+        html += '<div><span class="fs-4 text-success">' + res.imported + '</span><br><small>Newly Imported</small></div>';
+        html += '<div><span class="fs-4 text-info">' + res.updated + '</span><br><small>Updated</small></div>';
+        html += '<div><span class="fs-4 text-warning">' + res.skipped_upload + '</span><br><small>Skipped (upload)</small></div>';
+        html += '<div><span class="fs-4 text-warning">' + res.skipped_manual + '</span><br><small>Skipped (manual)</small></div>';
+        html += '</div></div>';
+        html += '<p class="text-center fw-bold">Total: ' + res.total + ' students processed</p>';
+
+        if (res.details && res.details.length > 0) {
+          html += '<hr><ul class="small" style="max-height:200px;overflow-y:auto">';
+          res.details.forEach(function (d) {
+            var icon = d.status === 'imported' ? '&#10004;' : d.status === 'updated' ? '&#128260;' : '&#9201;';
+            html += '<li>' + icon + ' ' + escHtml(d.name) + ' (' + escHtml(d.matric_no) + ') — ' + d.status + '</li>';
+          });
+          html += '</ul>';
+        }
+
+        document.getElementById('exeat2ImportResultBody').innerHTML = html;
+        var modal = new bootstrap.Modal(document.getElementById('exeat2ImportResultModal'));
+        modal.show();
+
+        // Reload the student list to reflect new imports
+        window.location.href = 'admin_students';
+      })
+      .catch(function (err) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-person-check"></i> Import Selected';
+        document.getElementById('exeat2ImportAllBtn').disabled = false;
+        Swal.fire({ title: 'Import Error', text: err.message, icon: 'error', confirmButtonColor: '#198754' });
+      });
+    }
 
     function escHtml(str) {
       if (!str) return '';
