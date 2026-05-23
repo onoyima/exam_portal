@@ -79,6 +79,7 @@ if ($exeat2_db) {
   try {
     $exeat2_departments = $exeat2_db->query("SELECT id, name FROM departments WHERE name IS NOT NULL AND name != '' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
     $exeat2_levels = $exeat2_db->query("SELECT id, level FROM levels ORDER BY CAST(level AS UNSIGNED)")->fetchAll(PDO::FETCH_ASSOC);
+    $exeat2_course_studies = $exeat2_db->query("SELECT id, name, department_id FROM exeat2.course_studies ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
   } catch (Exception $e) {
     $exeat2_db = null;
   }
@@ -212,8 +213,8 @@ if ($exeat2_db) {
               <option value="<?= $l['id'] ?>"><?= htmlspecialchars($l['level']) ?></option>
             <?php endforeach; ?>
           </select>
-          <select id="filterProgramme" class="admin-filter-input" style="width:auto;min-width:200px">
-            <option value="">All Programmes</option>
+          <select id="filterCourseStudy" class="admin-filter-input" style="width:auto;min-width:200px">
+            <option value="">All Course Studies</option>
           </select>
           <button type="button" id="refreshExeat2" class="admin-btn admin-btn-primary admin-btn-sm">
             <i class="bi bi-arrow-repeat"></i> Refresh
@@ -476,20 +477,20 @@ if ($exeat2_db) {
       }
     });
 
-    // ─── exeat2: programme cascading dropdown ───
+    // ─── exeat2: course study cascading dropdown ───
     document.getElementById('filterDepartment').addEventListener('change', function () {
       var deptId = this.value;
-      var progSelect = document.getElementById('filterProgramme');
-      progSelect.innerHTML = '<option value="">All Programmes</option>';
+      var csSelect = document.getElementById('filterCourseStudy');
+      csSelect.innerHTML = '<option value="">All Course Studies</option>';
       if (!deptId) return;
-      fetch('includes/fetch_exeat2_programmes.php?department_id=' + deptId)
+      fetch('includes/fetch_exeat2_course_studies.php?department_id=' + deptId)
         .then(function (r) { return r.json(); })
         .then(function (data) {
-          data.forEach(function (p) {
+          data.forEach(function (cs) {
             var opt = document.createElement('option');
-            opt.value = p.id;
-            opt.textContent = p.name;
-            progSelect.appendChild(opt);
+            opt.value = cs.id;
+            opt.textContent = cs.name;
+            csSelect.appendChild(opt);
           });
         })
         .catch(function () {});
@@ -501,7 +502,7 @@ if ($exeat2_db) {
     document.getElementById('refreshExeat2').addEventListener('click', function () {
       var dept = document.getElementById('filterDepartment').value;
       var level = document.getElementById('filterLevel').value;
-      var prog = document.getElementById('filterProgramme').value;
+      var courseStudyId = document.getElementById('filterCourseStudy').value;
 
       if (!dept && !level) {
         Swal.fire({ title: 'Filter Required', text: 'Please select at least a Department or Level to narrow results.', icon: 'warning', confirmButtonColor: '#198754' });
@@ -511,7 +512,7 @@ if ($exeat2_db) {
       var url = 'includes/fetch_exeat2_students.php?exam_id=<?= $exam_id ?>';
       if (dept) url += '&department_id=' + dept;
       if (level) url += '&level_id=' + level;
-      if (prog) url += '&course_study_id=' + prog;
+      if (courseStudyId) url += '&course_study_id=' + courseStudyId;
 
       var msgEl = document.getElementById('exeat2LoadMsg');
       msgEl.classList.remove('d-none');

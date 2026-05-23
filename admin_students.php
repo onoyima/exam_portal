@@ -8,10 +8,12 @@ $name = $_SESSION['user'] ?? 'Admin';
 // Fetch exeat2 filter options
 $exeat2_departments = [];
 $exeat2_levels = [];
+$exeat2_course_studies = [];
 if ($exeat2_db) {
   try {
     $exeat2_departments = $exeat2_db->query("SELECT id, name FROM departments WHERE name IS NOT NULL AND name != '' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
     $exeat2_levels = $exeat2_db->query("SELECT id, level FROM levels ORDER BY CAST(level AS UNSIGNED)")->fetchAll(PDO::FETCH_ASSOC);
+    $exeat2_course_studies = $exeat2_db->query("SELECT id, name, department_id FROM exeat2.course_studies ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
   } catch (Exception $e) {
     $exeat2_db = null;
   }
@@ -316,8 +318,8 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
                     <option value="<?= $l['id'] ?>"><?= htmlspecialchars($l['level']) ?></option>
                   <?php endforeach; ?>
                 </select>
-                <select id="exeat2Prog" class="admin-filter-input" style="width:auto;min-width:200px">
-                  <option value="">All Programmes</option>
+                <select id="exeat2CourseStudy" class="admin-filter-input" style="width:auto;min-width:200px">
+                  <option value="">All Course Studies</option>
                 </select>
                 <button type="button" id="exeat2RefreshBtn" class="admin-btn admin-btn-primary admin-btn-sm">
                   <i class="bi bi-arrow-repeat"></i> Load Students
@@ -700,22 +702,22 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
       });
     });
 
-    // ─── exeat2: programme cascading dropdown ───
+    // ─── exeat2: course study cascading dropdown ───
     var exeat2Dept = document.getElementById('exeat2Dept');
     if (exeat2Dept) {
       exeat2Dept.addEventListener('change', function () {
         var deptId = this.value;
-        var progSelect = document.getElementById('exeat2Prog');
-        progSelect.innerHTML = '<option value="">All Programmes</option>';
+        var csSelect = document.getElementById('exeat2CourseStudy');
+        csSelect.innerHTML = '<option value="">All Course Studies</option>';
         if (!deptId) return;
-        fetch('includes/fetch_exeat2_programmes.php?department_id=' + deptId)
+        fetch('includes/fetch_exeat2_course_studies.php?department_id=' + deptId)
           .then(function (r) { return r.json(); })
           .then(function (data) {
-            data.forEach(function (p) {
+            data.forEach(function (cs) {
               var opt = document.createElement('option');
-              opt.value = p.id;
-              opt.textContent = p.name;
-              progSelect.appendChild(opt);
+              opt.value = cs.id;
+              opt.textContent = cs.name;
+              csSelect.appendChild(opt);
             });
           })
           .catch(function () {});
@@ -728,7 +730,7 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
     document.getElementById('exeat2RefreshBtn').addEventListener('click', function () {
       var dept = document.getElementById('exeat2Dept').value;
       var level = document.getElementById('exeat2Level').value;
-      var prog = document.getElementById('exeat2Prog').value;
+      var courseStudyId = document.getElementById('exeat2CourseStudy').value;
 
       if (!dept && !level) {
         Swal.fire({ title: 'Filter Required', text: 'Please select at least a Department or Level to narrow results.', icon: 'warning', confirmButtonColor: '#198754' });
@@ -738,7 +740,7 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
       var url = 'includes/fetch_exeat2_students.php';
       if (dept) url += '?department_id=' + dept;
       if (level) url += (dept ? '&' : '?') + 'level_id=' + level;
-      if (prog) url += (dept || level ? '&' : '?') + 'course_study_id=' + prog;
+      if (courseStudyId) url += (dept || level ? '&' : '?') + 'course_study_id=' + courseStudyId;
 
       var msgEl = document.getElementById('exeat2LoadMsg');
       msgEl.classList.remove('d-none');
