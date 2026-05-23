@@ -463,10 +463,15 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 AND delete
 
                                 <div class="admin-card-body">
                                     <div class="d-flex justify-content-between align-items-start mb-2">
-                                        <div>
-                                            <h6 class="fw-bold mb-0"><?= htmlspecialchars($att['student_name']) ?>
-                                            </h6>
-                                            <small class="admin-badge-neutral"><?= htmlspecialchars($att['matric_no']) ?></small>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <img src="passport_image.php?type=student&id=<?= $att['student_id'] ?>"
+                                                 class="rounded-circle" style="width:40px;height:40px;object-fit:cover"
+                                                 alt="" onerror="this.style.display='none'">
+                                            <div>
+                                                <h6 class="fw-bold mb-0"><?= htmlspecialchars($att['student_name']) ?>
+                                                </h6>
+                                                <small class="admin-badge-neutral"><?= htmlspecialchars($att['matric_no']) ?></small>
+                                            </div>
                                         </div>
                                         <div class="text-end">
                                             <?php if ($att['is_locked']): ?>

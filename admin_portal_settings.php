@@ -130,7 +130,8 @@ $default_cms_settings = [
     'section_workflow_active' => '1',
     'section_formats_active' => '1',
     'section_team_active' => '1',
-    'section_roi_active' => '1'
+    'section_roi_active' => '1',
+    'require_student_password' => 'false'
 ];
 
 $settings = $db->query("SELECT setting_key, setting_value FROM system_settings")->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -408,6 +409,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         <div>
                                             <label class="form-label fw-bold small text-muted text-uppercase">Staff &amp; Examiner Login Messages</label>
                                             <textarea name="settings[staff_login_content]" class="form-control rounded-3" rows="3"><?= htmlspecialchars($settings['staff_login_content']) ?></textarea>
+                                        </div>
+                                        <hr>
+                                        <div class="d-flex align-items-center justify-content-between">
+                                            <div>
+                                                <label class="form-label fw-bold small text-muted text-uppercase mb-0">Require Password for Student Login</label>
+                                                <div class="field-desc mt-1">When ON, students must enter their password in addition to matric number. Default OFF.</div>
+                                            </div>
+                                            <div class="form-check form-switch form-check-lg">
+                                                <input type="hidden" name="settings[require_student_password]" value="false">
+                                                <input type="checkbox" name="settings[require_student_password]" class="form-check-input" role="switch" value="true" <?= ($settings['require_student_password'] ?? 'false') === 'true' ? 'checked' : '' ?>>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

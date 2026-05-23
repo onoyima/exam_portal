@@ -39,3 +39,11 @@ if (!defined('DB_PASS'))    define('DB_PASS',    '');
 if (!defined('DB_CHARSET')) define('DB_CHARSET', 'utf8mb4');
 if (!defined('SESSION_LIFETIME')) define('SESSION_LIFETIME', 1800);
 
+// exeat2 school portal DB fallbacks
+if (!defined('EXEAT2_DB_HOST')) define('EXEAT2_DB_HOST', 'localhost');
+if (!defined('EXEAT2_DB_PORT')) define('EXEAT2_DB_PORT', '3306');
+if (!defined('EXEAT2_DB_NAME')) define('EXEAT2_DB_NAME', 'exeat2');
+if (!defined('EXEAT2_DB_USER')) define('EXEAT2_DB_USER', 'root');
+if (!defined('EXEAT2_DB_PASS')) define('EXEAT2_DB_PASS', '');
+if (!defined('EXEAT2_DB_CHARSET')) define('EXEAT2_DB_CHARSET', 'utf8mb4');
+
