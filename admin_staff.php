@@ -12,7 +12,8 @@ if ($exeat2_db) {
   try {
     $exeat2_departments = $exeat2_db->query("SELECT id, name FROM departments WHERE name IS NOT NULL AND name != '' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
   } catch (Exception $e) {
-    $exeat2_db = null;
+    $exeat2_error = $e->getMessage();
+    error_log("exeat2 query failed: " . $e->getMessage());
   }
 }
 

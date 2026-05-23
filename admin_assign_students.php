@@ -81,7 +81,8 @@ if ($exeat2_db) {
     $exeat2_levels = $exeat2_db->query("SELECT id, level FROM levels ORDER BY CAST(level AS UNSIGNED)")->fetchAll(PDO::FETCH_ASSOC);
     $exeat2_course_studies = $exeat2_db->query("SELECT id, name, department_id FROM exeat2.course_studies ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
   } catch (Exception $e) {
-    $exeat2_db = null;
+    $exeat2_error = $e->getMessage();
+    error_log("exeat2 query failed: " . $e->getMessage());
   }
 }
 ?>
