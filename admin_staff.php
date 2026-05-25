@@ -161,10 +161,11 @@ $staff = $db->query("SELECT * FROM examiners WHERE role = 'examiner' AND deleted
                     <div id="exeat2StaffErrorMsg" class="admin-empty-desc"></div>
                   </div>
                   <div id="exeat2StaffTableWrapper" class="table-responsive d-none">
-                    <table class="admin-table" id="exeat2StaffTable">
+                      <table class="admin-table" id="exeat2StaffTable">
                       <thead>
                         <tr>
                           <th width="40"><input type="checkbox" id="staffMasterCheckbox" class="form-check-input"></th>
+                          <th width="50">Photo</th>
                           <th>Name</th>
                           <th>Email</th>
                           <th>Username</th>
@@ -265,6 +266,7 @@ $staff = $db->query("SELECT * FROM examiners WHERE role = 'examiner' AND deleted
                             <table class="admin-table">
                                 <thead>
                                     <tr>
+                                        <th width="50">Photo</th>
                                         <th>Name</th>
                                         <th>Username</th>
                                         <th>Role</th>
@@ -274,6 +276,11 @@ $staff = $db->query("SELECT * FROM examiners WHERE role = 'examiner' AND deleted
                                 <tbody>
                                     <?php foreach ($staff as $s): ?>
                                         <tr>
+                                            <td class="text-center">
+                                                <img src="passport_image.php?type=examiner&id=<?= $s['id'] ?>"
+                                                     class="rounded-circle" style="width:32px;height:32px;object-fit:cover"
+                                                     alt="" onerror="this.style.display='none'">
+                                            </td>
                                             <td class="fw-bold">
                                                 <?= htmlspecialchars($s['name']) ?>
                                             </td>
@@ -449,8 +456,12 @@ $staff = $db->query("SELECT * FROM examiners WHERE role = 'examiner' AND deleted
                 var tr = document.createElement('tr');
                 var label = labels[s.status] || '<span class="admin-badge admin-badge-neutral">Unknown</span>';
                 var canSelect = (s.status !== 'assigned');
+                var photo = s.local_id
+                    ? '<img src="passport_image.php?type=examiner&id=' + s.local_id + '" class="rounded-circle" style="width:32px;height:32px;object-fit:cover" alt="" onerror="this.style.display=\'none\'">'
+                    : '<span class="rounded-circle d-inline-flex align-items-center justify-content-center bg-secondary bg-opacity-10 text-secondary" style="width:32px;height:32px;font-size:12px"><i class="bi bi-person"></i></span>';
                 tr.innerHTML =
                     '<td><input type="checkbox" class="staff-exeat2-checkbox form-check-input" value="' + s.exeat2_staff_id + '"' + (canSelect ? '' : ' disabled') + '></td>' +
+                    '<td class="text-center">' + photo + '</td>' +
                     '<td>' + escHtml(s.name) + '</td>' +
                     '<td>' + escHtml(s.email || '') + '</td>' +
                     '<td><code>' + escHtml(s.username) + '</code></td>' +

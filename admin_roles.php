@@ -167,6 +167,7 @@ $examiners = $db->query("SELECT id, name, username, email, role, source FROM exa
                             <table class="admin-table" id="rolesTable">
                                 <thead>
                                     <tr>
+                                        <th width="50">Photo</th>
                                         <th>Staff Member</th>
                                         <th>Current Role</th>
                                         <th>Source</th>
@@ -176,9 +177,13 @@ $examiners = $db->query("SELECT id, name, username, email, role, source FROM exa
                                 <tbody>
                                     <?php foreach ($examiners as $staff): ?>
                                         <tr>
+                                            <td class="text-center">
+                                                <img src="passport_image.php?type=examiner&id=<?= $staff['id'] ?>"
+                                                     class="rounded-circle" style="width:36px;height:36px;object-fit:cover"
+                                                     alt="" onerror="this.style.display='none'">
+                                            </td>
                                             <td>
                                                 <div class="d-flex align-items-center gap-3">
-                                                    <span class="admin-user-avatar" style="width:36px;height:36px;font-size:14px"><?= strtoupper(substr($staff['name'], 0, 1)) ?></span>
                                                     <div>
                                                         <div class="fw-semibold"><?= htmlspecialchars($staff['name']) ?></div>
                                                         <div class="small text-secondary">
