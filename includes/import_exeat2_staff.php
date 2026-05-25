@@ -51,32 +51,32 @@ if (!is_dir($passport_dir)) {
 }
 
 function save_passport_blob($data, $path) {
-    // Try raw binary first (JPEG, PNG, GIF etc.)
     $prefix = substr($data, 0, 4);
     $hex = bin2hex($prefix);
-    // Common image magic bytes: JPEG=ffd8, PNG=89504e47, GIF=47494638, WEBP=52494646
-    $is_raw_image = preg_match('/^(ffd8|8950|47494638|52494646)/i', $hex);
-
-    if ($is_raw_image) {
+    if (preg_match('/^(ffd8|8950|47494638|52494646)/i', $hex)) {
         file_put_contents($path, $data);
         return ['format' => 'raw', 'hex_prefix' => $hex];
     }
-
-    // Try base64 decode (strip potential data URI prefix)
     $b64 = $data;
-    if (preg_match('/^data:image\/(\w+);base64,/', $b64, $m)) {
-        $b64 = substr($b64, strpos($b64, ',') + 1);
+    if (strncmp($b64, 'data:image/', 11) === 0) {
+        $pos = strpos($b64, 'base64,');
+        if ($pos !== false) $b64 = substr($b64, $pos + 7);
     }
     $decoded = base64_decode($b64, true);
-    if ($decoded !== false && (strpos($decoded, "\xFF\xD8") === 0 || strpos($decoded, "\x89PNG") === 0)) {
-        $ext = strpos($decoded, "\xFF\xD8") === 0 ? 'jpg' : 'png';
-        $new_path = preg_replace('/\.\w+$/', ".$ext", $path);
-        file_put_contents($new_path, $decoded);
-        return ['format' => 'base64', 'hex_prefix' => substr(bin2hex($decoded), 0, 8)];
+    if ($decoded !== false) {
+        $dhex = bin2hex(substr($decoded, 0, 4));
+        if (preg_match('/^(ffd8|8950|47494638|52494646)/i', $dhex)) {
+            $ext = strncmp($dhex, 'ffd8', 4) === 0 ? 'jpg' : 'png';
+            $new_path = substr($path, 0, -4) . ".$ext";
+            file_put_contents($new_path, $decoded);
+            return ['format' => 'base64', 'hex_prefix' => substr($dhex, 0, 8)];
+        }
     }
-
+    file_put_contents($path, $data);
     return ['format' => 'unknown', 'hex_prefix' => $hex];
 }
+
+try {
 
 foreach ($rows as $row) {
     $username = $row['username'];
@@ -151,3 +151,7 @@ foreach ($rows as $row) {
 
 $results['total'] = $results['imported'] + $results['updated'] + $results['skipped_manual'] + $results['skipped_upload'];
 echo json_encode($results);
+
+} catch (Exception $e) {
+    echo json_encode(['error' => 'Import error: ' . $e->getMessage()]);
+}
