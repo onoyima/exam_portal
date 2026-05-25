@@ -68,7 +68,7 @@ function save_passport_blob($data, $path) {
         $b64 = substr($b64, strpos($b64, ',') + 1);
     }
     $decoded = base64_decode($b64, true);
-    if ($decoded !== false && strpos($decoded, "\xFF\xD8") === 0 || strpos($decoded, "\x89PNG") === 0) {
+    if ($decoded !== false && (strpos($decoded, "\xFF\xD8") === 0 || strpos($decoded, "\x89PNG") === 0)) {
         $ext = strpos($decoded, "\xFF\xD8") === 0 ? 'jpg' : 'png';
         $new_path = preg_replace('/\.\w+$/', ".$ext", $path);
         file_put_contents($new_path, $decoded);
