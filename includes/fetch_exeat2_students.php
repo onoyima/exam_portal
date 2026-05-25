@@ -9,6 +9,8 @@ if (!$exeat2_db) {
     exit;
 }
 
+try {
+
 $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
 $level_id      = isset($_GET['level_id']) ? intval($_GET['level_id']) : 0;
 $course_study_id = isset($_GET['course_study_id']) ? intval($_GET['course_study_id']) : 0;
@@ -19,7 +21,6 @@ $params = [];
 $conditions[] = "s.status = 1";
 $conditions[] = "sa.status = 1";
 $conditions[] = "sa.matric_no IS NOT NULL AND sa.matric_no != ''";
-// Exclude non-standard levels (1000+) not present in the levels table
 $conditions[] = "sa.level < 1000";
 
 if ($department_id > 0) {
@@ -27,7 +28,6 @@ if ($department_id > 0) {
     $params[] = $department_id;
 }
 if ($level_id > 0) {
-    // Convert level ID to actual level value (e.g. id=1 → level='100')
     $lv = $exeat2_db->prepare("SELECT level FROM levels WHERE id = ?");
     $lv->execute([$level_id]);
     $level_val = $lv->fetchColumn();
@@ -69,7 +69,6 @@ $stmt = $exeat2_db->prepare($sql);
 $stmt->execute($params);
 $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Detect inline status for each student against local DB
 $matric_nos = array_column($students, 'matric_no');
 $local_map = [];
 
@@ -82,7 +81,6 @@ if (!empty($matric_nos)) {
     }
 }
 
-// Also check exam_students for this exam
 $exam_id = isset($_GET['exam_id']) ? intval($_GET['exam_id']) : 0;
 $assigned_ids = [];
 if ($exam_id && !empty($matric_nos)) {
@@ -116,7 +114,6 @@ foreach ($students as &$stu) {
 }
 unset($stu);
 
-// Strip passport blob from JSON (too large)
 $response = $students;
 foreach ($response as &$r) {
     unset($r['passport']);
@@ -124,3 +121,7 @@ foreach ($response as &$r) {
 unset($r);
 
 echo json_encode($response);
+
+} catch (Exception $e) {
+    echo json_encode(['error' => 'Query error: ' . $e->getMessage()]);
+}
