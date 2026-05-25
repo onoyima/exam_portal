@@ -149,41 +149,11 @@ body {
 }
 
 /* --- START Landing Page Specific Styles --- */
-.landing-navbar {
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 95%;
-    max-width: 1550px;
-    background: var(--glass-bg) !important;
-    backdrop-filter: blur(25px) saturate(200%) !important;
-    border: 1px solid var(--glass-border) !important;
-    border-radius: 60px !important;
-    padding: 15px 35px !important;
-    z-index: 2000;
-    transition: var(--transition);
-}
-
-.landing-navbar.scrolled {
-    width: 100%;
-    top: 0;
-    border-radius: 0;
-    background: #fff !important;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-}
+/* Landing navbar is now defined in index.php inline <style> for better responsive control */
 
 .section-padding { padding: 100px 0; }
 
-.hero-section {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    padding-top: 100px;
-    position: relative;
-    overflow: hidden;
-    background: #fff;
-}
+/* Hero-section base is now defined in index.php inline <style> */
 
 .hero-content { position: relative; z-index: 10; }
 .hero-image-container { position: relative; }
@@ -2895,6 +2865,56 @@ body {
 .admin-btn-outline:hover {
   background: var(--color-bg);
   border-color: var(--color-text-muted);
+}
+.admin-btn-outline-danger {
+  background: transparent;
+  color: #dc3545;
+  border-color: #dc3545;
+}
+.admin-btn-outline-danger:hover {
+  background: #dc3545;
+  color: #fff;
+}
+.admin-btn-outline-danger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
+
+/* Bulk actions bar */
+.admin-bulk-bar {
+  background: #fff;
+  border-radius: 12px;
+  padding: 10px 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.admin-bulk-bar .form-check-input {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  margin-top: 0;
+}
+.admin-bulk-bar .form-check-input:checked {
+  background-color: #dc3545;
+  border-color: #dc3545;
+}
+
+/* Card checkboxes */
+.card-select {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+.card-select:checked {
+  opacity: 1;
+  background-color: #dc3545;
+  border-color: #dc3545;
+}
+.card-select:hover {
+  opacity: 1;
 }
 .admin-btn-sm {
   padding: var(--space-1) var(--space-3);

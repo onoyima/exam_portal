@@ -406,6 +406,23 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 AND delete
                 </div>
                 <?php endif; ?>
             </div>
+            <!-- Bulk Actions Toolbar -->
+            <div class="admin-bulk-bar d-flex align-items-center gap-3 flex-wrap mb-3 px-2">
+                <div class="d-flex align-items-center gap-2">
+                    <input type="checkbox" id="selectAllCheck" onchange="toggleSelectAll(this.checked)" class="form-check-input">
+                    <label for="selectAllCheck" class="small text-secondary mb-0">Select All</label>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" onclick="deleteSelected()" class="admin-btn admin-btn-sm admin-btn-outline-danger" id="deleteSelectedBtn" disabled>
+                        <i class="bi bi-eye-slash me-1"></i> Hide Selected
+                    </button>
+                    <button type="button" onclick="deleteAll()" class="admin-btn admin-btn-sm admin-btn-outline-danger">
+                        <i class="bi bi-eye-slash me-1"></i> <?= htmlspecialchars($status_filter === 'active' ? 'Hide All Active' : 'Hide All History') ?>
+                    </button>
+                </div>
+                <span class="small text-muted" id="selectedCount">0 selected</span>
+            </div>
+
             <div class="row g-4">
                 <?php if (empty($live_attempts)): ?>
                     <div class="col-12 text-center py-5">
@@ -415,7 +432,17 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 AND delete
                 <?php else: ?>
                     <?php foreach ($live_attempts as $att): ?>
                         <div class="col-12 col-md-6 col-lg-4" id="card-<?= $att['id'] ?>">
-                            <div class="admin-card h-100">
+                            <div class="admin-card h-100 position-relative">
+                                <!-- Delete button -->
+                                <button type="button" onclick="deleteAttempt(<?= $att['id'] ?>, '<?= addslashes($att['student_name']) ?>')"
+                                    class="admin-btn position-absolute" style="top:8px;right:8px;z-index:25;width:32px;height:32px;padding:0;border-radius:50%;background:rgba(220,53,69,0.85);color:#fff;border:none;font-size:0.85rem;line-height:1;display:flex;align-items:center;justify-content:center;"
+                                    title="Remove card from view">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                                <!-- Select checkbox -->
+                                <div class="position-absolute" style="top:8px;left:8px;z-index:25;">
+                                    <input type="checkbox" class="form-check-input card-select" value="<?= $att['id'] ?>" onchange="updateSelectedCount()">
+                                </div>
                                 <div class="video-wrapper">
                                     <?php
                                     $snap_src = 'assets/img/user_placeholder.png';
@@ -933,6 +960,84 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 AND delete
             });
         }
 
+        // ── Remove Card(s) from view (UI only, does not delete DB records) ──
+        function deleteAttempt(id, name) {
+            Swal.fire({
+                title: 'Remove Card?',
+                html: `Remove <b>${name}</b>'s card from this view?<br><small class="text-muted">The database record is NOT affected. Refresh the page to see it again.</small>`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, remove card',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const card = document.getElementById(`card-${id}`);
+                    if (card) card.remove();
+                    updateSelectedCount();
+                }
+            });
+        }
+
+        function deleteSelected() {
+            const checkboxes = document.querySelectorAll('.card-select:checked');
+            const ids = Array.from(checkboxes).map(cb => cb.value);
+            if (ids.length === 0) return;
+
+            Swal.fire({
+                title: `Remove ${ids.length} Cards?`,
+                html: `Remove <b>${ids.length}</b> selected card(s) from this view?<br><small class="text-muted">Database records are NOT affected. Refresh to see them again.</small>`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, remove selected',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    ids.forEach(id => {
+                        const card = document.getElementById(`card-${id}`);
+                        if (card) card.remove();
+                    });
+                    document.getElementById('selectAllCheck').checked = false;
+                    updateSelectedCount();
+                }
+            });
+        }
+
+        function deleteAll() {
+            const cards = document.querySelectorAll('[id^="card-"]');
+            if (cards.length === 0) return;
+
+            Swal.fire({
+                title: 'Clear All Cards?',
+                html: `Remove all <b>${cards.length}</b> card(s) from this view?<br><small class="text-muted">Database records are NOT affected. Refresh the page to see them again.</small>`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, clear all',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    cards.forEach(el => el.remove());
+                    document.getElementById('selectAllCheck').checked = false;
+                    updateSelectedCount();
+                }
+            });
+        }
+
+        function toggleSelectAll(checked) {
+            document.querySelectorAll('.card-select').forEach(cb => cb.checked = checked);
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            const count = document.querySelectorAll('.card-select:checked').length;
+            const el = document.getElementById('selectedCount');
+            const btn = document.getElementById('deleteSelectedBtn');
+            if (el) el.textContent = count + ' selected';
+            if (btn) btn.disabled = count === 0;
+        }
+
         const zoomModal = new bootstrap.Modal(document.getElementById('zoomModal'));
         function zoomImage(src, name) {
             document.getElementById('zoomImg').src = src;
@@ -969,6 +1074,9 @@ $all_exams = $db->query("SELECT id, name FROM exams WHERE is_active=1 AND delete
                 }).catch(() => {});
         }
         setInterval(fetchUpdates, 15000);
+
+        // Initialize selected count
+        document.addEventListener('DOMContentLoaded', updateSelectedCount);
     </script>
   <script src="assets/js/admin-common.js"></script>
   <script src="assets/js/admin-swal.js"></script>
