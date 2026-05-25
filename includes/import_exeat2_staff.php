@@ -25,7 +25,7 @@ $sql = "SELECT
   COALESCE(st.email, CONCAT(LOWER(st.lname), '.', LOWER(SUBSTRING(st.fname,1,1)), '@veritas.edu.ng')) AS username,
   st.password      AS password,
   st.passport      AS passport
-FROM exeat2.staff st
+FROM staff st
 WHERE st.id IN ($placeholders) AND st.status = 1";
 
 $stmt = $exeat2_db->prepare($sql);
