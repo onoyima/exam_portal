@@ -92,7 +92,7 @@ try {
 
 foreach ($rows as $row) {
     $matric_no = $row['matric_no'];
-    $existing = $db->prepare("SELECT id, source FROM students WHERE matric_no = ? AND deleted_at IS NULL");
+    $existing = $db->prepare("SELECT id, source FROM students WHERE matric_no = ?");
     $existing->execute([$matric_no]);
     $local = $existing->fetch(PDO::FETCH_ASSOC);
 

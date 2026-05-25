@@ -80,7 +80,7 @@ try {
 
 foreach ($rows as $row) {
     $username = $row['username'];
-    $existing = $db->prepare("SELECT id, source FROM examiners WHERE username = ? AND deleted_at IS NULL");
+    $existing = $db->prepare("SELECT id, source FROM examiners WHERE username = ?");
     $existing->execute([$username]);
     $local = $existing->fetch(PDO::FETCH_ASSOC);
 
