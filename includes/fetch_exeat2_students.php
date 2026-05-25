@@ -14,6 +14,7 @@ try {
 $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
 $level_id      = isset($_GET['level_id']) ? intval($_GET['level_id']) : 0;
 $course_study_id = isset($_GET['course_study_id']) ? intval($_GET['course_study_id']) : 0;
+$search        = isset($_GET['search']) ? trim($_GET['search']) : '';
 
 $conditions = [];
 $params = [];
@@ -39,6 +40,13 @@ if ($level_id > 0) {
 if ($course_study_id > 0) {
     $conditions[] = "sa.course_study_id = ?";
     $params[] = $course_study_id;
+}
+if ($search !== '') {
+    $conditions[] = "(s.fname LIKE ? OR s.lname LIKE ? OR s.email LIKE ?)";
+    $like = "%{$search}%";
+    $params[] = $like;
+    $params[] = $like;
+    $params[] = $like;
 }
 
 $where = implode(' AND ', $conditions);

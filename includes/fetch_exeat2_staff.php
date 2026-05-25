@@ -12,6 +12,7 @@ if (!$exeat2_db) {
 try {
 
 $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
+$search        = isset($_GET['search']) ? trim($_GET['search']) : '';
 
 $conditions = ["st.status = 1"];
 $params = [];
@@ -19,6 +20,13 @@ $params = [];
 if ($department_id > 0) {
     $conditions[] = "swp.department_id = ?";
     $params[] = $department_id;
+}
+if ($search !== '') {
+    $conditions[] = "(st.fname LIKE ? OR st.lname LIKE ? OR st.email LIKE ?)";
+    $like = "%{$search}%";
+    $params[] = $like;
+    $params[] = $like;
+    $params[] = $like;
 }
 
 $where = implode(' AND ', $conditions);
