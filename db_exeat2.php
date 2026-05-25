@@ -3,15 +3,17 @@ require_once __DIR__ . '/config.php';
 
 $exeat2_db = null;
 $exeat2_error = '';
-$required = ['EXEAT2_DB_HOST', 'EXEAT2_DB_NAME', 'EXEAT2_DB_USER'];
-$all_defined = true;
-$missing = [];
-foreach ($required as $c) {
-    if (!defined($c)) { $all_defined = false; $missing[] = $c; }
-}
 
-if (!$all_defined) {
-    $exeat2_error = "Missing constants: " . implode(', ', $missing) . ". Add them to .env.";
+// Determine if .env was loaded (vs fallback defaults)
+$env_loaded = file_exists(__DIR__ . '/.env');
+
+// Check if exeat2 constants came from .env (vs config.php fallbacks)
+$exeat2_configured = $env_loaded && defined('EXEAT2_DB_HOST') && EXEAT2_DB_HOST !== '';
+
+if (!$env_loaded) {
+    $exeat2_error = ".env file not found. Create it with EXEAT2_DB_* settings.";
+} elseif (!$exeat2_configured) {
+    $exeat2_error = "EXEAT2_DB_HOST is empty or .env is missing required EXEAT2_DB_* values.";
 } elseif (!in_array('mysql', PDO::getAvailableDrivers())) {
     $exeat2_error = "PDO MySQL driver not installed.";
 } else {
