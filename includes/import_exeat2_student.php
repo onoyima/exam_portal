@@ -50,6 +50,8 @@ $results = [
     'skipped_upload' => 0,
     'skipped_manual' => 0,
     'skipped_assigned' => 0,
+    'passport_found' => 0,
+    'passport_saved' => 0,
     'details' => [],
 ];
 
@@ -78,13 +80,14 @@ foreach ($rows as $row) {
         ]);
         $local_id = $db->lastInsertId();
 
-        // Write passport to disk
         if (!empty($row['passport'])) {
-            file_put_contents("$passport_dir_students/{$local_id}.jpg", $row['passport']);
+            $results['passport_found']++;
+            $written = file_put_contents("$passport_dir_students/{$local_id}.jpg", $row['passport']);
+            if ($written !== false) $results['passport_saved']++;
         }
 
         $results['imported']++;
-        $results['details'][] = ['matric_no' => $matric_no, 'status' => 'imported', 'name' => $row['name']];
+        $results['details'][] = ['matric_no' => $matric_no, 'status' => 'imported', 'name' => $row['name'], 'passport_bytes' => strlen($row['passport'] ?? '')];
     } elseif ($local['source'] === 'exeat2') {
         $db->prepare("
             UPDATE students SET
@@ -98,11 +101,13 @@ foreach ($rows as $row) {
         ]);
 
         if (!empty($row['passport'])) {
-            file_put_contents("$passport_dir_students/{$local['id']}.jpg", $row['passport']);
+            $results['passport_found']++;
+            $written = file_put_contents("$passport_dir_students/{$local['id']}.jpg", $row['passport']);
+            if ($written !== false) $results['passport_saved']++;
         }
 
         $results['updated']++;
-        $results['details'][] = ['matric_no' => $matric_no, 'status' => 'updated', 'name' => $row['name']];
+        $results['details'][] = ['matric_no' => $matric_no, 'status' => 'updated', 'name' => $row['name'], 'passport_bytes' => strlen($row['passport'] ?? '')];
         $local_id = $local['id'];
     } else {
         $local_id = $local['id'];

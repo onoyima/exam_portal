@@ -25,6 +25,7 @@ if (!$env_loaded) {
         );
         $exeat2_db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $exeat2_db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+        $exeat2_db->setAttribute(PDO::MYSQL_ATTR_MAX_BUFFER_SIZE, 10 * 1024 * 1024); // 10MB for passport blobs
     } catch (PDOException $e) {
         $exeat2_error = $e->getMessage();
         error_log("exeat2 connection failed: " . $e->getMessage());
