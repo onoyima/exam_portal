@@ -51,13 +51,12 @@ $results = [
     'updated' => 0,
     'skipped_upload' => 0,
     'skipped_manual' => 0,
-    'skipped_assigned' => 0,
     'passport_found' => 0,
     'passport_saved' => 0,
     'details' => [],
 ];
 
-$passport_dir_students = __DIR__ . '/../uploads/passports/students';
+$passport_dir_students = __DIR__ . '/../uploads/passports/student';
 if (!is_dir($passport_dir_students)) {
     mkdir($passport_dir_students, 0755, true);
 }
@@ -78,9 +77,7 @@ function save_passport_blob($data, $path) {
     }
     $decoded = base64_decode($b64, true);
     if ($decoded !== false && (strpos($decoded, "\xFF\xD8") === 0 || strpos($decoded, "\x89PNG") === 0)) {
-        $ext = strpos($decoded, "\xFF\xD8") === 0 ? 'jpg' : 'png';
-        $new_path = preg_replace('/\.\w+$/', ".$ext", $path);
-        file_put_contents($new_path, $decoded);
+        file_put_contents($path, $decoded);
         return ['format' => 'base64', 'hex_prefix' => substr(bin2hex($decoded), 0, 8)];
     }
 
