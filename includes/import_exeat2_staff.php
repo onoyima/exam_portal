@@ -65,14 +65,15 @@ foreach ($rows as $row) {
         ]);
         $local_id = $db->lastInsertId();
 
+        $passport_path = "$passport_dir/{$local_id}.jpg";
         if (!empty($row['passport'])) {
             $results['passport_found']++;
-            $written = file_put_contents("$passport_dir/{$local_id}.jpg", $row['passport']);
+            $written = file_put_contents($passport_path, $row['passport']);
             if ($written !== false) $results['passport_saved']++;
         }
 
         $results['imported']++;
-        $results['details'][] = ['name' => $row['name'], 'username' => $username, 'status' => 'imported', 'passport_bytes' => strlen($row['passport'] ?? '')];
+        $results['details'][] = ['name' => $row['name'], 'username' => $username, 'status' => 'imported', 'passport_bytes' => strlen($row['passport'] ?? ''), 'passport_path' => $passport_path, 'file_exists' => file_exists($passport_path)];
     } elseif ($local['source'] === 'exeat2') {
         $db->prepare("
             UPDATE examiners SET
@@ -83,14 +84,15 @@ foreach ($rows as $row) {
             $row['exeat2_staff_id'], $local['id']
         ]);
 
+        $passport_path = "$passport_dir/{$local['id']}.jpg";
         if (!empty($row['passport'])) {
             $results['passport_found']++;
-            $written = file_put_contents("$passport_dir/{$local['id']}.jpg", $row['passport']);
+            $written = file_put_contents($passport_path, $row['passport']);
             if ($written !== false) $results['passport_saved']++;
         }
 
         $results['updated']++;
-        $results['details'][] = ['name' => $row['name'], 'username' => $username, 'status' => 'updated', 'passport_bytes' => strlen($row['passport'] ?? '')];
+        $results['details'][] = ['name' => $row['name'], 'username' => $username, 'status' => 'updated', 'passport_bytes' => strlen($row['passport'] ?? ''), 'passport_path' => $passport_path, 'file_exists' => file_exists($passport_path)];
         $local_id = $local['id'];
     } else {
         $key = ($local['source'] === 'upload') ? 'skipped_upload' : 'skipped_manual';
