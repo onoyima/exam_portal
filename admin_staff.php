@@ -528,14 +528,19 @@ $staff = $db->query("SELECT * FROM examiners WHERE role = 'examiner' AND deleted
                 btn.innerHTML = '<i class="bi bi-person-check"></i> Import Selected';
                 document.getElementById('importStaffAllBtn').disabled = false;
 
+                if (res.error) {
+                    Swal.fire({ title: 'Import Error', text: res.error, icon: 'error', confirmButtonColor: '#198754' });
+                    return;
+                }
+
                 var html = '';
                 html += '<div class="mb-3">';
                 html += '<div class="d-flex justify-content-around text-center">';
-                html += '<div><span class="fs-4 text-success">' + res.imported + '</span><br><small>Newly Imported</small></div>';
-                html += '<div><span class="fs-4 text-info">' + res.updated + '</span><br><small>Updated</small></div>';
-                html += '<div><span class="fs-4 text-warning">' + (res.skipped_manual + res.skipped_upload) + '</span><br><small>Skipped</small></div>';
+                html += '<div><span class="fs-4 text-success">' + (res.imported ?? 0) + '</span><br><small>Newly Imported</small></div>';
+                html += '<div><span class="fs-4 text-info">' + (res.updated ?? 0) + '</span><br><small>Updated</small></div>';
+                html += '<div><span class="fs-4 text-warning">' + ((res.skipped_manual ?? 0) + (res.skipped_upload ?? 0)) + '</span><br><small>Skipped</small></div>';
                 html += '</div></div>';
-                html += '<p class="text-center fw-bold">Total: ' + res.total + ' staff processed</p>';
+                html += '<p class="text-center fw-bold">Total: ' + (res.total ?? 0) + ' staff processed</p>';
 
                 if (res.details && res.details.length > 0) {
                     html += '<hr><ul class="small" style="max-height:200px;overflow-y:auto">';
