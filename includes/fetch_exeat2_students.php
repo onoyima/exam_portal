@@ -62,11 +62,11 @@ $sql = "SELECT
   s.username,
   s.password,
   s.passport
-FROM exeat2.students s
-JOIN exeat2.student_academics sa ON sa.student_id = s.id
+FROM students s
+JOIN student_academics sa ON sa.student_id = s.id
   AND sa.academic_session_id = (
     SELECT MAX(sa2.academic_session_id)
-    FROM exeat2.student_academics sa2
+    FROM student_academics sa2
     WHERE sa2.student_id = s.id
   )
 WHERE $where

@@ -18,7 +18,7 @@ if ($department_id <= 0) {
 try {
     $stmt = $exeat2_db->prepare("
         SELECT cs.id, cs.name
-        FROM exeat2.course_studies cs
+        FROM course_studies cs
         WHERE cs.department_id = ?
         ORDER BY cs.name
     ");

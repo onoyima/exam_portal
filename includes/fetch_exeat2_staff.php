@@ -38,8 +38,8 @@ $sql = "SELECT
   COALESCE(st.email, CONCAT(LOWER(st.lname), '.', LOWER(SUBSTRING(st.fname,1,1)), '@veritas.edu.ng')) AS username,
   st.password      AS password,
   st.passport      AS passport
-FROM exeat2.staff st
-LEFT JOIN exeat2.staff_work_profiles swp ON swp.staff_id = st.id
+FROM staff st
+LEFT JOIN staff_work_profiles swp ON swp.staff_id = st.id
 WHERE $where
 GROUP BY st.id
 ORDER BY st.lname ASC
