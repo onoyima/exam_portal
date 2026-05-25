@@ -18,31 +18,64 @@ if (empty($staff_ids) || !$exeat2_db) {
 }
 
 $placeholders = implode(',', array_fill(0, count($staff_ids), '?'));
-$sql = "SELECT
-  st.id            AS exeat2_staff_id,
-  CONCAT(st.fname, ' ', COALESCE(st.mname,''), ' ', st.lname) AS name,
-  st.email         AS email,
-  COALESCE(st.email, CONCAT(LOWER(st.lname), '.', LOWER(SUBSTRING(st.fname,1,1)), '@veritas.edu.ng')) AS username,
-  st.password      AS password,
-  st.passport      AS passport
-FROM staff st
-WHERE st.id IN ($placeholders) AND st.status = 1";
-
-$stmt = $exeat2_db->prepare($sql);
-$stmt->execute($staff_ids);
-$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+try {
+    $stmt = $exeat2_db->prepare("SELECT
+      st.id            AS exeat2_staff_id,
+      CONCAT(st.fname, ' ', COALESCE(st.mname,''), ' ', st.lname) AS name,
+      st.email         AS email,
+      COALESCE(st.email, CONCAT(LOWER(st.lname), '.', LOWER(SUBSTRING(st.fname,1,1)), '@veritas.edu.ng')) AS username,
+      st.password      AS password,
+      st.passport      AS passport
+    FROM staff st
+    WHERE st.id IN ($placeholders) AND st.status = 1");
+    $stmt->execute($staff_ids);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    echo json_encode(['error' => 'exeat2 query failed: ' . $e->getMessage()]);
+    exit;
+}
 
 $results = [
     'imported' => 0,
     'updated' => 0,
     'skipped_manual' => 0,
     'skipped_upload' => 0,
+    'passport_found' => 0,
+    'passport_saved' => 0,
     'details' => [],
 ];
 
 $passport_dir = __DIR__ . '/../uploads/passports/examiners';
 if (!is_dir($passport_dir)) {
     mkdir($passport_dir, 0755, true);
+}
+
+function save_passport_blob($data, $path) {
+    // Try raw binary first (JPEG, PNG, GIF etc.)
+    $prefix = substr($data, 0, 4);
+    $hex = bin2hex($prefix);
+    // Common image magic bytes: JPEG=ffd8, PNG=89504e47, GIF=47494638, WEBP=52494646
+    $is_raw_image = preg_match('/^(ffd8|8950|47494638|52494646)/i', $hex);
+
+    if ($is_raw_image) {
+        file_put_contents($path, $data);
+        return ['format' => 'raw', 'hex_prefix' => $hex];
+    }
+
+    // Try base64 decode (strip potential data URI prefix)
+    $b64 = $data;
+    if (preg_match('/^data:image\/(\w+);base64,/', $b64, $m)) {
+        $b64 = substr($b64, strpos($b64, ',') + 1);
+    }
+    $decoded = base64_decode($b64, true);
+    if ($decoded !== false && strpos($decoded, "\xFF\xD8") === 0 || strpos($decoded, "\x89PNG") === 0) {
+        $ext = strpos($decoded, "\xFF\xD8") === 0 ? 'jpg' : 'png';
+        $new_path = preg_replace('/\.\w+$/', ".$ext", $path);
+        file_put_contents($new_path, $decoded);
+        return ['format' => 'base64', 'hex_prefix' => substr(bin2hex($decoded), 0, 8)];
+    }
+
+    return ['format' => 'unknown', 'hex_prefix' => $hex];
 }
 
 foreach ($rows as $row) {
@@ -63,29 +96,52 @@ foreach ($rows as $row) {
         ]);
         $local_id = $db->lastInsertId();
 
+        $detail = ['name' => $row['name'], 'username' => $username, 'status' => 'imported'];
         if (!empty($row['passport'])) {
-            file_put_contents("$passport_dir/{$local_id}.jpg", $row['passport']);
+            $results['passport_found']++;
+            $path = "$passport_dir/{$local_id}.jpg";
+            $info = save_passport_blob($row['passport'], $path);
+            if (file_exists($path)) {
+                $results['passport_saved']++;
+                $detail['file_exists'] = true;
+            }
+            $detail['passport_bytes'] = strlen($row['passport']);
+            $detail['passport_format'] = $info['format'];
+            $detail['passport_prefix'] = $info['hex_prefix'];
+            $detail['passport_path'] = $path;
+        } else {
+            $detail['passport_bytes'] = 0;
         }
-
+        $results['details'][] = $detail;
         $results['imported']++;
-        $results['details'][] = ['name' => $row['name'], 'username' => $username, 'status' => 'imported'];
     } elseif ($local['source'] === 'exeat2') {
         $db->prepare("
             UPDATE examiners SET
-                name=?, password=?, email=?, external_id=?
+                name=?, password=?, email=?, external_id=?, deleted_at=NULL
             WHERE id=?
         ")->execute([
             $row['name'], $row['password'], $row['email'],
             $row['exeat2_staff_id'], $local['id']
         ]);
 
+        $detail = ['name' => $row['name'], 'username' => $username, 'status' => 'updated'];
         if (!empty($row['passport'])) {
-            file_put_contents("$passport_dir/{$local['id']}.jpg", $row['passport']);
+            $results['passport_found']++;
+            $path = "$passport_dir/{$local['id']}.jpg";
+            $info = save_passport_blob($row['passport'], $path);
+            if (file_exists($path)) {
+                $results['passport_saved']++;
+                $detail['file_exists'] = true;
+            }
+            $detail['passport_bytes'] = strlen($row['passport']);
+            $detail['passport_format'] = $info['format'];
+            $detail['passport_prefix'] = $info['hex_prefix'];
+            $detail['passport_path'] = $path;
+        } else {
+            $detail['passport_bytes'] = 0;
         }
-
+        $results['details'][] = $detail;
         $results['updated']++;
-        $results['details'][] = ['name' => $row['name'], 'username' => $username, 'status' => 'updated'];
-        $local_id = $local['id'];
     } else {
         $key = ($local['source'] === 'upload') ? 'skipped_upload' : 'skipped_manual';
         $results[$key]++;

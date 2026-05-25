@@ -18,31 +18,33 @@ if (empty($student_ids) || !$exeat2_db) {
     exit;
 }
 
-// Fetch selected students from exeat2
 $placeholders = implode(',', array_fill(0, count($student_ids), '?'));
-$sql = "SELECT
-  s.id                 AS exeat2_id,
-  CONCAT(s.fname, ' ', COALESCE(s.mname,''), ' ', s.lname) AS name,
-  s.fname              AS firstname,
-  s.mname              AS middlename,
-  s.lname              AS lastname,
-  s.email,
-  sa.matric_no,
-  s.username,
-  s.password,
-  s.passport
-FROM students s
-JOIN student_academics sa ON sa.student_id = s.id
-  AND sa.academic_session_id = (
-    SELECT MAX(sa2.academic_session_id)
-    FROM student_academics sa2
-    WHERE sa2.student_id = s.id
-  )
-WHERE s.id IN ($placeholders) AND s.status = 1 AND sa.status = 1";
-
-$stmt = $exeat2_db->prepare($sql);
-$stmt->execute($student_ids);
-$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+try {
+    $stmt = $exeat2_db->prepare("SELECT
+      s.id                 AS exeat2_id,
+      CONCAT(s.fname, ' ', COALESCE(s.mname,''), ' ', s.lname) AS name,
+      s.fname              AS firstname,
+      s.mname              AS middlename,
+      s.lname              AS lastname,
+      s.email,
+      sa.matric_no,
+      s.username,
+      s.password,
+      s.passport
+    FROM students s
+    JOIN student_academics sa ON sa.student_id = s.id
+      AND sa.academic_session_id = (
+        SELECT MAX(sa2.academic_session_id)
+        FROM student_academics sa2
+        WHERE sa2.student_id = s.id
+      )
+    WHERE s.id IN ($placeholders) AND s.status = 1 AND sa.status = 1");
+    $stmt->execute($student_ids);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    echo json_encode(['error' => 'exeat2 query failed: ' . $e->getMessage()]);
+    exit;
+}
 
 $results = [
     'imported' => 0,
@@ -50,12 +52,39 @@ $results = [
     'skipped_upload' => 0,
     'skipped_manual' => 0,
     'skipped_assigned' => 0,
+    'passport_found' => 0,
+    'passport_saved' => 0,
     'details' => [],
 ];
 
 $passport_dir_students = __DIR__ . '/../uploads/passports/students';
 if (!is_dir($passport_dir_students)) {
     mkdir($passport_dir_students, 0755, true);
+}
+
+function save_passport_blob($data, $path) {
+    $prefix = substr($data, 0, 4);
+    $hex = bin2hex($prefix);
+    $is_raw_image = preg_match('/^(ffd8|8950|47494638|52494646)/i', $hex);
+
+    if ($is_raw_image) {
+        file_put_contents($path, $data);
+        return ['format' => 'raw', 'hex_prefix' => $hex];
+    }
+
+    $b64 = $data;
+    if (preg_match('/^data:image\/(\w+);base64,/', $b64, $m)) {
+        $b64 = substr($b64, strpos($b64, ',') + 1);
+    }
+    $decoded = base64_decode($b64, true);
+    if ($decoded !== false && (strpos($decoded, "\xFF\xD8") === 0 || strpos($decoded, "\x89PNG") === 0)) {
+        $ext = strpos($decoded, "\xFF\xD8") === 0 ? 'jpg' : 'png';
+        $new_path = preg_replace('/\.\w+$/', ".$ext", $path);
+        file_put_contents($new_path, $decoded);
+        return ['format' => 'base64', 'hex_prefix' => substr(bin2hex($decoded), 0, 8)];
+    }
+
+    return ['format' => 'unknown', 'hex_prefix' => $hex];
 }
 
 foreach ($rows as $row) {
@@ -78,18 +107,29 @@ foreach ($rows as $row) {
         ]);
         $local_id = $db->lastInsertId();
 
-        // Write passport to disk
+        $detail = ['matric_no' => $matric_no, 'status' => 'imported', 'name' => $row['name']];
         if (!empty($row['passport'])) {
-            file_put_contents("$passport_dir_students/{$local_id}.jpg", $row['passport']);
+            $results['passport_found']++;
+            $path = "$passport_dir_students/{$local_id}.jpg";
+            $info = save_passport_blob($row['passport'], $path);
+            if (file_exists($path)) {
+                $results['passport_saved']++;
+                $detail['file_exists'] = true;
+            }
+            $detail['passport_bytes'] = strlen($row['passport']);
+            $detail['passport_format'] = $info['format'];
+            $detail['passport_prefix'] = $info['hex_prefix'];
+            $detail['passport_path'] = $path;
+        } else {
+            $detail['passport_bytes'] = 0;
         }
-
+        $results['details'][] = $detail;
         $results['imported']++;
-        $results['details'][] = ['matric_no' => $matric_no, 'status' => 'imported', 'name' => $row['name']];
     } elseif ($local['source'] === 'exeat2') {
         $db->prepare("
             UPDATE students SET
                 name=?, firstname=?, middlename=?, lastname=?,
-                email=?, username=?, password=?, external_id=?
+                email=?, username=?, password=?, external_id=?, deleted_at=NULL
             WHERE id=?
         ")->execute([
             $row['name'], $row['firstname'], $row['middlename'],
@@ -97,12 +137,24 @@ foreach ($rows as $row) {
             $row['password'], $row['exeat2_id'], $local['id']
         ]);
 
+        $detail = ['matric_no' => $matric_no, 'status' => 'updated', 'name' => $row['name']];
         if (!empty($row['passport'])) {
-            file_put_contents("$passport_dir_students/{$local['id']}.jpg", $row['passport']);
+            $results['passport_found']++;
+            $path = "$passport_dir_students/{$local['id']}.jpg";
+            $info = save_passport_blob($row['passport'], $path);
+            if (file_exists($path)) {
+                $results['passport_saved']++;
+                $detail['file_exists'] = true;
+            }
+            $detail['passport_bytes'] = strlen($row['passport']);
+            $detail['passport_format'] = $info['format'];
+            $detail['passport_prefix'] = $info['hex_prefix'];
+            $detail['passport_path'] = $path;
+        } else {
+            $detail['passport_bytes'] = 0;
         }
-
+        $results['details'][] = $detail;
         $results['updated']++;
-        $results['details'][] = ['matric_no' => $matric_no, 'status' => 'updated', 'name' => $row['name']];
         $local_id = $local['id'];
     } else {
         $local_id = $local['id'];
@@ -111,7 +163,6 @@ foreach ($rows as $row) {
         $results['details'][] = ['matric_no' => $matric_no, 'status' => 'skipped_' . $local['source'], 'name' => $row['name']];
     }
 
-    // Link to exam (optional — skip if no exam_id given)
     if ($exam_id) {
         $db->prepare("INSERT IGNORE INTO exam_students (exam_id, student_id) VALUES (?, ?)")
            ->execute([$exam_id, $local_id]);
