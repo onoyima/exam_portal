@@ -77,7 +77,7 @@ foreach ($rows as $row) {
     } elseif ($local['source'] === 'exeat2') {
         $db->prepare("
             UPDATE examiners SET
-                name=?, password=?, email=?, external_id=?
+                name=?, password=?, email=?, external_id=?, deleted_at=NULL
             WHERE id=?
         ")->execute([
             $row['name'], $row['password'], $row['email'],

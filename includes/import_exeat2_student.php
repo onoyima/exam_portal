@@ -86,13 +86,14 @@ foreach ($rows as $row) {
             if ($written !== false) $results['passport_saved']++;
         }
 
+        $passport_path = "$passport_dir_students/{$local_id}.jpg";
         $results['imported']++;
-        $results['details'][] = ['matric_no' => $matric_no, 'status' => 'imported', 'name' => $row['name'], 'passport_bytes' => strlen($row['passport'] ?? '')];
+        $results['details'][] = ['matric_no' => $matric_no, 'status' => 'imported', 'name' => $row['name'], 'passport_bytes' => strlen($row['passport'] ?? ''), 'passport_path' => $passport_path, 'file_exists' => file_exists($passport_path)];
     } elseif ($local['source'] === 'exeat2') {
         $db->prepare("
             UPDATE students SET
                 name=?, firstname=?, middlename=?, lastname=?,
-                email=?, username=?, password=?, external_id=?
+                email=?, username=?, password=?, external_id=?, deleted_at=NULL
             WHERE id=?
         ")->execute([
             $row['name'], $row['firstname'], $row['middlename'],
@@ -100,11 +101,13 @@ foreach ($rows as $row) {
             $row['password'], $row['exeat2_id'], $local['id']
         ]);
 
+        $passport_path = "$passport_dir_students/{$local['id']}.jpg";
         if (!empty($row['passport'])) {
             $results['passport_found']++;
-            $written = file_put_contents("$passport_dir_students/{$local['id']}.jpg", $row['passport']);
+            $written = file_put_contents($passport_path, $row['passport']);
             if ($written !== false) $results['passport_saved']++;
         }
+        $results['details'][] = ['matric_no' => $matric_no, 'status' => 'updated', 'name' => $row['name'], 'passport_bytes' => strlen($row['passport'] ?? ''), 'passport_path' => $passport_path, 'file_exists' => file_exists($passport_path)];
 
         $results['updated']++;
         $results['details'][] = ['matric_no' => $matric_no, 'status' => 'updated', 'name' => $row['name'], 'passport_bytes' => strlen($row['passport'] ?? '')];
