@@ -91,6 +91,8 @@ $ICONS['clipboard']      = $S.'<rect x="5" y="2" width="10" height="18" rx="2"/>
               <?= $ICONS['people'] ?><span data-label>Manage Students</span></a></li>
             <li><a href="admin_staff" class="nav-item<?= $current_page == 'admin_staff.php' ? ' active' : '' ?>">
               <?= $ICONS['id'] ?><span data-label>Manage Staff</span></a></li>
+            <li><a href="admin_roles" class="nav-item<?= $current_page == 'admin_roles.php' ? ' active' : '' ?>">
+              <?= $ICONS['shield'] ?><span data-label>Role Assignment</span></a></li>
           </ul>
         </div>
       </li>

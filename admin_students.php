@@ -307,6 +307,7 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
               <!-- Filters -->
               <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
                 <span class="fw-semibold small text-secondary">FILTERS:</span>
+                <input type="text" id="exeat2StudentSearch" class="admin-filter-input" style="width:auto;min-width:200px" placeholder="Search by name or email...">
                 <select id="exeat2Dept" class="admin-filter-input" style="width:auto;min-width:200px">
                   <option value="">All Departments</option>
                   <?php foreach ($exeat2_departments as $d): ?>
@@ -703,6 +704,11 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
       });
     });
 
+    // ─── exeat2: search on Enter key ───
+    document.getElementById('exeat2StudentSearch').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') document.getElementById('exeat2RefreshBtn').click();
+    });
+
     // ─── exeat2: course study cascading dropdown ───
     var exeat2Dept = document.getElementById('exeat2Dept');
     if (exeat2Dept) {
@@ -729,19 +735,17 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
     var exeat2Students = [];
 
     document.getElementById('exeat2RefreshBtn').addEventListener('click', function () {
+      var search = document.getElementById('exeat2StudentSearch').value.trim();
       var dept = document.getElementById('exeat2Dept').value;
       var level = document.getElementById('exeat2Level').value;
       var courseStudyId = document.getElementById('exeat2CourseStudy').value;
 
-      if (!dept && !level) {
-        Swal.fire({ title: 'Filter Required', text: 'Please select at least a Department or Level to narrow results.', icon: 'warning', confirmButtonColor: '#198754' });
-        return;
-      }
-
       var url = 'includes/fetch_exeat2_students.php';
-      if (dept) url += '?department_id=' + dept;
-      if (level) url += (dept ? '&' : '?') + 'level_id=' + level;
-      if (courseStudyId) url += (dept || level ? '&' : '?') + 'course_study_id=' + courseStudyId;
+      var sep = '?';
+      if (search) { url += sep + 'search=' + encodeURIComponent(search); sep = '&'; }
+      if (dept) { url += sep + 'department_id=' + dept; sep = '&'; }
+      if (level) { url += sep + 'level_id=' + level; sep = '&'; }
+      if (courseStudyId) { url += sep + 'course_study_id=' + courseStudyId; sep = '&'; }
 
       var msgEl = document.getElementById('exeat2LoadMsg');
       msgEl.classList.remove('d-none');

@@ -128,6 +128,7 @@ $staff = $db->query("SELECT * FROM examiners WHERE role = 'examiner' AND deleted
               <div class="admin-filters mb-3">
                 <div class="d-flex align-items-center gap-3 flex-wrap">
                   <span class="fw-semibold small text-secondary">FILTERS:</span>
+                  <input type="text" id="staffSearch" class="admin-filter-input" style="width:auto;min-width:200px" placeholder="Search by name or email...">
                   <select id="staffFilterDepartment" class="admin-filter-input" style="width:auto;min-width:200px">
                     <option value="">All Departments</option>
                     <?php foreach ($exeat2_departments as $d): ?>
@@ -369,14 +370,22 @@ $staff = $db->query("SELECT * FROM examiners WHERE role = 'examiner' AND deleted
             });
         });
 
+        // ─── exeat2 Staff: search on Enter key ───
+        document.getElementById('staffSearch').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') document.getElementById('refreshExeat2Staff').click();
+        });
+
         // ─── exeat2 Staff: fetch and render ───
         var exeat2StaffData = [];
 
         document.getElementById('refreshExeat2Staff').addEventListener('click', function () {
+            var search = document.getElementById('staffSearch').value.trim();
             var dept = document.getElementById('staffFilterDepartment').value;
 
             var url = 'includes/fetch_exeat2_staff.php';
-            if (dept) url += '?department_id=' + dept;
+            var sep = '?';
+            if (search) { url += sep + 'search=' + encodeURIComponent(search); sep = '&'; }
+            if (dept) { url += sep + 'department_id=' + dept; sep = '&'; }
 
             var msgEl = document.getElementById('staffLoadMsg');
             msgEl.classList.remove('d-none');
