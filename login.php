@@ -46,6 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($authenticated) {
         $_SESSION['user'] = $user['username'];
         $_SESSION['role'] = $user['role'];
+        $_SESSION['examiner_id'] = $user['id'];
 
         try {
             $db->prepare("INSERT INTO login_history (username, user_type, ip_address, user_agent, status) VALUES (?, ?, ?, ?, 'success')")
