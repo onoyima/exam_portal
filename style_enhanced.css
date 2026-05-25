@@ -1486,6 +1486,8 @@ input[type="file"].form-control {
   margin-right: 0.5rem;
   box-shadow: 0 2px 8px rgba(79, 140, 255, 0.3);
   transition: var(--transition);
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 .profile-icon:hover {
@@ -2675,6 +2677,8 @@ body {
   justify-content: center;
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
+  overflow: hidden;
+  flex-shrink: 0;
 }
 .admin-user-name {
   font-size: var(--font-size-sm);

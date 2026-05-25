@@ -199,7 +199,7 @@ $total_questions = $db->query("SELECT COUNT(*) FROM questions WHERE deleted_at I
         </div>
         <div class="admin-navbar-end">
           <div class="admin-user-badge">
-            <span class="admin-user-avatar"><?= strtoupper(substr($_SESSION['user'] ?? 'A', 0, 1)) ?></span>
+            <span class="admin-user-avatar"><img src="passport_image.php?type=examiner&amp;id=<?= $_SESSION["examiner_id"] ?? 0 ?>" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.remove();var p=this.parentElement;if(p){var s=p.nextElementSibling;if(s){var c=s.textContent.trim().charAt(0);p.textContent=c?c.toUpperCase():&quot;?&quot;}}"></span>
             <span class="admin-user-name"><?= htmlspecialchars($_SESSION['user'] ?? 'Admin') ?></span>
           </div>
           <a href="logout" class="admin-logout-btn" title="Logout">

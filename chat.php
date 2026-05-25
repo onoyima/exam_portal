@@ -270,7 +270,7 @@ $sender_id = $stmt->fetchColumn() ?: 0;
               <div class="fw-bold small mb-0 text-dark"><?= htmlspecialchars($name) ?></div>
               <div class="text-muted small chat-timestamp"><?= strtoupper($role) ?></div>
             </div>
-            <span class="profile-icon me-0"><?= strtoupper(substr($name, 0, 1)) ?></span>
+            <span class="profile-icon me-0"><img src="passport_image.php?type=examiner&amp;id=<?= $_SESSION["examiner_id"] ?? 0 ?>" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.remove();var p=this.parentElement;if(p){var c=p.previousElementSibling;if(c){var t=c.textContent.trim();p.textContent=t.charAt(0).toUpperCase()||&quot;?&quot;}}"></span>
           </div>
           <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-3 mt-2 animate slideIn" aria-labelledby="profileDropdown">
             <li>
