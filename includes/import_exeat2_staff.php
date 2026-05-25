@@ -45,7 +45,7 @@ $results = [
     'details' => [],
 ];
 
-$passport_dir = __DIR__ . '/../uploads/passports/examiners';
+$passport_dir = __DIR__ . '/../uploads/passports/examiner';
 if (!is_dir($passport_dir)) {
     mkdir($passport_dir, 0755, true);
 }
@@ -68,10 +68,8 @@ function save_passport_blob($data, $path) {
         $b64 = substr($b64, strpos($b64, ',') + 1);
     }
     $decoded = base64_decode($b64, true);
-    if ($decoded !== false && strpos($decoded, "\xFF\xD8") === 0 || strpos($decoded, "\x89PNG") === 0) {
-        $ext = strpos($decoded, "\xFF\xD8") === 0 ? 'jpg' : 'png';
-        $new_path = preg_replace('/\.\w+$/', ".$ext", $path);
-        file_put_contents($new_path, $decoded);
+    if ($decoded !== false && (strpos($decoded, "\xFF\xD8") === 0 || strpos($decoded, "\x89PNG") === 0)) {
+        file_put_contents($path, $decoded);
         return ['format' => 'base64', 'hex_prefix' => substr(bin2hex($decoded), 0, 8)];
     }
 
