@@ -82,7 +82,7 @@ $local_map = [];
 
 if (!empty($matric_nos)) {
     $placeholders = implode(',', array_fill(0, count($matric_nos), '?'));
-    $local_stmt = $db->prepare("SELECT matric_no, id, source FROM students WHERE matric_no IN ($placeholders)");
+    $local_stmt = $db->prepare("SELECT matric_no, id, source FROM students WHERE matric_no IN ($placeholders) AND deleted_at IS NULL");
     $local_stmt->execute($matric_nos);
     foreach ($local_stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $local_map[$row['matric_no']] = $row;

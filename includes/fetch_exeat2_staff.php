@@ -53,7 +53,7 @@ $local_map = [];
 if (!empty($staff)) {
     $usernames = array_column($staff, 'username');
     $placeholders = implode(',', array_fill(0, count($usernames), '?'));
-    $local_stmt = $db->prepare("SELECT username, id, source FROM examiners WHERE username IN ($placeholders)");
+    $local_stmt = $db->prepare("SELECT username, id, source FROM examiners WHERE username IN ($placeholders) AND deleted_at IS NULL");
     $local_stmt->execute($usernames);
     foreach ($local_stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $local_map[$row['username']] = $row;

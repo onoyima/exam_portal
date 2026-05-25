@@ -80,7 +80,7 @@ function save_passport_blob($data, $path) {
 
 foreach ($rows as $row) {
     $username = $row['username'];
-    $existing = $db->prepare("SELECT id, source FROM examiners WHERE username = ?");
+    $existing = $db->prepare("SELECT id, source FROM examiners WHERE username = ? AND deleted_at IS NULL");
     $existing->execute([$username]);
     $local = $existing->fetch(PDO::FETCH_ASSOC);
 
