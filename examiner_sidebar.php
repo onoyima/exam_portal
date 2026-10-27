@@ -116,6 +116,20 @@ $ICONS['mic']            = $S.'<rect x="7.5" y="2" width="5" height="9" rx="2.5"
         </div>
       </li>
 
+      <!-- ── Learning Management System ── -->
+      <li class="nav-group">
+        <div class="nav-group-header" data-bs-toggle="collapse" data-bs-target="#navLms">
+          <span class="group-label" data-label>Learning Management System</span>
+          <span class="group-arrow"><?= $ICONS['chevron-down'] ?></span>
+        </div>
+        <div class="collapse show" id="navLms">
+          <ul class="nav-sub">
+            <li><a href="lms/public/" target="_blank" class="nav-item">
+              <?= $ICONS['book-open'] ?><span data-label>Open LMS</span></a></li>
+          </ul>
+        </div>
+      </li>
+
     </ul>
   </nav>
 

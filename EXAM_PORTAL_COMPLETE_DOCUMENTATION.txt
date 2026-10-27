@@ -1,0 +1,1522 @@
+================================================================================
+  VERITAS EXAM PORTAL (NEXTGEN ASSESSMENT PORTAL) — COMPLETE DOCUMENTATION
+================================================================================
+  Developer: BMXcode Initiator
+  Institution: Veritas University, Abuja
+  Version: 2.0 Enhanced Edition
+  Last Updated: May 2026
+================================================================================
+VERITAS EXAM PORTAL (NEXTGEN ASSESSMENT PORTAL) — COMPLETE DOCUMENTATION
+TABLE OF CONTENTS
+────────────────────────────────────────────────────────────────────────────────
+  1.  PROJECT OVERVIEW
+  2.  TECHNOLOGY STACK
+  3.  FULL DIRECTORY STRUCTURE
+  4.  DATABASE SCHEMA (COMPLETE)
+  5.  AUTHENTICATION & AUTHORIZATION SYSTEM
+  6.  ALL PAGES & ROUTES
+  7.  API ENDPOINTS
+  8.  EXAM TYPES & WORKFLOWS
+  9.  PROCTORING SYSTEM (7-LAYER SECURITY STACK)
+  10. AI PROCTORING (TENSORFLOW.JS BLAZEFACE)
+  11. SECURE EXAM BROWSER (ELECTRON SEB)
+  12. CHAT SYSTEM
+  13. STAFF CHAT (REAL-TIME MESSAGING)
+  14. CONFIGURATION FILES
+  15. JAVASCRIPT MODULES
+  16. CSS STYLING SYSTEM
+  17. EXEAT2 (LMS) INTEGRATION
+  18. DEFAULT CREDENTIALS
+  19. SYSTEM REQUIREMENTS
+  20. KEY FEATURES STATUS MATRIX
+  21. LMS INCLUSION PLAN & RECOMMENDATIONS
+  22. DEVELOPMENT ROADMAP FOR LMS INTEGRATION
+  23. SECURITY CONSIDERATIONS
+  24. APPENDIX: FULL FILE CONTENTS
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+  Project Name:  Veritas Exam Portal (NextGen Assessment Portal)
+  Location:      C:\xampp\htdocs\exam_portal
+  Purpose:       A secure, AI-proctored digital examination system supporting
+                 multiple exam types (Objective/MCQ, Practical/OSCE, VIVA/Oral)
+                 with real-time proctoring, device authorization, and
+                 comprehensive reporting. Built for Veritas University, Abuja.
+
+  The system features:
+  ─────────────────────
+  - Multi-role system: Admin, Examiner (Staff), and Student
+  - Three exam formats: Objective (MCQ), Practical (OSCE), VIVA (Oral)
+  - 7-layer security stack including browser lockdown, AI face detection,
+    device whitelisting, session hardening, and fullscreen enforcement
+  - Real-time proctoring with live video (WebRTC)
+  - Secure Exam Browser (Electron-based kiosk)
+  - Staff chat system (private & group messaging)
+  - Comprehensive audit trail for all CRUD operations
+  - Analytics dashboard with Chart.js visualizations
+  - CMS/Portal customization system
+  - exeat2 (LMS) integration capabilities
+  - Dark mode support
+
+================================================================================
+2. TECHNOLOGY STACK
+================================================================================
+
+  ┌─────────────────────┬──────────────────────────────────────────────────┐
+  │ Layer               │ Technology                                       │
+  ├─────────────────────┼──────────────────────────────────────────────────┤
+  │ Backend             │ PHP 7.4+ / 8.0+ (PDO, native sessions)          │
+  │ Database            │ MySQL 5.7+ / 8.0+ (InnoDB, triggers)            │
+  │ Frontend            │ HTML5, CSS3, JavaScript (ES6+)                   │
+  │ CSS Framework       │ Bootstrap 5.3.7 (customized)                     │
+  │ Icons               │ Bootstrap Icons, Boxicons                        │
+  │ Charts              │ Chart.js (via CDN)                               │
+  │ Animations          │ AOS (Animate on Scroll) library                  │
+  │ Alerts/Modals       │ SweetAlert2                                      │
+  │ AI Proctoring       │ TensorFlow.js (BlazeFace face detection)         │
+  │ Secure Browser      │ Electron (custom SEB - "Veritas SEB Kiosk")      │
+  │ WebRTC              │ Native (signaling via PHP/MySQL bridge)          │
+  │ Webcam              │ MediaDevices API                                 │
+  │ Build Tools (SEB)   │ electron-builder                                 │
+  │ Fonts               │ Google Fonts: Outfit, Plus Jakarta Sans, Inter   │
+  │ Server              │ Apache (XAMPP) / Nginx                           │
+  │ Secondary DB        │ exeat2 (Laravel school portal)                   │
+  │ Audio Alarms        │ Web Audio API (client-side, no external files)   │
+  │ URL Rewriting       │ Apache mod_rewrite (.htaccess)                   │
+  └─────────────────────┴──────────────────────────────────────────────────┘
+
+================================================================================
+3. FULL DIRECTORY STRUCTURE
+================================================================================
+
+exam_portal/
+│
+├── .env                          # Environment config (DB credentials, etc.)
+├── .env.example                  # Environment template
+├── .gitattributes
+├── .gitignore
+├── .htaccess                     # Apache URL rewriting (strip .php extension)
+├── 500L_QUESTION.txt             # Question bank data files
+├── 500L QUESTON2.txt
+├── asses.php                     # Examiner assessment/grading interface
+├── assessment_portal_testing_checklist.html  # QA testing checklist
+├── audit_system.php              # System audit log viewer
+├── auth.php                      # Auth system core (session mgmt, CSRF,
+│                                 #   device auth, role gate)
+├── card.md
+├── chat.php                      # Full-page staff chat interface
+├── chat_backend.php              # Chat AJAX backend (RESTful)
+├── chat_status.php               # Chat online status indicator
+├── config.php                    # .env file loader + constant definitions
+├── CourseStudy.php
+├── db.php                        # Primary database connection (PDO)
+├── db.example.php                # Database connection example file
+├── db_exeat2.php                 # Secondary DB connection (exeat2 portal)
+├── db_backup.php
+├── db_test.php
+├── debug_exeat2.php
+├── download_template.php         # CSV import template downloader
+├── exam_logic.php                # Exam scoring/finalization logic
+├── examiner_objective_results.php # Examiner view: objective results
+├── examiner_results.php          # Examiner view: practical/viva results
+├── examiner_sidebar.php          # Sidebar navigation for examiner role
+├── footer.php                    # Global footer + chat widget + theme toggle
+├── index.php                     # Landing/marketing page
+├── init_questions.php
+├── login.php                     # Staff login (admin/examiner)
+├── logout.php                    # Staff logout
+├── objective_exam_api.php        # Objective exam AJAX API (save, start,
+│                                 #   get_remaining_time)
+├── passport_image.php            # Student passport photo serving
+├── proctor_ping.php              # Proctor heartbeat endpoint + violation
+│                                 #   reporting
+├── report.php                    # Report generation
+├── search_students.php           # Student search API
+├── services.php                  # Services/features information page
+├── student_dashboard.php         # Student dashboard (exam listings)
+├── student_login.php             # Student login (AJAX multi-step)
+├── student_logout.php            # Student logout
+├── student_objective_exam.php    # Core exam-taking engine (full exam UI)
+├── student_sidebar.php           # Student sidebar navigation
+├── style.css                     # Original CSS (556 lines)
+├── style_enhanced.css            # Enhanced CSS (4264 lines)
+├── system_chat.php
+├── upload_recording.php          # Webcam recording upload endpoint
+├── webrtc_api.php                # WebRTC signaling relay API
+│
+├── ADMIN PAGES (root level - prefixed with admin_):
+│   ├── admin_analytics.php       # Analytics dashboard with Chart.js
+│   ├── admin_assign_students.php # Assign/remove students to/from exams
+│   │                            # (includes exeat2 integration)
+│   ├── admin_audit_trail.php     # Full audit trail viewer with filters
+│   ├── admin_dashboard.php       # Main admin dashboard (KPIs, charts, stats)
+│   ├── admin_devices.php         # Device authorization manager
+│   ├── admin_exam_audit.php      # Per-exam audit trail viewer
+│   ├── admin_exams.php           # Practical exam CRUD (1117 lines)
+│   ├── admin_live_proctor.php    # Live proctoring monitoring panel
+│   ├── admin_objective_exams.php # Objective exam CRUD
+│   ├── admin_objective_questions.php # Objective questions CRUD
+│   ├── admin_portal_settings.php # Portal CMS/settings (1374 lines)
+│   ├── admin_questions.php       # Practical question bank management
+│   ├── admin_roles.php           # Role/permission management
+│   ├── admin_session_report.php  # Session-based report generation
+│   ├── admin_sessions.php        # Academic session CRUD
+│   ├── admin_sidebar.php         # Admin sidebar menu (SVG icons, collapsible)
+│   ├── admin_staff.php           # Examiner/staff management
+│   ├── admin_student_scores.php  # Student score viewer
+│   ├── admin_students.php        # Student CRUD with exeat2 integration
+│   ├── admin_upload.php          # Bulk upload center (CSV/CSV)
+│   ├── admin_viva_exams.php      # VIVA exam CRUD
+│   └── all_students_score.php    # All students score summary
+│
+├── assets/
+│   ├── css/
+│   │   ├── bootstrap.min.css     # Bootstrap 5.3.7 CSS
+│   │   └── bootstrap.min.css.map
+│   ├── img/
+│   │   ├── hero.png              # Landing page hero image
+│   │   ├── about.png             # About section image
+│   │   ├── proctoring.png        # Proctoring illustration
+│   │   ├── login_bg.jpg          # Login page background
+│   │   └── ... (other images)
+│   ├── js/
+│   │   ├── bootstrap.bundle.min.js  # Bootstrap 5.3.7 JS bundle
+│   │   ├── bootstrap.bundle.min.js.map
+│   │   ├── student_lockdown.js   # Keyboard & browser lockdown (34 lines)
+│   │   ├── ai_proctor.js         # TensorFlow.js AI face detection (298 lines)
+│   │   ├── admin-common.js       # Admin sidebar, spinners, confirm (163 lines)
+│   │   └── admin-swal.js         # SweetAlert2 integration (86 lines)
+│   └── favicon.ico
+│
+├── bootstrap-5.3.7-dist/         # Bootstrap 5.3.7 distribution files
+│
+├── database/
+│   ├── exam_portal.sql           # Full DB dump with data (801 lines)
+│   ├── exam_portal_portable.sql
+│   ├── full_db.sql
+│   ├── schema.sql                # Schema-only SQL dump
+│   ├── migration_v2.sql          # exeat2 integration migration (source/
+│   │                           #   external_id columns)
+│   ├── clean_dump.php
+│   ├── export.php
+│   ├── hash_existing_passwords.php
+│   ├── *.csv                     # Sample import data files
+│   └── backup_db_pre_implementation.sql
+│
+├── downloads/
+│   └── seb/
+│       └── VeritasSEB-1.0.0-win.exe  # SEB Windows installer
+│
+├── exams/                        # Directory (currently empty)
+│
+├── includes/
+│   ├── fetch_exeat2_course_studies.php
+│   ├── fetch_exeat2_staff.php
+│   ├── fetch_exeat2_students.php
+│   ├── import_exeat2_staff.php
+│   └── import_exeat2_student.php
+│
+├── logs/                         # PHP error log directory
+│   └── php_errors.log
+│
+├── migrations/
+│   └── 001_add_deleted_at.sql    # Soft delete migration
+│
+├── Models/                       # 186 Laravel Eloquent models from exeat2
+│   └── (various *.php model files from exeat2 Laravel portal)
+│
+├── modules/
+│   └── secure_gate/
+│       ├── index.php             # SEB gate/landing page UI
+│       └── config_generator.php  # SEB .seb configuration file generator
+│
+├── seb-client/                   # Electron Secure Exam Browser source
+│   ├── README.md
+│   ├── build-installer.bat       # Windows build script
+│   ├── build-installer.ps1       # PowerShell build script
+│   ├── build-installer.sh        # Linux build script
+│   ├── installers/
+│   │   └── VeritasSEB-1.0.0-win.exe
+│   └── src/
+│       ├── package.json          # Electron project config
+│       ├── main.js               # Electron main process (kiosk browser)
+│       ├── config.json           # SEB configuration
+│       ├── preload.js            # Electron preload script
+│       └── assets/
+│
+├── tmp/
+│
+├── uploads/
+│   ├── snapshots/                # Webcam snapshot captures
+│   └── recordings/               # Webcam video recordings
+│
+├── scratch/                      # Scratch/test scripts
+│
+└── *.md files:                   # Documentation
+    ├── README.md
+    ├── README_ENHANCED.md
+    ├── NEXTGEN_ASSESSMENT_PORTAL_PITCH.md (595 lines, business proposal)
+    ├── EXEAT2_INTEGRATION_PLAN.md (1010 lines, detailed integration plan)
+    ├── TECH_ANALYSIS_AND_RECOMMENDATIONS.md
+    ├── UX_OVERHAUL_PLAN.md
+    └── UBUNTU_MIGRATION_GUIDE.txt
+
+================================================================================
+4. DATABASE SCHEMA (COMPLETE)
+================================================================================
+
+  Database Name: backup_db_pre_implementation (configurable via .env)
+  Engine: InnoDB
+  Charset: utf8mb4
+
+  4.1 TABLE: academic_sessions
+  ──────────────────────────────────────────────────────────────────────────────
+  Column         Type              Null    Description
+  ──────────────────────────────────────────────────────────────────────────────
+  id             int(11) PK AI     NOT NULL  Primary key
+  session_name   varchar(100)                Session label (e.g. "2024/2025")
+  is_active      tinyint(1)                  Active flag (0/1)
+  created_at     timestamp                   Record creation time
+  deleted_at     timestamp         YES       Soft delete timestamp
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.2 TABLE: students (~3560 rows)
+  ──────────────────────────────────────────────────────────────────────────────
+  Column               Type              Null    Description
+  ──────────────────────────────────────────────────────────────────────────────
+  id                   int(11) PK AI     NOT NULL  Primary key
+  name                 varchar(255)                Full name
+  firstname            varchar(100)                First name
+  middlename           varchar(100)                Middle name
+  lastname             varchar(100)                Last name
+  email                varchar(150)                Email address
+  matric_no            varchar(50) UNIQUE          Matriculation number
+  username             varchar(100) UNIQUE         Login username
+  password             varchar(255)                bcrypt hash (default: '12345')
+  current_session_id   varchar(255)                PHP session ID for hardening
+  source               varchar(20)                 Origin: 'upload','exeat2',
+                                                  'manual' (migration v2)
+  external_id          bigint(20)                  FK to exeat2.students.id
+  deleted_at           timestamp         YES       Soft delete
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.3 TABLE: examiners (~12 rows)
+  ──────────────────────────────────────────────────────────────────────────────
+  Column               Type              Null    Description
+  ──────────────────────────────────────────────────────────────────────────────
+  id                   int(11) PK AI     NOT NULL  Primary key
+  name                 varchar(255)                Full name
+  username             varchar(100) UNIQUE         Login username
+  password             varchar(255)                bcrypt hash
+  role                 varchar(20)                 'admin' or 'examiner'
+  source               varchar(20)                 Origin (migration v2)
+  external_id          bigint(20)                  FK to exeat2.staff.id
+  email                varchar(255)                Email (migration v2)
+  deleted_at           timestamp         YES       Soft delete
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.4 TABLE: exams (~84 rows)
+  ──────────────────────────────────────────────────────────────────────────────
+  Column               Type              Null    Description
+  ──────────────────────────────────────────────────────────────────────────────
+  id                   int(11) PK AI     NOT NULL  Primary key
+  session_id           int(11)                     FK -> academic_sessions.id
+  name                 varchar(255)                Exam name
+  type                 enum('practical',           Exam format
+                        'objective','viva')
+  is_active            tinyint(1)                  Active/inactive toggle
+  description          text              YES       Exam description
+  total_mark           decimal(6,2)                Maximum possible score
+  duration_minutes     int(11)                     Time limit in minutes
+  max_attempts         int(11)                     Max allowed attempts (def 1)
+  score_policy         enum('highest',             Which attempt counts
+                        'first','last')
+  grading_method       varchar(20)                 'highest' or 'average'
+  shuffle_objective    tinyint(1)                  Shuffle question order
+  shuffle_options      tinyint(1)                  Shuffle answer options
+  questions_to_show    int(11)                     Subset of pool to display
+  student_can_view_score tinyint(1)                Allow student score view
+  start_time           datetime          YES       Scheduled start time
+  end_time             datetime          YES       Scheduled end time
+  open_at              datetime          YES       Legacy scheduling
+  close_at             datetime          YES       Legacy scheduling
+  is_strict            tinyint(1)                  Strict lockdown mode
+  proctor_fullscreen   tinyint(1)                  Enforce fullscreen
+  proctor_tab_lock     tinyint(1)                  Detect tab switches
+  proctor_kb_lock      tinyint(1)                  Block keyboard shortcuts
+  proctor_auto_submit  tinyint(1)                  Auto-submit on violation
+  proctor_browser_check tinyint(1)                 Verify browser type
+  proctor_webcam       tinyint(1)                  Require webcam
+  proctor_live_video   tinyint(1)                  Enable live streaming
+  created_at           timestamp                   Record creation time
+  deleted_at           timestamp         YES       Soft delete
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.5 TABLE: questions (Practical/VIVA question bank, ~1080 rows)
+  ──────────────────────────────────────────────────────────────────────────────
+  Column         Type              Null    Description
+  ──────────────────────────────────────────────────────────────────────────────
+  id             int(11) PK AI     NOT NULL  Primary key
+  exam_id        int(11)                     FK -> exams.id
+  text           varchar(500)                Question/procedure text
+  score_values   varchar(50)                 Scoring options (e.g.
+                                            "0,0.25,0.5,0.75,1")
+  deleted_at     timestamp         YES       Soft delete
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.6 TABLE: objective_questions (~370 rows)
+  ──────────────────────────────────────────────────────────────────────────────
+  Column             Type              Null    Description
+  ──────────────────────────────────────────────────────────────────────────────
+  id                 int(11) PK AI     NOT NULL  Primary key
+  exam_id            int(11)                     FK -> exams.id
+  question_text      text                        Question body text
+  question_image     varchar(255)      YES       Optional question image
+  option_a           varchar(255)                Option A text
+  option_a_image     varchar(255)      YES       Option A image
+  option_b           varchar(255)                Option B text
+  option_b_image     varchar(255)      YES       Option B image
+  option_c           varchar(255)      YES       Option C text
+  option_c_image     varchar(255)      YES       Option C image
+  option_d           varchar(255)      YES       Option D text
+  option_d_image     varchar(255)      YES       Option D image
+  correct_option     char(1)                     'A', 'B', 'C', or 'D'
+  mark               float                       Point value (default 1)
+  deleted_at         timestamp         YES       Soft delete
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.7 TABLE: answers (Practical/VIVA scores, ~17500 rows)
+  ──────────────────────────────────────────────────────────────────────────────
+  Column         Type              Null    Description
+  ──────────────────────────────────────────────────────────────────────────────
+  id             int(11) PK AI     NOT NULL  Primary key
+  exam_id        int(11)                     FK -> exams.id
+  question_id    int(11)                     FK -> questions.id
+  student_id     int(11)                     FK -> students.id
+  examiner_id    int(11)                     FK -> examiners.id
+  score          decimal(5,2)                Score given by examiner
+  updated_at     datetime                    Last update time
+  created_at     datetime                    Record creation time
+  updated_by     int(11)                     FK -> examiners.id
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.8 TABLE: objective_answers (~11246 rows)
+  ──────────────────────────────────────────────────────────────────────────────
+  Column             Type              Null    Description
+  ──────────────────────────────────────────────────────────────────────────────
+  id                 int(11) PK AI     NOT NULL  Primary key
+  exam_id            int(11)                     FK -> exams.id
+  student_id         int(11)                     FK -> students.id
+  question_id        int(11)                     FK -> objective_questions.id
+  selected_option    char(1)            YES      Student's selection: A/B/C/D
+  submitted_at       datetime                    Submission timestamp
+  attempt_no         int(11)                     Attempt number
+  UNIQUE KEY         (exam_id, student_id, attempt_no, question_id)
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.9 TABLE: objective_attempts (~594 rows)
+  ──────────────────────────────────────────────────────────────────────────────
+  Column               Type              Null    Description
+  ──────────────────────────────────────────────────────────────────────────────
+  id                   int(11) PK AI     NOT NULL  Primary key
+  exam_id              int(11)                     FK -> exams.id
+  student_id           int(11)                     FK -> students.id
+  login_id             int(11)           YES       Login history FK
+  attempt_no           int(11)                     Attempt number
+  started_at           datetime                    Start timestamp
+  finished_at          datetime          YES       Finish timestamp
+  time_taken           int(11)           YES       Duration in seconds
+  question_order       text              YES       Shuffled question ID order
+  score                decimal(10,2)     YES       Calculated score
+  violation_count      int(11)                     Default 0
+  is_locked            tinyint(1)                  Locked by violations
+  proctor_status       enum('active',              Current proctor status
+                        'blur','disconnected',
+                        'submitted')
+  webcam_snapshot      longtext          YES       Base64 snapshot (deprecated)
+  snapshot_path        varchar(255)      YES       File path to snapshot
+  is_live_requested    tinyint(1)                  Admin requested live view
+  last_warning_at      datetime          YES       Last warning timestamp
+  warning_message      text              YES       Admin's warning text
+  last_active          datetime          YES       Heartbeat timestamp
+  remote_command       varchar(255)      YES       Admin remote commands
+  UNIQUE KEY           (exam_id, student_id, attempt_no)
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.10 TABLE: exam_students (~32737 rows, pivot)
+  ──────────────────────────────────────────────────────────────────────────────
+  Column         Type              Null    Description
+  ──────────────────────────────────────────────────────────────────────────────
+  id             int(11) PK AI     NOT NULL  Primary key
+  exam_id        int(11)                     FK -> exams.id
+  student_id     int(11)                     FK -> students.id
+  UNIQUE KEY     (exam_id, student_id)
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.11 TABLE: exam_examiners (pivot)
+  ──────────────────────────────────────────────────────────────────────────────
+  Column         Type              Null    Description
+  ──────────────────────────────────────────────────────────────────────────────
+  id             int(11) PK AI     NOT NULL  Primary key
+  exam_id        int(11)                     FK -> exams.id
+  examiner_id    int(11)                     FK -> examiners.id
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.12 TABLE: exam_questions (pivot)
+  ──────────────────────────────────────────────────────────────────────────────
+  Column         Type              Null    Description
+  ──────────────────────────────────────────────────────────────────────────────
+  id             int(11) PK AI     NOT NULL  Primary key
+  exam_id        int(11)                     FK -> exams.id
+  question_id    int(11)                     FK -> questions.id
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.13 TABLE: exam_violations (~20 rows)
+  ──────────────────────────────────────────────────────────────────────────────
+  Column           Type              Null    Description
+  ──────────────────────────────────────────────────────────────────────────────
+  id               int(11) PK AI     NOT NULL  Primary key
+  attempt_id       int(11)                     FK -> objective_attempts.id
+  student_id       int(11)           YES       FK -> students.id
+  exam_id          int(11)           YES       FK -> exams.id
+  violation_type   varchar(50)                 Type: WINDOW_BLUR, TAB_SWITCH,
+                                              FACE_NOT_VISIBLE, MULTIPLE_FACES
+  details          text              YES       Description of violation
+  created_at       datetime                    Timestamp
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.14 TABLE: approved_devices (~403 rows)
+  ──────────────────────────────────────────────────────────────────────────────
+  Column         Type              Null    Description
+  ──────────────────────────────────────────────────────────────────────────────
+  id             int(11) PK AI     NOT NULL  Primary key
+  ip_address     varchar(45) UNIQUE          Client IP address
+  mac_address    varchar(100)      YES       Client MAC address (optional)
+  device_info    text              YES       User-Agent string
+  status         enum('pending',             Approval status
+                    'approved','rejected')
+  last_seen      timestamp                   Last contact timestamp
+  created_at     timestamp                   Record creation time
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.15 TABLE: audit_trail (~40688 rows)
+  ──────────────────────────────────────────────────────────────────────────────
+  Column         Type              Null    Description
+  ──────────────────────────────────────────────────────────────────────────────
+  id             int(11) PK AI     NOT NULL  Primary key
+  user_id        int(11)           YES       User identifier
+  user_type      enum('admin',               User role
+                    'examiner','student')
+  username       varchar(100)      YES       Username at time of action
+  action         varchar(255)                Action type: INSERT, UPDATE,
+                                            DELETE, ASSESSMENT_SUBMITTED
+  table_name     varchar(255)      YES       Affected table
+  record_id      int(11)           YES       Affected record ID
+  old_values     text              YES       Previous values (JSON)
+  new_values     text              YES       New values (JSON)
+  ip_address     varchar(45)       YES       Client IP
+  user_agent     text              YES       Browser user-agent
+  created_at     datetime                    Timestamp
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.16 TABLE: chat_messages (~33 rows)
+  ──────────────────────────────────────────────────────────────────────────────
+  Column         Type              Null    Description
+  ──────────────────────────────────────────────────────────────────────────────
+  id             int(11) PK AI     NOT NULL  Primary key
+  sender_id      int(11)                     FK -> examiners.id
+  receiver_id    int(11)           YES       FK -> examiners.id (NULL = group)
+  group_id       int(11)           YES       Group chat identifier
+  message        text              YES       Message text
+  media_type     varchar(50)       YES       MIME type of media
+  media_blob     longblob          YES       Binary media data
+  created_at     datetime                    Timestamp
+  is_read        tinyint(1)                  Read status (0/1)
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.17 OTHER TABLES:
+  ──────────────────────────────────────────────────────────────────────────────
+  Table                  Rows     Description
+  ──────────────────────────────────────────────────────────────────────────────
+  login_history          ~734     Login/logout tracking log
+  system_settings        ~374     Key-value CMS settings store
+  system_events                   System event log
+  system_chat_log                 AI/system chat log
+  webrtc_signals                  WebRTC signaling relay table
+  export_history                  Data export log
+  ──────────────────────────────────────────────────────────────────────────────
+
+  4.18 DATABASE TRIGGERS:
+  ──────────────────────┬───────────────────────────────────────────────────────
+  Trigger                Purpose
+  ──────────────────────┼───────────────────────────────────────────────────────
+  audit_answers_insert   Logs assessment submissions to audit_trail
+  audit_exams_insert     Logs exam creation to audit_trail
+  audit_exams_update     Logs exam modifications to audit_trail
+  audit_questions_insert Logs question creation
+  audit_questions_update Logs question modifications
+  audit_questions_delete Logs question deletions
+  audit_students_insert  Logs student creation
+  audit_students_update  Logs student modifications
+  audit_students_delete  Logs student deletions
+  ──────────────────────┴───────────────────────────────────────────────────────
+
+================================================================================
+5. AUTHENTICATION & AUTHORIZATION SYSTEM
+================================================================================
+
+  5.1 ROLES (3-tier)
+  ──────────────────────────────────────────────────────────────────────────────
+  Role        Access Level
+  ──────────────────────────────────────────────────────────────────────────────
+  admin       Full system access: all admin pages, user management, exam CRUD,
+              analytics, audit trail, proctoring, chat, settings
+  examiner    Assessment/grading access only: assess students, view assigned
+              exam results, staff chat
+  student     Exam-taking access only: dashboard, objective exam engine,
+              view results
+  ──────────────────────────────────────────────────────────────────────────────
+
+  5.2 AUTHENTICATION FLOW
+  ──────────────────────────────────────────────────────────────────────────────
+  STAFF LOGIN (login.php):
+    1. Username + password form submission
+    2. bcrypt verify against examiners table
+    3. Legacy plaintext auto-upgrade: if plaintext matches, hash and update
+    4. Session creation with role, user, examiner_id
+    5. Login history audit log INSERT
+    6. Redirect based on role (admin -> admin_dashboard, examiner -> assess)
+
+  STUDENT LOGIN (student_login.php):
+    1. Two-step AJAX process
+    2. Step 1: Matric number lookup (cleaned: removes /,-, spaces)
+    3. Identity confirmation modal displayed
+    4. Step 2: Optional password verification (configurable via system_settings)
+    5. session_regenerate_id(true) for session fixation prevention
+    6. Session ID stored in students.current_session_id
+    7. Multi-session detection: stored session ID compared on every proctor ping
+    8. Login history INSERT
+
+  5.3 SESSION HARDENING
+  ──────────────────────────────────────────────────────────────────────────────
+  - Current session_id stored in students.current_session_id at login
+  - On every proctor_ping.php call, stored ID is compared to current session_id
+  - If mismatch (another login from elsewhere), student is FORCED_LOGOUT
+  - Inactivity timeout configurable via SESSION_LIFETIME (default 1800s/30min)
+  - session_regenerate_id(true) on each student login
+
+  5.4 AUTHORIZATION GATE
+  ──────────────────────────────────────────────────────────────────────────────
+  - Function: check_auth(array|string $allowed_roles)
+  - Called on every protected page
+  - Checks $_SESSION['role'] against allowed roles
+  - On failure: redirects to appropriate login page based on requested access
+  - Student routes additionally call check_device_auth()
+
+  5.5 CSRF PROTECTION
+  ──────────────────────────────────────────────────────────────────────────────
+  - Token generation: bin2hex(random_bytes(32))
+  - Stored in $_SESSION['csrf_token']
+  - Validated on all POST requests via validate_csrf()
+  - Hidden input generated via csrf_field() helper
+  - Constant-time comparison via hash_equals()
+
+  5.6 DEVICE AUTHORIZATION (check_device_auth())
+  ──────────────────────────────────────────────────────────────────────────────
+  - IP-based device registration and whitelisting
+  - Auto-registers unknown IPs as 'pending' status
+  - 'approved' devices: full access granted
+  - 'rejected' devices: blocked with 403 + styled error page
+  - 'pending' devices: shown waiting page with 15-second auto-refresh
+  - Admin manages via admin_devices.php
+
+================================================================================
+6. ALL PAGES & ROUTES
+================================================================================
+
+  6.1 PUBLIC PAGES
+  ──────────────────────────────────────────────────────────────────────────────
+  Route              File                     Description
+  ──────────────────────────────────────────────────────────────────────────────
+  /                  index.php                Landing/marketing page (hero,
+                                              stats, about, features, security,
+                                              workflow, team, footer)
+  /services          services.php             Features/services info page
+  /login             login.php                Staff login (admin/examiner)
+  /student_login     student_login.php        Student login (AJAX, 2-step)
+  /logout            logout.php               Staff logout
+  /student_logout    student_logout.php       Student logout
+
+  6.2 ADMIN PAGES (require auth: admin)
+  ──────────────────────────────────────────────────────────────────────────────
+  Route              File                     Description
+  ──────────────────────────────────────────────────────────────────────────────
+  /admin_dashboard   admin_dashboard.php      KPI dashboard with 12+ metrics,
+                                              Chart.js charts, monthly trends,
+                                              quick action cards
+  /admin_analytics   admin_analytics.php      Advanced analytics with multiple
+                                              chart types, exam comparison,
+                                              department breakdowns
+  /admin_students    admin_students.php       Student CRUD: add, edit, delete,
+                                              bulk import, exeat2 student
+                                              browser/filter, exam history per
+                                              student (922 lines)
+  /admin_staff       admin_staff.php          Examiner/staff management:
+                                              create, edit, delete examiners
+  /admin_roles       admin_roles.php          Role assignment and management
+  /admin_sessions    admin_sessions.php       Academic sessions CRUD
+  /admin_exams       admin_exams.php          Practical exam CRUD: create,
+                                              edit, activate/deactivate,
+                                              assign students/questions,
+                                              proctor settings (1117 lines)
+  /admin_objective_exams admin_objective_exams.php  Objective exam CRUD
+  /admin_viva_exams  admin_viva_exams.php     VIVA exam CRUD
+  /admin_questions   admin_questions.php      Practical question bank
+                                              management with CRUD
+  /admin_objective_questions admin_objective_questions.php  Objective question
+                                              management
+  /admin_assign_students admin_assign_students.php  Assign/remove students to/
+                                              from exams with exeat2 student
+                                              import (686 lines)
+  /admin_upload      admin_upload.php         Bulk data upload center
+                                              (students, questions, etc.)
+  /admin_student_scores admin_student_scores.php  Student score viewer
+  /all_students_score all_students_score.php  All students score summary
+  /admin_live_proctor admin_live_proctor.php  Live proctoring monitor: grid
+                                              view of active sessions, admin
+                                              actions (warn, force submit,
+                                              request live video, recordings)
+  /admin_devices     admin_devices.php        Device authorization manager
+                                              (approve/reject IPs)
+  /admin_exam_audit  admin_exam_audit.php     Per-exam audit trail viewer
+  /admin_audit_trail admin_audit_trail.php    Full audit trail with filters
+  /admin_session_report admin_session_report.php  Session-based reports
+  /admin_portal_settings admin_portal_settings.php  CMS/settings management
+                                              (1374 lines): hero content, about
+                                              section, security descriptions,
+                                              AI packages, workflow steps,
+                                              exam formats, team, theme, etc.
+  /report            report.php               Report generation (CSV export)
+  /chat              chat.php                 Full staff chat interface
+  /assessment_portal_testing_checklist.html   Static QA testing checklist
+
+  6.3 EXAMINER PAGES (require auth: examiner)
+  ──────────────────────────────────────────────────────────────────────────────
+  Route              File                     Description
+  ──────────────────────────────────────────────────────────────────────────────
+  /assess            asses.php                Assessment interface: select exam,
+                                              search student, rate procedures/
+                                              questions with score dropdowns,
+                                              auto-save AJAX
+  /examiner_results  examiner_results.php     View practical/viva results with
+                                              filters
+  /examiner_objective_results examiner_objective_results.php  View objective
+                                              exam results
+  /chat              chat.php                 Staff chat
+
+  6.4 STUDENT PAGES (require auth: student)
+  ──────────────────────────────────────────────────────────────────────────────
+  Route              File                     Description
+  ──────────────────────────────────────────────────────────────────────────────
+  /student_dashboard student_dashboard.php    Dashboard: list of active exams,
+                                              attempt status, start/resume/
+                                              review buttons (312 lines)
+  /student_objective_exam student_objective_exam.php  Core exam engine: question
+                                              rendering, timer, navigation
+                                              palette, answer saving, proctor
+                                              heartbeat, WebRTC live, violation
+                                              overlay, lockdown, recording,
+                                              result view, review mode (~2000+ lines)
+
+================================================================================
+7. API ENDPOINTS
+================================================================================
+
+  Endpoint                           Method   Actions
+  ──────────────────────────────────────────────────────────────────────────────
+  objective_exam_api.php             POST     action=save_answer
+  ?action=save_answer                          Saves MCQ answer with
+                                              INSERT ON DUPLICATE KEY UPDATE
+                                    POST     action=start_attempt
+  ?action=start_attempt                        Creates new attempt record
+                                    GET      action=get_remaining_time
+  ?action=get_remaining_time                   Returns remaining seconds
+
+  proctor_ping.php                   POST     Heartbeat: status, snapshot,
+                                              violation reporting, warning
+                                              retrieval, remote commands,
+                                              session validation, lock check
+                                    Response: JSON { status, violation_count,
+                                              is_live_requested, warning,
+                                              remote_command, time_ping }
+
+  webrtc_api.php                     POST     action=send - Store signal
+  ?action=...                        GET      action=get - Poll signals
+                                    POST     action=request_live
+                                    POST     action=stop_live
+                                    POST     action=clear - Clear signals
+
+  chat_backend.php                   GET      action=get_contacts
+  ?action=...                        GET      action=unread_count
+                                    GET      action=recent_unread
+                                    GET      action=all_messages_preview
+                                    GET      ?receiver_id=X or ?group_id=X
+                                    POST     action=send
+                                    POST     action=mark_read
+                                    POST     action=clear_chats
+
+  upload_recording.php               POST     action=student_chunk - Webcam
+                                              recording chunk upload
+
+  search_students.php                GET      Student search by name/matric
+
+  passport_image.php                 GET      type=student&id=X - Serve
+                                              student passport image
+
+  download_template.php              GET      Download CSV import templates
+
+================================================================================
+8. EXAM TYPES & WORKFLOWS
+================================================================================
+
+  8.1 OBJECTIVE (MCQ) EXAMS
+  ──────────────────────────────────────────────────────────────────────────────
+  WORKFLOW:
+    1. Admin creates exam via admin_objective_exams.php
+       - Sets name, session, duration, max_attempts, grading method
+       - Configures proctor flags (webcam, fullscreen, tab lock, etc.)
+       - Sets scheduling (start_time, end_time)
+       - Configures question pool (questions_to_show), shuffle settings
+    2. Admin adds A/B/C/D questions via admin_objective_questions.php
+       - Supports question text + optional image
+       - Each option can have text + optional image
+       - Correct answer marked (A/B/C/D), mark value assigned
+    3. Admin assigns students to exam via admin_assign_students.php
+       - Manual selection, bulk assign all, or filter by exeat2 criteria
+    4. Student logs in, sees exam on dashboard
+    5. Student clicks "Start Exam" -> enters student_objective_exam.php
+    6. Questions rendered with navigation palette (grid)
+    7. Answers saved via AJAX (objective_exam_api.php -> save_answer)
+    8. Timer counts down, auto-submits at zero
+    9. Proctor heartbeat (proctor_ping.php) runs every few seconds
+    10. Violations tracked (tab blur, window switch, face detection)
+    11. On submit/timeout: score calculated, attempt finalized
+    12. Results viewable: per-attempt scores, time taken, review mode
+
+  GRADING METHODS:
+    - Highest: final grade = max score across all attempts
+    - Average: final grade = average of all attempt scores
+
+  SCORING POLICIES:
+    - Highest attempt counts
+    - First attempt counts
+    - Last attempt counts
+
+  TIMING: duration_minutes per attempt, with auto-finalize on expiry
+
+  8.2 PRACTICAL (OSCE) EXAMS
+  ──────────────────────────────────────────────────────────────────────────────
+  WORKFLOW:
+    1. Admin creates exam via admin_exams.php
+    2. Admin adds procedural/assessment questions via admin_questions.php
+       - Each question has text and score_values (e.g., "0,0.25,0.5,0.75,1")
+    3. Examiner assigned to exam
+    4. Examiner opens asses.php, selects exam
+    5. Examiner searches for student by name/matric
+    6. Examiner rates each procedure/step with score dropdown
+    7. Scores saved instantly via AJAX to answers table
+    8. Aggregate score calculated automatically (sum of all question scores)
+
+  8.3 VIVA (ORAL) EXAMS
+  ──────────────────────────────────────────────────────────────────────────────
+  - Similar workflow to Practical exams
+  - Categorized as 'viva' type in exams table
+  - Results viewable separately from practical scores
+  - Examiner rates student performance on oral criteria
+  - Dedicated admin_viva_exams.php for management
+
+================================================================================
+9. PROCTORING SYSTEM (7-LAYER SECURITY STACK)
+================================================================================
+
+  ┌──────┬──────────────────────────┬─────────────────────────────────────────┐
+  │ L7   │ OS Kiosk (SEB)          │ Electron-based locked-down browser      │
+  │ L6   │ Browser Lockdown        │ JS blocks F12, right-click, Ctrl+U, etc │
+  │ L5   │ Tab Blur Counters       │ Detects window/tab focus loss           │
+  │ L4   │ Webcam Proctoring       │ Real-time face detection (TensorFlow.js)│
+  │ L3   │ Device Whitelisting     │ IP-based approval system                │
+  │ L2   │ Session Hardening       │ Session ID in DB, concurrent detection  │
+  │ L1   │ Fullscreen Enforcement  │ API requests fullscreen on exam start   │
+  └──────┴──────────────────────────┴─────────────────────────────────────────┘
+
+  VIOLATION SYSTEM:
+  ──────────────────────────────────────────────────────────────────────────────
+  Violation Types:  WINDOW_BLUR, TAB_SWITCH, FACE_NOT_VISIBLE, MULTIPLE_FACES
+  Tracking:         violation_count column in objective_attempts
+  Strike Limit:     5 violations = automatic lock (is_locked = 1)
+  Auto-submit:      3 violations can trigger auto-submit (configurable)
+  Admin Actions:    warn, send message, force submit, request live video
+  Persistence:      Lock persists even after logout/relogin
+
+  PROCTOR FLAGS (per-exam configuration):
+  ──────────────────────────────────────────────────────────────────────────────
+  Flag                  Description
+  ──────────────────────────────────────────────────────────────────────────────
+  is_strict             Master switch: enables ALL proctor features
+  proctor_fullscreen    Requires fullscreen mode during exam
+  proctor_tab_lock      Detects tab/window switches
+  proctor_kb_lock       Blocks keyboard shortcuts
+  proctor_auto_submit   Auto-submits on violation threshold
+  proctor_browser_check Verifies allowed browser
+  proctor_webcam        Requires webcam access
+  proctor_live_video    Enables live video streaming to admin
+
+  LIVE PROCTORING PANEL (admin_live_proctor.php):
+  ──────────────────────────────────────────────────────────────────────────────
+  - Grid/gallery view of all active student sessions
+  - Each card shows: student name, photo, webcam snapshot, violation count,
+    timer, proctor status
+  - Admin actions per student:
+    * Send warning message
+    * Force submit exam
+    * Request live video (WebRTC)
+    * View exam recordings
+  - Bulk actions: download all recordings as ZIP
+  - Auto-refresh at configurable interval
+
+================================================================================
+10. AI PROCTORING (TENSORFLOW.JS BLAZEFACE)
+================================================================================
+
+  File: assets/js/ai_proctor.js (298 lines)
+
+  OVERVIEW:
+  - Client-side face detection using TensorFlow.js BlazeFace model
+  - All inference runs in the browser — no server-side GPU required
+  - Integrates with existing proctor_ping.php violation pipeline
+
+  CONFIGURATION:
+  ──────────────────────────────────────────────────────────────────────────────
+  Setting                    Default   Description
+  ──────────────────────────────────────────────────────────────────────────────
+  DETECTION_INTERVAL_MS      4000      Run detection every 4 seconds
+  VIOLATION_COOLDOWN_MS      18000     Min gap between same violation type
+  FACE_CONFIDENCE_THRESH     0.72      BlazeFace probability threshold
+  STARTUP_DELAY_MS           5000      Wait after exam start before scanning
+
+  DETECTED VIOLATIONS:
+  ──────────────────────────────────────────────────────────────────────────────
+  Violation              Condition
+  ──────────────────────────────────────────────────────────────────────────────
+  FACE_NOT_VISIBLE       No face detected in webcam frame
+  MULTIPLE_FACES         More than one face detected (potential accomplice)
+
+  FEATURES:
+  - Web Audio API alarm tones (no external audio files needed)
+    * noface: dual-tone sine pattern
+    * multiFace: rapid sawtooth alarm
+    * strike: urgent triple beep
+  - On-screen toast notifications with color-coded alerts
+  - Rate-limited violation reporting (cooldown per type)
+  - Automatic startup on DOM ready
+  - Graceful fallback if TensorFlow.js not loaded or webcam unavailable
+  - Integrates with window.sendPing() from the exam control unit
+
+================================================================================
+11. SECURE EXAM BROWSER (ELECTRON SEB)
+================================================================================
+
+  Location: seb-client/ directory
+
+  OVERVIEW:
+  - Electron-based kiosk-mode locked-down browser
+  - Prevents access to OS desktop, other applications, or unauthorized sites
+  - Requires pre-configuration of exam URL and allowed domains
+
+  SOURCE FILES:
+  ──────────────────────────────────────────────────────────────────────────────
+  File                  Description
+  ──────────────────────────────────────────────────────────────────────────────
+  src/package.json      Electron project config (name, version, build config)
+  src/main.js           Electron main process: BrowserWindow kiosk setup,
+                        domain whitelisting, keyboard blocking, logout
+                        pattern detection, connection timeout handling
+  src/preload.js        Preload script for IPC communication
+  src/config.json       Exam URL, logout patterns, app title, allowed domains,
+                        connection timeout
+  build-installer.bat   Windows build script
+  build-installer.ps1   PowerShell build script
+  build-installer.sh    Linux build script
+
+  CONFIG.JSON STRUCTURE:
+  ──────────────────────────────────────────────────────────────────────────────
+  {
+    "examUrl": "http://localhost/exam_portal/student_login",
+    "logoutPatterns": ["student_logout", "login"],
+    "appTitle": "Veritas SEB Kiosk",
+    "allowedDomains": ["localhost", "127.0.0.1"],
+    "connectionTimeout": 30
+  }
+
+  FEATURES:
+  - Kiosk fullscreen mode (no window chrome, no taskbar access)
+  - Domain whitelisting (only pre-configured domains can load)
+  - Keyboard shortcut blocking (F11, Alt+F4, Ctrl+W, etc.)
+  - Auto-closes on logout pattern detection in URL
+  - Connection timeout handling with user notification
+  - Cross-platform: Windows (.exe), macOS (.dmg), Linux (.AppImage/.deb)
+
+  SEB CONFIG GENERATOR (modules/secure_gate/):
+  ──────────────────────────────────────────────────────────────────────────────
+  - config_generator.php: generates .seb configuration files (XML plist format)
+  - Can set: quit password, fullscreen mode, browser view mode
+  - Prevents: F12, print screen, quit without password
+  - index.php: SEB gate landing page with download and instructions
+
+================================================================================
+12. CHAT SYSTEM
+================================================================================
+
+  12.1 STAFF CHAT (chat.php, chat_backend.php)
+  ──────────────────────────────────────────────────────────────────────────────
+  Full-page chat interface for admin and examiner roles:
+  - Contact list (all staff members)
+  - Group chat channel
+  - Private 1-on-1 messaging
+  - Message timestamps
+  - Send text messages
+  - Media sharing (images, audio, video stored as BLOBs in DB)
+  - Read/unread status
+  - Online/offline indicators (simple implementation)
+  - Admin-only: clear all chats with confirmation
+  - Real-time polling (3-second interval for messages, 5-second for notifications)
+  - Responsive design (mobile/tablet/desktop)
+
+  12.2 EMBEDDED CHAT WIDGET (footer.php)
+  ──────────────────────────────────────────────────────────────────────────────
+  Floating chat icon on all pages with:
+  - Notification badge showing unread count
+  - Dropdown preview of recent unread messages (navbar bell)
+  - Full chat modal with contacts, messages, send functionality
+  - Same feature set as full-page chat
+
+  12.3 CHAT BACKEND API (chat_backend.php)
+  ──────────────────────────────────────────────────────────────────────────────
+  RESTful JSON API:
+  GET:
+    ?action=get_contacts          -> List all staff (except self)
+    ?action=unread_count          -> Unread message count
+    ?action=recent_unread         -> Recent unread messages preview
+    ?action=all_messages_preview  -> All messages preview
+    ?receiver_id=X                -> Conversation with specific user
+    ?group_id=X                   -> Group chat messages
+  POST:
+    ?action=send                  -> Send message (text + optional file)
+    ?action=mark_read             -> Mark messages as read
+    ?action=clear_chats           -> Clear all chats (admin only)
+
+================================================================================
+13. CONFIGURATION FILES
+================================================================================
+
+  13.1 .env FILE
+  ──────────────────────────────────────────────────────────────────────────────
+  # Database Configuration
+  DB_HOST=localhost
+  DB_PORT=3306
+  DB_NAME=backup_db_pre_implementation
+  DB_USER=root
+  DB_PASS=
+  DB_CHARSET=utf8mb4
+
+  # Application Configuration
+  APP_ENV=development
+  SESSION_LIFETIME=1800
+
+  # School Portal DB (exeat2)
+  EXEAT2_DB_HOST=localhost
+  EXEAT2_DB_PORT=3306
+  EXEAT2_DB_NAME=exeat2
+  EXEAT2_DB_USER=root
+  EXEAT2_DB_PASS=
+  EXEAT2_DB_CHARSET=utf8mb4
+
+  13.2 config.php
+  ──────────────────────────────────────────────────────────────────────────────
+  - Loads .env file, parses KEY=VALUE pairs
+  - Defines constants: DB_HOST, DB_NAME, DB_USER, DB_PASS, DB_CHARSET,
+    SESSION_LIFETIME, EXEAT2_DB_*
+  - Provides fallback defaults for missing values
+  - Handles both quoted and unquoted values
+
+  13.3 db.php
+  ──────────────────────────────────────────────────────────────────────────────
+  - Includes config.php
+  - Creates PDO connection with error mode EXCEPTION
+  - Disables emulated prepares (real prepared statements)
+  - Error handling: logs to logs/php_errors.log, shows generic message to user
+  - Includes exam_logic.php
+
+  13.4 db_exeat2.php
+  ──────────────────────────────────────────────────────────────────────────────
+  - Secondary PDO connection to exeat2 school portal database
+  - Uses EXEAT2_DB_* constants
+  - Graceful failure: $exeat2_db is null if connection fails
+
+  13.5 .htaccess
+  ──────────────────────────────────────────────────────────────────────────────
+  RewriteEngine On
+  # Redirect /file.php to /file (External Redirect)
+  RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /([^/]+)\.php\ HTTP/
+  RewriteRule ^(.+)\.php$ /$1 [R=301,L,NC]
+
+  # Serve /file as /file.php (Internal Rewrite)
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME}\.php -f
+  RewriteRule ^(.*?)/?$ $1.php [L,NC]
+
+================================================================================
+14. JAVASCRIPT MODULES
+================================================================================
+
+  14.1 student_lockdown.js (34 lines)
+  ──────────────────────────────────────────────────────────────────────────────
+  Keyboard and browser lockdown for exam integrity:
+  - Prevents context menu (right-click)
+  - Blocks F12 (DevTools)
+  - Blocks Escape key
+  - Blocks Ctrl+U (view source), Ctrl+P (print), Ctrl+S (save)
+  - Blocks Ctrl+Shift+I/J/C (DevTools variants)
+  - Blocks Alt+F4 (close window)
+
+  14.2 ai_proctor.js (298 lines)
+  ──────────────────────────────────────────────────────────────────────────────
+  AI proctoring module with TensorFlow.js BlazeFace:
+  - Client-side face detection
+  - Web Audio API alarm generation
+  - Toast notification overlay
+  - Integration with proctor_ping.php violation pipeline
+  - Rate-limited reporting with cooldown
+  - Auto-start on DOM ready
+
+  14.3 admin-common.js (163 lines)
+  ──────────────────────────────────────────────────────────────────────────────
+  - Sidebar toggle (desktop collapse + mobile slide)
+  - data-confirm form handler (native confirm() replacement)
+  - Legacy confirm() interceptor (converts to SweetAlert2)
+  - Loading spinner on form submit
+  - Admin notification polling
+
+  14.4 admin-swal.js (86 lines)
+  ──────────────────────────────────────────────────────────────────────────────
+  - SweetAlert2 CDN injection
+  - Global alert() override
+  - data-swal-confirm attribute handler
+  - Form data-swal handler
+
+================================================================================
+15. CSS STYLING SYSTEM
+================================================================================
+
+  15.1 style_enhanced.css (4264 lines)
+  ──────────────────────────────────────────────────────────────────────────────
+  Comprehensive CSS system with:
+  - CSS custom properties (variables) for theming
+  - Full responsive design system (mobile/tablet/desktop)
+  - Dark mode support via .dark-mode class on body
+  - Glassmorphism effects (backdrop-filter blur)
+  - Professional admin sidebar styling
+  - Examination interface styles (timer, question nav palette, progress bar)
+  - Chat interface styles
+  - Print-friendly styles
+  - Accessibility considerations (focus states, contrast)
+  - Smooth animations and transitions
+  - Dashboard card grid layouts
+  - Form input styling
+  - Table styling
+  - Modal and overlay styles
+  - Violation overlay and toast styles
+
+  15.2 style.css (556 lines)
+  ──────────────────────────────────────────────────────────────────────────────
+  Original styling with blue theme. Minimal, basic responsive design.
+  Standard card/button/table styling.
+
+================================================================================
+16. EXEAT2 (LMS) INTEGRATION
+================================================================================
+
+  OVERVIEW:
+  The portal can integrate with the school's existing Laravel-based exeat2
+  portal for student data synchronization.
+
+  COMPONENTS:
+  ──────────────────────────────────────────────────────────────────────────────
+  Component               Description
+  ──────────────────────────────────────────────────────────────────────────────
+  db_exeat2.php           Secondary PDO connection to exeat2 database
+  Models/                 Directory containing 186 Laravel Eloquent models
+                          (mirror of exeat2 models for reference/integration)
+  database/migration_v2.sql  Adds source and external_id columns to students
+                          and examiners tables for tracking origin
+  includes/fetch_exeat2_*.php  Scripts to fetch data from exeat2
+  includes/import_exeat2_*.php  Scripts to import data from exeat2
+  admin_students.php      Student management with exeat2 department/level/
+                          course_study filters for browsing
+  admin_assign_students.php  Assign students from exeat2 filtered views
+  EXEAT2_INTEGRATION_PLAN.md  1010-line detailed integration plan document
+  ──────────────────────────────────────────────────────────────────────────────
+
+  EXEAT2 DATABASE TABLES (reference):
+  - students (~4397 rows)
+  - student_academics (~12324 rows)
+  - departments, course_studies, programmes
+  - levels, faculty, staff, etc.
+
+  SOURCE TRACKING:
+  - students.source: 'upload' | 'exeat2' | 'manual'
+  - students.external_id: maps to exeat2.students.id
+  - examiners.source: 'manual' | 'exeat2' | 'upload'
+  - examiners.external_id: maps to exeat2.staff.id
+
+================================================================================
+17. DEFAULT CREDENTIALS
+================================================================================
+
+  ADMIN:
+  ──────────────────────────────────────────────────────────────────────────────
+  Username:  admin
+  Password:  (bcrypt hashed in DB - auto-upgrades from legacy plaintext)
+  Role:      admin
+
+  EXAMINERS:
+  ──────────────────────────────────────────────────────────────────────────────
+  Usernames: examiner1 through examiner6
+  Password:  (bcrypt hashed in DB)
+  Role:      examiner
+
+  STUDENTS:
+  ──────────────────────────────────────────────────────────────────────────────
+  Login:     Matric number (or username)
+  Default:   12345 (bcrypt hashed in DB, auto-upgrades on first login)
+
+  NOTE: The README_ENHANCED.md lists admin/admin123 and examiner/examiner123
+  as credentials, but the actual DB dump shows bcrypt hashes for the actual
+  usernames found in the examiners table.
+
+================================================================================
+18. SYSTEM REQUIREMENTS
+================================================================================
+
+  ┌─────────────────────┬─────────────────────┬───────────────────────────────┐
+  │ Component           │ Minimum             │ Recommended                   │
+  ├─────────────────────┼─────────────────────┼───────────────────────────────┤
+  │ PHP                 │ 7.4                 │ 8.0+                          │
+  │ MySQL               │ 5.7                 │ 8.0+                          │
+  │ RAM                 │ 128MB               │ 256MB+                        │
+  │ Storage             │ 50MB                │ 100MB+                        │
+  │ Web Server          │ Apache mod_rewrite  │ Apache or Nginx               │
+  │ HTTPS               │ Required            │ Required (camera access)      │
+  │ Browser             │ Chrome/Edge latest  │ Chrome/Edge latest            │
+  │ Node.js             │ Not required        │ For SEB building              │
+  └─────────────────────┴─────────────────────┴───────────────────────────────┘
+
+================================================================================
+19. KEY FEATURES STATUS MATRIX
+================================================================================
+
+  Feature                               Status
+  ──────────────────────────────────────────────────────────────────────────────
+  Objective/MCQ exams with auto-grading  COMPLETE
+  Practical/OSCE exams with manual       COMPLETE
+  VIVA/Oral exams                        COMPLETE
+  AI face detection proctoring          COMPLETE (TensorFlow.js BlazeFace)
+  Live video streaming (WebRTC)         COMPLETE
+  Exam scheduling (start/end times)      COMPLETE
+  Multiple attempts with policies       COMPLETE (highest/first/last/average)
+  Question shuffling & pooling          COMPLETE
+  Student bulk upload (CSV)             COMPLETE
+  Device authorization (IP whitelist)   COMPLETE
+  Session hardening (concurrent login)  COMPLETE
+  Keyboard/mouse lockdown               COMPLETE
+  Fullscreen enforcement                COMPLETE
+  Violation tracking (3/5-strike rule)  COMPLETE
+  Admin live proctoring panel           COMPLETE
+  Real-time staff chat                  COMPLETE
+  Audit trail (all CRUD operations)     COMPLETE
+  Analytics dashboard with charts       COMPLETE
+  Report generation (CSV export)        COMPLETE
+  CMS/Portal customization settings     COMPLETE
+  Academic session management           COMPLETE
+  Role-based access control             COMPLETE
+  Secure Exam Browser (Electron)        COMPLETE
+  Dark mode                             COMPLETE
+  WhatsApp support integration          COMPLETE
+  exeat2 (LMS) integration              PARTIAL (import scripts exist,
+                                          full sync in progress)
+  Multi-language support                NOT STARTED
+  Mobile native app                     NOT STARTED
+  SCORM/LTI compliance                  NOT STARTED
+  REST API for external LMS             NOT STARTED
+  Gradebook integration                 NOT STARTED
+  Automated email notifications         NOT STARTED
+
+================================================================================
+20. LMS INCLUSION PLAN & RECOMMENDATIONS
+================================================================================
+
+  This section provides a strategic roadmap for integrating the Exam Portal
+  with a Learning Management System (LMS) such as Moodle, Canvas, Sakai, or
+  the existing exeat2 portal.
+
+  20.1 CURRENT STATE
+  ──────────────────────────────────────────────────────────────────────────────
+  The portal currently operates as a standalone examination system with:
+  - Its own student database (can import from exeat2)
+  - Its own exam/question management
+  - Its own authentication system
+  - Manual synchronization scripts for exeat2
+  - No standardized LMS interoperability (no LTI, SCORM, xAPI)
+
+  20.2 INTEGRATION ARCHITECTURE OPTIONS
+  ──────────────────────────────────────────────────────────────────────────────
+
+  OPTION A: LTI 1.3 STANDARD INTEGRATION (RECOMMENDED)
+  ──────────────────────────────────────────────────────────────────────────────
+  Implement the portal as an LTI 1.3 Advantage tool provider:
+  - Allows launching exams directly from any LTI-compliant LMS
+  - Automatic user provisioning (no separate login needed)
+  - Grade passback to LMS gradebook
+  - Names and Roles Provisioning (membership sync)
+  - Deep Linking for exam selection within LMS
+
+  Required development:
+    * LTI 1.3 tool provider library (e.g., 1EdTech's PHP SDK or opensource)
+    * JWKS endpoint for public key distribution
+    * OAuth 2.0 / OpenID Connect login flow
+    * Grade passback endpoint (line items & scores)
+    * Names and Roles Provisioning service
+    * Deep Linking service
+
+  OPTION B: SINGLE SIGN-ON (SSO) WITH SAML/OAUTH
+  ──────────────────────────────────────────────────────────────────────────────
+  Replace the existing login system with SSO:
+  - SAML 2.0 SSO (works with most enterprise LMS)
+  - OAuth 2.0 / OpenID Connect (modern approach)
+  - CAS (Central Authentication Service)
+  - Benefits: unified login, no separate credentials, automatic account creation
+
+  OPTION C: CUSTOM REST API FOR LMS
+  ──────────────────────────────────────────────────────────────────────────────
+  Build a comprehensive REST API:
+  - Course/exam sync endpoints
+  - Student enrollment sync
+  - Grade passback
+  - Attendance tracking
+  - Would need custom LMS plugins on the other side
+
+  OPTION D: FULL EXEAT2 MERGER
+  ──────────────────────────────────────────────────────────────────────────────
+  Deep integration with the existing exeat2 Laravel portal:
+  - Shared authentication
+  - Single database for students
+  - Course/semester sync
+  - Result pushback to exeat2
+  - Already partially implemented (import scripts exist)
+
+  20.3 RECOMMENDED APPROACH (PHASED)
+  ──────────────────────────────────────────────────────────────────────────────
+
+  PHASE 1: API FOUNDATION (2-3 weeks)
+  ──────────────────────────────────────────────────────────────────────────────
+  [ ] Create a proper REST API layer (JSON:API or similar standard)
+  [ ] Implement API authentication (API keys + JWT)
+  [ ] Build sync endpoints:
+      - GET /api/students - list students
+      - GET /api/exams - list exams
+      - POST /api/enrollments - enroll students
+      - GET /api/results - get exam results
+  [ ] Add rate limiting and API documentation
+
+  PHASE 2: exeat2 FULL INTEGRATION (3-4 weeks)
+  ──────────────────────────────────────────────────────────────────────────────
+  [ ] Replace manual import scripts with real-time sync
+  [ ] Implement webhook receivers for exeat2 events
+  [ ] Create unified student identity (external_id mapping)
+  [ ] Set up cron/scheduler for periodic sync
+  [ ] Implement grade pushback to exeat2
+  [ ] Single sign-on via exeat2 authentication
+
+  PHASE 3: LTI 1.3 COMPLIANCE (4-6 weeks)
+  ──────────────────────────────────────────────────────────────────────────────
+  [ ] Implement LTI 1.3 tool provider
+  [ ] Create JWKS endpoint
+  [ ] Implement OpenID Connect login flow
+  [ ] Build Deep Linking service
+  [ ] Implement Names and Roles Provisioning
+  [ ] Create Assignment and Grade Service
+  [ ] Test with major LMS platforms (Moodle, Canvas)
+
+  PHASE 4: ADVANCED LMS FEATURES (4-6 weeks)
+  ──────────────────────────────────────────────────────────────────────────────
+  [ ] xAPI / Tin Can API statements for learning analytics
+  [ ] Caliper Analytics support
+  [ ] SCORM package import/export
+  [ ] Question bank sharing (QTI format)
+  [ ] Gradebook integration with passback
+  [ ] Course-level exam management from LMS
+  [ ] Automated email/SMS notifications
+  [ ] Reporting dashboard with LMS data
+
+  20.4 DATABASE CHANGES NEEDED
+  ──────────────────────────────────────────────────────────────────────────────
+
+  New tables required:
+  ──────────────────────────────────────────────────────────────────────────────
+  lti_registrations       # Store LTI tool registrations
+  lti_deployments         # LTI 1.3 deployment records
+  lti_sessions            # LTI launch sessions
+  lti_contexts            # Course/context mapping
+  api_tokens              # API authentication tokens
+  sync_logs               # Data sync audit log
+  webhook_endpoints       # Webhook configuration
+  webhook_events          # Webhook event log
+  ──────────────────────────────────────────────────────────────────────────────
+
+  Table modifications:
+  ──────────────────────────────────────────────────────────────────────────────
+  students:
+    - ADD lti_user_id VARCHAR(255) NULL  # LTI platform user ID
+    - ADD lti_id VARCHAR(255) NULL        # LTI platform ID
+    - ADD last_sync_at DATETIME NULL      # Last sync timestamp
+
+  exams:
+    - ADD lti_context_id VARCHAR(255) NULL  # LTI context/course ID
+    - ADD lti_resource_link_id VARCHAR(255) NULL  # LTI resource link
+    - ADD lti_line_item_url VARCHAR(255) NULL     # Grade passback URL
+    - ADD external_course_id INT NULL             # FK to LMS course
+
+  results/scores:
+    - ADD lti_score_sent TINYINT(1) DEFAULT 0  # Whether passed back
+    - ADD lti_score_sent_at DATETIME NULL       # When passed back
+
+  20.5 SECURITY CONSIDERATIONS FOR LMS INTEGRATION
+  ──────────────────────────────────────────────────────────────────────────────
+  - LTI 1.3 uses OAuth 2.0 JWT-based authentication (no shared secrets)
+  - All API endpoints must use HTTPS in production
+  - API rate limiting to prevent abuse
+  - Webhook signature verification (HMAC)
+  - Input validation and sanitization on all sync endpoints
+  - Audit logging for all API and LTI operations
+  - Regular security audits
+  - GDPR/FERPA compliance for student data handling
+
+================================================================================
+21. DEVELOPMENT ROADMAP FOR LMS INTEGRATION
+================================================================================
+
+  WEEK 1-2: API Foundation
+  ──────────────────────────────────────────────────────────────────────────────
+  - Set up API routing structure
+  - Implement API authentication (API keys + JWT)
+  - Build student CRUD API endpoints
+  - Build exam CRUD API endpoints
+  - Implement enrollment API endpoints
+  - Build result/score API endpoints
+
+  WEEK 3-4: exeat2 Sync
+  ──────────────────────────────────────────────────────────────────────────────
+  - Create real-time sync service
+  - Implement webhook consumer
+  - Build sync dashboard UI
+  - Set up scheduled sync jobs
+  - Implement conflict resolution
+  - Add sync monitoring and logging
+
+  WEEK 5-7: LTI 1.3 Implementation
+  ──────────────────────────────────────────────────────────────────────────────
+  - Study LTI 1.3 specification
+  - Implement tool provider registration endpoint
+  - Create JWKS key pair and endpoint
+  - Implement OIDC login initiation
+  - Build resource link launch handler
+  - Implement grade passback service
+  - Create names and roles service
+  - Test with Moodle and Canvas
+
+  WEEK 8-10: Advanced Features & Polish
+  ──────────────────────────────────────────────────────────────────────────────
+  - Implement xAPI statement generation
+  - Build SCORM/QTI support
+  - Add automated notifications
+  - Create integration dashboard
+  - Performance optimization
+  - Documentation
+  - Deployment and testing
+
+================================================================================
+22. SECURITY CONSIDERATIONS
+================================================================================
+
+  Current Security Measures:
+  ──────────────────────────────────────────────────────────────────────────────
+  ✓ SQL Injection Prevention: PDO prepared statements throughout
+  ✓ XSS Prevention: htmlspecialchars() output encoding
+  ✓ CSRF Protection: 32-byte random tokens validated on all POST
+  ✓ Password Hashing: bcrypt with auto-upgrade from legacy plaintext
+  ✓ Session Fixation Prevention: session_regenerate_id(true) on login
+  ✓ Session Hardening: session ID stored in DB, concurrent login detection
+  ✓ Device Authorization: IP-based whitelist with pending/approved/rejected
+  ✓ Browser Lockdown: F12, right-click, keyboard shortcuts blocked
+  ✓ Fullscreen Enforcement: API request fullscreen on exam start
+  ✓ Violation Tracking: automatic lock on 5+ violations
+  ✓ Audit Trail: all CRUD operations logged with before/after values
+  ✓ Error Handling: no error details exposed to users, logged server-side
+  ✓ HTTPS Required: camera/microphone access requires secure context
+
+  Additional Recommendations:
+  ──────────────────────────────────────────────────────────────────────────────
+  [ ] Implement Content Security Policy (CSP) headers
+  [ ] Add HTTP Strict Transport Security (HSTS)
+  [ ] Rate limiting on login endpoints
+  [ ] Account lockout after failed login attempts
+  [ ] Regular password rotation policy
+  [ ] 2FA for admin accounts
+  [ ] Database encryption at rest
+  [ ] Regular security scanning
+  [ ] Penetration testing
+  [ ] Dependency vulnerability scanning
+
+================================================================================
+23. APPENDIX: KEY FILE CONTENTS REFERENCE
+================================================================================
+
+  This section references the most important source files for developers.
+  See individual files for full contents.
+
+  config.php           -> .env loader, constant definitions, fallback defaults
+  db.php               -> PDO connection, error handling
+  auth.php             -> Session management, role gates, CSRF, device auth
+  exam_logic.php       -> Score calculation, attempt finalization
+  proctor_ping.php     -> Heartbeat, violation logging, snapshot capture,
+                          warning/command relay, session validation
+  objective_exam_api.php -> Answer saving, attempt start, time queries
+  student_objective_exam.php -> Full exam engine (~2000 lines)
+  student_login.php    -> Two-step AJAX authentication
+  login.php            -> Staff authentication
+  admin_dashboard.php  -> KPI dashboard with 12+ metrics
+  admin_exams.php      -> Practical exam CRUD with proctor flags
+  admin_portal_settings.php -> CMS customization
+  admin_sidebar.php    -> Navigation with SVG icons
+  admin-common.js      -> Sidebar, confirm, spinners
+  admin-swal.js        -> SweetAlert2 integration
+  student_lockdown.js  -> Browser lockdown
+  ai_proctor.js        -> TensorFlow.js face detection
+  footer.php           -> Footer, chat widget, theme toggle
+  .htaccess            -> URL rewriting rules
+
+================================================================================
+END OF DOCUMENT
+================================================================================

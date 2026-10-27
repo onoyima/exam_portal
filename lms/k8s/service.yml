@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: lms-app-service
+  namespace: veritas-lms
+  labels:
+    app: veritas-lms
+    tier: backend
+    component: app
+  annotations:
+    description: "LMS application service"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "80"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: veritas-lms
+    tier: backend
+    component: app
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lms-redis-service
+  namespace: veritas-lms
+  labels:
+    app: veritas-lms
+    tier: data
+    component: redis
+spec:
+  type: ClusterIP
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+      protocol: TCP
+  selector:
+    app: veritas-lms
+    tier: data
+    component: redis
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lms-mysql-service
+  namespace: veritas-lms
+  labels:
+    app: veritas-lms
+    tier: data
+    component: mysql
+spec:
+  type: ClusterIP
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 3306
+      protocol: TCP
+  selector:
+    app: veritas-lms
+    tier: data
+    component: mysql
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lms-rabbitmq-service
+  namespace: veritas-lms
+  labels:
+    app: veritas-lms
+    tier: data
+    component: rabbitmq
+spec:
+  type: ClusterIP
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: 5672
+      protocol: TCP
+    - name: management
+      port: 15672
+      targetPort: 15672
+      protocol: TCP
+  selector:
+    app: veritas-lms
+    tier: data
+    component: rabbitmq

@@ -13,7 +13,7 @@ switch ($type) {
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="student_bulk_upload_template.csv"');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['Firstname', 'Middlename', 'Lastname', 'Email', 'Matric No', 'Password']);
+        fputcsv($out, ['firstname', 'middlename', 'lastname', 'email', 'matric_no', 'password']);
         fputcsv($out, ['Jane', 'Elizabeth', 'Doe', 'jane.doe@university.edu', 'MAT/2026/001', 'Pass123']);
         fputcsv($out, ['John', 'Robert', 'Smith', 'john.smith@university.edu', 'MAT/2026/002', 'Pass456']);
         fclose($out);
@@ -21,11 +21,11 @@ switch ($type) {
 
     case 'student_assign':
         header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="student_assignment_template.csv"');
+        header('Content-Disposition: attachment; filename="student_upload_template.csv"');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['Name', 'Matric No', 'Username']);
-        fputcsv($out, ['Alice Brown', 'MAT/2026/003', 'alicebrown']);
-        fputcsv($out, ['Charlie Green', 'MAT/2026/004', 'charliegreen']);
+        fputcsv($out, ['firstname', 'middlename', 'lastname', 'email', 'matric_no', 'password']);
+        fputcsv($out, ['Jane', 'Elizabeth', 'Doe', 'jane.doe@university.edu', 'MAT/2026/001', 'Pass123']);
+        fputcsv($out, ['John', 'Robert', 'Smith', 'john.smith@university.edu', 'MAT/2026/002', 'Pass456']);
         fclose($out);
         exit;
 

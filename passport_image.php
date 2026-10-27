@@ -9,12 +9,17 @@ if (!in_array($type, $allowed) || !$id) {
     exit;
 }
 
-$path = __DIR__ . "/uploads/passports/$type/$id.jpg";
-if (file_exists($path)) {
-    header('Content-Type: ' . mime_content_type($path));
-    header('Cache-Control: public, max-age=86400');
-    readfile($path);
-    exit;
+$dir = $type === 'student' ? 'students' : ($type === 'examiner' ? 'examiners' : $type);
+$base = __DIR__ . "/uploads/passports/$dir/$id";
+$extensions = ['jpg', 'png', 'gif'];
+foreach ($extensions as $ext) {
+    $path = "$base.$ext";
+    if (file_exists($path)) {
+        header('Content-Type: ' . mime_content_type($path));
+        header('Cache-Control: public, max-age=86400');
+        readfile($path);
+        exit;
+    }
 }
 
 $name = '';

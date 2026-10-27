@@ -24,59 +24,93 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['students'])) {
     $count = 0;
 
     $first_row = fgetcsv($csv);
-    $header_found = false;
-    if ($first_row) {
-      $first_col = strtolower(str_replace(' ', '', $first_row[0]));
-      if ($first_col === 'firstname' || $first_col === 'first_name' || $first_col === 'name') {
-        $header_found = true;
-      }
-    }
+    if (!$first_row) { fclose($csv); $error = 'Empty file.'; }
+    else {
+      // --- Known DB column headers for header-based mapping ---
+      $db_columns = ['firstname', 'middlename', 'lastname', 'email', 'matric_no', 'password'];
 
-    if (!$header_found) {
-      rewind($csv);
-    }
+      $normalized = array_map(function ($h) {
+        return strtolower(trim($h));
+      }, $first_row);
 
-    while ($row = fgetcsv($csv)) {
-      if (count($row) < 3)
-        continue;
-
-      $fname = trim($row[0] ?? '');
-      $mname = trim($row[1] ?? '');
-      $lname = trim($row[2] ?? '');
-      $email = trim($row[3] ?? '');
-      $matric = trim($row[4] ?? '');
-      $pass = trim($row[5] ?? '12345');
-
-      $full_name = trim($fname . ' ' . $mname . ' ' . $lname);
-      $full_name = str_replace('  ', ' ', $full_name);
-      if (empty($full_name))
-        $full_name = $matric;
-
-      $check = $db->prepare("SELECT id FROM students WHERE matric_no = ? AND deleted_at IS NULL");
-      $check->execute([$matric]);
-      $existing = $check->fetch(PDO::FETCH_ASSOC);
-
-      if ($existing) {
-        $sid = $existing['id'];
-        if ($update_existing) {
-          $stmt = $db->prepare("UPDATE students SET name=?, firstname=?, middlename=?, lastname=?, email=?, matric_no=?, username=?, password=? WHERE id=?");
-          $stmt->execute([$full_name, $fname, $mname, $lname, $email, $matric, $matric, $pass, $sid]);
+      $col_map = [];
+      foreach ($normalized as $idx => $col) {
+        if (in_array($col, $db_columns)) {
+          $col_map[$col] = $idx;
         }
-      } else {
-        $stmt = $db->prepare("INSERT INTO students (name, firstname, middlename, lastname, email, matric_no, username, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$full_name, $fname, $mname, $lname, $email, $matric, $matric, $pass]);
-        $sid = $db->lastInsertId();
       }
 
-      if (!empty($exam_ids) && $sid) {
-        foreach ($exam_ids as $eid) {
-          $eid = intval($eid);
-          if ($eid > 0) {
-            $db->prepare("INSERT IGNORE INTO exam_students (exam_id, student_id) VALUES (?, ?)")->execute([$eid, $sid]);
+      $header_found = !empty($col_map);
+
+      if (!$header_found) {
+        rewind($csv);
+      }
+
+      while ($row = fgetcsv($csv)) {
+        if (count($row) < 3) continue;
+
+        if ($header_found) {
+          $fname  = isset($col_map['firstname'])  ? trim($row[$col_map['firstname']] ?? '') : '';
+          $mname  = isset($col_map['middlename']) ? trim($row[$col_map['middlename']] ?? '') : '';
+          $lname  = isset($col_map['lastname'])   ? trim($row[$col_map['lastname']] ?? '') : '';
+          $email  = isset($col_map['email'])      ? trim($row[$col_map['email']] ?? '') : '';
+          $matric = isset($col_map['matric_no'])  ? trim($row[$col_map['matric_no']] ?? '') : '';
+          $pass   = isset($col_map['password'])   ? trim($row[$col_map['password']] ?? '') : '12345';
+        } else {
+          $fname  = trim($row[0] ?? '');
+          $mname  = trim($row[1] ?? '');
+          $lname  = trim($row[2] ?? '');
+          $email  = trim($row[3] ?? '');
+          $matric = trim($row[4] ?? '');
+          $pass   = trim($row[5] ?? '12345');
+        }
+
+        if (empty($matric)) continue;
+
+        $full_name = trim("$fname $mname $lname");
+        $full_name = preg_replace('/\s+/', ' ', $full_name);
+        if (empty($full_name)) $full_name = $matric;
+
+        // Look up by matric_no (including soft-deleted)
+        $check = $db->prepare("SELECT * FROM students WHERE matric_no = ?");
+        $check->execute([$matric]);
+        $existing = $check->fetch(PDO::FETCH_ASSOC);
+
+        if ($existing) {
+          $sid = $existing['id'];
+          if ($update_existing) {
+            // Full overwrite
+            $stmt = $db->prepare("UPDATE students SET name=?, firstname=?, middlename=?, lastname=?, email=?, matric_no=?, username=?, password=?, deleted_at=NULL WHERE id=?");
+            $stmt->execute([$full_name, $fname, $mname, $lname, $email, $matric, $matric, $pass, $sid]);
+          } else {
+            // NULL-fill merge: only update DB fields that are NULL and have a CSV value
+            $m_fname = $fname ?: $existing['firstname'];
+            $m_mname = $mname ?: $existing['middlename'];
+            $m_lname = $lname ?: $existing['lastname'];
+            $m_email = $email ?: $existing['email'];
+            $m_pass  = $pass  ?: $existing['password'];
+            $m_full  = trim("$m_fname $m_mname $m_lname");
+            $m_full  = preg_replace('/\s+/', ' ', $m_full) ?: $matric;
+
+            $stmt = $db->prepare("UPDATE students SET name=?, firstname=?, middlename=?, lastname=?, email=?, password=?, deleted_at=NULL WHERE id=?");
+            $stmt->execute([$m_full, $m_fname, $m_mname, $m_lname, $m_email, $m_pass, $sid]);
+          }
+        } else {
+          $stmt = $db->prepare("INSERT INTO students (name, firstname, middlename, lastname, email, matric_no, username, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+          $stmt->execute([$full_name, $fname, $mname, $lname, $email, $matric, $matric, $pass]);
+          $sid = $db->lastInsertId();
+        }
+
+        if (!empty($exam_ids) && $sid) {
+          foreach ($exam_ids as $eid) {
+            $eid = intval($eid);
+            if ($eid > 0) {
+              $db->prepare("INSERT IGNORE INTO exam_students (exam_id, student_id) VALUES (?, ?)")->execute([$eid, $sid]);
+            }
           }
         }
+        $count++;
       }
-      $count++;
     }
     fclose($csv);
     $success = "Successfully processed $count students!" . (!empty($exam_ids) ? " Assigned to " . count($exam_ids) . " exams." : "");
@@ -193,7 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['questions'])) {
                   <div class="admin-dropzone" id="studentDropzone" onclick="document.getElementById('studentFileInput').click()">
                     <div class="admin-dropzone-icon"><i class="bi bi-cloud-upload"></i></div>
                     <div class="admin-dropzone-text" id="studentDropzoneText">Drop your CSV file here or click to browse</div>
-                    <div class="admin-dropzone-hint">Format: Firstname, Middlename, Lastname, Email, Matric No, Password</div>
+                    <div class="admin-dropzone-hint">Format: firstname, middlename, lastname, email, matric_no, password</div>
                     <input type="file" name="students" id="studentFileInput" accept=".csv" class="upload-hidden" onchange="handleFileSelect(this, 'student')">
                   </div>
                   <div id="studentFileInfo" class="mt-2 upload-hidden">

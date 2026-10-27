@@ -68,6 +68,13 @@ if (isset($db)) {
 
         <!-- Practical Exams section removed from student view -->
 
+        <li class="nav-section-label small text-uppercase fw-bold text-muted mb-2 mt-4 px-3">Learning Management</li>
+        <li>
+            <a href="lms/public/" target="_blank" class="nav-link">
+                <i class="bx bx-book-open me-2"></i> <span>Open LMS</span>
+            </a>
+        </li>
+
         <li class="mt-4">
             <hr>
         </li>

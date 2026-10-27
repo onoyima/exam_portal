@@ -1,0 +1,21 @@
+RewriteEngine On
+RewriteBase /exam_portal/lms/public/
+
+# Pass Authorization header to PHP (Apache strips it by default)
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Allow direct access to existing files and directories
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Route everything else to index.php
+RewriteRule ^(.*)$ index.php [QSA,L]
+
+# Security: deny access to sensitive files
+<FilesMatch "\.(env|sql|md|log)$">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "^(composer\.json|package\.json|bootstrap\.php|routes\.php)$">
+    Require all denied
+</FilesMatch>

@@ -156,8 +156,8 @@ try {
                 $answer_id = $stmt->fetchColumn();
                 
                 if ($answer_id) {
-                    $db->prepare("UPDATE answers SET score=?, examiner_id=?, updated_by=NOW() WHERE id=?")
-                      ->execute([floatval($score), $examiner_id, $answer_id]);
+                    $db->prepare("UPDATE answers SET score=?, examiner_id=?, updated_by=?, updated_at=NOW() WHERE id=?")
+                      ->execute([floatval($score), $examiner_id, $examiner_id, $answer_id]);
                 } else {
                     $db->prepare("INSERT INTO answers(exam_id, question_id, student_id, examiner_id, score, created_at) VALUES (?,?,?,?,?, NOW())")
                       ->execute([$selected_exam, $qid, $student_id, $examiner_id, floatval($score)]);

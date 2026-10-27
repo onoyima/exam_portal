@@ -66,8 +66,10 @@ function save_passport_blob($data, $path) {
     $prefix = substr($data, 0, 4);
     $hex = bin2hex($prefix);
     if (preg_match('/^(ffd8|8950|47494638|52494646)/i', $hex)) {
-        file_put_contents($path, $data);
-        return ['format' => 'raw', 'hex_prefix' => $hex];
+        $ext = strncmp($hex, 'ffd8', 4) === 0 ? 'jpg' : (strncmp($hex, '8950', 4) === 0 ? 'png' : 'gif');
+        $new_path = substr($path, 0, -4) . ".$ext";
+        file_put_contents($new_path, $data);
+        return ['format' => 'raw', 'saved_path' => $new_path];
     }
     $b64 = $data;
     if (strncmp($b64, 'data:image/', 11) === 0) {
@@ -81,11 +83,12 @@ function save_passport_blob($data, $path) {
             $ext = strncmp($dhex, 'ffd8', 4) === 0 ? 'jpg' : 'png';
             $new_path = substr($path, 0, -4) . ".$ext";
             file_put_contents($new_path, $decoded);
-            return ['format' => 'base64', 'hex_prefix' => substr($dhex, 0, 8)];
+            return ['format' => 'base64', 'saved_path' => $new_path];
         }
     }
-    file_put_contents($path, $data);
-    return ['format' => 'unknown', 'hex_prefix' => $hex];
+    $new_path = $path;
+    file_put_contents($new_path, $data);
+    return ['format' => 'unknown', 'saved_path' => $new_path];
 }
 
 try {
@@ -115,14 +118,13 @@ foreach ($rows as $row) {
             $results['passport_found']++;
             $path = "$passport_dir_students/{$local_id}.jpg";
             $info = save_passport_blob($row['passport'], $path);
-            if (file_exists($path)) {
+            if (file_exists($info['saved_path'])) {
                 $results['passport_saved']++;
                 $detail['file_exists'] = true;
             }
             $detail['passport_bytes'] = strlen($row['passport']);
             $detail['passport_format'] = $info['format'];
-            $detail['passport_prefix'] = $info['hex_prefix'];
-            $detail['passport_path'] = $path;
+            $detail['passport_path'] = $info['saved_path'];
         } else {
             $detail['passport_bytes'] = 0;
         }
@@ -145,14 +147,13 @@ foreach ($rows as $row) {
             $results['passport_found']++;
             $path = "$passport_dir_students/{$local['id']}.jpg";
             $info = save_passport_blob($row['passport'], $path);
-            if (file_exists($path)) {
+            if (file_exists($info['saved_path'])) {
                 $results['passport_saved']++;
                 $detail['file_exists'] = true;
             }
             $detail['passport_bytes'] = strlen($row['passport']);
             $detail['passport_format'] = $info['format'];
-            $detail['passport_prefix'] = $info['hex_prefix'];
-            $detail['passport_path'] = $path;
+            $detail['passport_path'] = $info['saved_path'];
         } else {
             $detail['passport_bytes'] = 0;
         }
@@ -161,9 +162,25 @@ foreach ($rows as $row) {
         $local_id = $local['id'];
     } else {
         $local_id = $local['id'];
+        // Still save passport even if skipping data update
+        $detail = ['matric_no' => $matric_no, 'status' => 'skipped_' . $local['source'], 'name' => $row['name']];
+        if (!empty($row['passport'])) {
+            $results['passport_found']++;
+            $path = "$passport_dir_students/{$local_id}.jpg";
+            $info = save_passport_blob($row['passport'], $path);
+            if (file_exists($info['saved_path'])) {
+                $results['passport_saved']++;
+                $detail['file_exists'] = true;
+            }
+            $detail['passport_bytes'] = strlen($row['passport']);
+            $detail['passport_format'] = $info['format'];
+            $detail['passport_path'] = $info['saved_path'];
+        } else {
+            $detail['passport_bytes'] = 0;
+        }
         $key = ($local['source'] === 'upload') ? 'skipped_upload' : 'skipped_manual';
         $results[$key]++;
-        $results['details'][] = ['matric_no' => $matric_no, 'status' => 'skipped_' . $local['source'], 'name' => $row['name']];
+        $results['details'][] = $detail;
     }
 
     if ($exam_id) {

@@ -2,6 +2,7 @@
 require 'auth.php';
 check_auth('admin');
 require 'db.php';
+require 'db_exeat2.php';
 $name = $_SESSION['user'] ?? 'Admin';
 
 // Handle form submissions
@@ -60,30 +61,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $file = $_FILES['students_file']['tmp_name'];
       $handle = fopen($file, 'r');
 
-      while (($row = fgetcsv($handle)) !== false) {
-        if (count($row) >= 3) {
-          $name = trim($row[0]);
-          $matric_no = trim($row[1]);
-          $username = trim($row[2]);
+      $first_row = fgetcsv($handle);
+      if (!$first_row) { fclose($handle); $error = 'Empty file.'; }
+      else {
+        // Header-based mapping
+        $db_columns = ['firstname', 'middlename', 'lastname', 'email', 'matric_no', 'password'];
+        $normalized = array_map(function ($h) { return strtolower(trim($h)); }, $first_row);
+        $col_map = [];
+        foreach ($normalized as $idx => $col) {
+          if (in_array($col, $db_columns)) {
+            $col_map[$col] = $idx;
+          }
+        }
+        $header_found = !empty($col_map);
+        if (!$header_found) {
+          rewind($handle);
+        }
 
-          // Check if student already exists (including soft-deleted)
-          $stmt = $db->prepare("SELECT id FROM students WHERE (matric_no = ? OR username = ?) AND deleted_at IS NULL");
-          $stmt->execute([$matric_no, $username]);
+        while (($row = fgetcsv($handle)) !== false) {
+          if (count($row) < 3) continue;
+
+          if ($header_found) {
+            $fname  = isset($col_map['firstname'])  ? trim($row[$col_map['firstname']] ?? '') : '';
+            $mname  = isset($col_map['middlename']) ? trim($row[$col_map['middlename']] ?? '') : '';
+            $lname  = isset($col_map['lastname'])   ? trim($row[$col_map['lastname']] ?? '') : '';
+            $email  = isset($col_map['email'])      ? trim($row[$col_map['email']] ?? '') : '';
+            $matric_no = isset($col_map['matric_no'])  ? trim($row[$col_map['matric_no']] ?? '') : '';
+            $pass   = isset($col_map['password'])   ? trim($row[$col_map['password']] ?? '') : '12345';
+          } else {
+            $fname  = trim($row[0] ?? '');
+            $mname  = trim($row[1] ?? '');
+            $lname  = trim($row[2] ?? '');
+            $email  = trim($row[3] ?? '');
+            $matric_no = trim($row[4] ?? '');
+            $pass   = trim($row[5] ?? '12345');
+          }
+
+          if (empty($matric_no)) continue;
+
+          $full_name = trim("$fname $mname $lname");
+          $full_name = preg_replace('/\s+/', ' ', $full_name);
+          if (empty($full_name)) $full_name = $matric_no;
+
+          // Look up by matric_no (including soft-deleted)
+          $stmt = $db->prepare("SELECT * FROM students WHERE matric_no = ?");
+          $stmt->execute([$matric_no]);
           $existing_student = $stmt->fetch();
 
           if ($existing_student) {
-            // Student exists, just assign to exam
-            $student_id = $existing_student['id'];
+            $sid = $existing_student['id'];
+            // NULL-fill merge: only update NULL DB fields with CSV values
+            $m_fname = $fname ?: $existing_student['firstname'];
+            $m_mname = $mname ?: $existing_student['middlename'];
+            $m_lname = $lname ?: $existing_student['lastname'];
+            $m_email = $email ?: $existing_student['email'];
+            $m_pass  = $pass  ?: $existing_student['password'];
+            $m_full  = trim("$m_fname $m_mname $m_lname");
+            $m_full  = preg_replace('/\s+/', ' ', $m_full) ?: $matric_no;
+
+            $stmt = $db->prepare("UPDATE students SET name=?, firstname=?, middlename=?, lastname=?, email=?, password=?, deleted_at=NULL WHERE id=?");
+            $stmt->execute([$m_full, $m_fname, $m_mname, $m_lname, $m_email, $m_pass, $sid]);
           } else {
-            // Create new student
-            $stmt = $db->prepare("INSERT INTO students(name, matric_no, username) VALUES (?, ?, ?)");
-            $stmt->execute([$name, $matric_no, $username]);
-            $student_id = $db->lastInsertId();
+            $stmt = $db->prepare("INSERT INTO students (name, firstname, middlename, lastname, email, matric_no, username, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$full_name, $fname, $mname, $lname, $email, $matric_no, $matric_no, $pass]);
+            $sid = $db->lastInsertId();
           }
 
-          // Assign student to exam (avoid duplicates)
-          $stmt = $db->prepare("INSERT IGNORE INTO exam_students(exam_id, student_id) VALUES (?, ?)");
-          $stmt->execute([$exam_id, $student_id]);
+          // Assign student to exam
+          $db->prepare("INSERT IGNORE INTO exam_students(exam_id, student_id) VALUES (?, ?)")->execute([$exam_id, $sid]);
           $uploaded_count++;
         }
       }
@@ -192,6 +237,21 @@ $exams = $db->query("SELECT * FROM exams WHERE deleted_at IS NULL ORDER BY creat
 $students = $db->query("SELECT * FROM students WHERE deleted_at IS NULL ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 $questions = $db->query("SELECT * FROM questions WHERE deleted_at IS NULL ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
 $examiners = $db->query("SELECT * FROM examiners WHERE username != 'admin' AND deleted_at IS NULL ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+
+// Fetch exeat2 filter options
+$exeat2_departments = [];
+$exeat2_levels = [];
+$exeat2_course_studies = [];
+if ($exeat2_db) {
+  try {
+    $exeat2_departments = $exeat2_db->query("SELECT id, name FROM departments WHERE name IS NOT NULL AND name != '' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+    $exeat2_levels = $exeat2_db->query("SELECT id, level FROM levels ORDER BY CAST(level AS UNSIGNED)")->fetchAll(PDO::FETCH_ASSOC);
+    $exeat2_course_studies = $exeat2_db->query("SELECT id, name, department_id FROM course_studies ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+  } catch (Exception $e) {
+    $exeat2_error = $e->getMessage();
+    error_log("exeat2 query failed: " . $e->getMessage());
+  }
+}
 
 // For each exam, get assigned students, questions, and examiners
 $exam_students = [];
@@ -448,14 +508,102 @@ foreach ($exams as $exam) {
                     <div class="col-md-6">
                       <label for="students_file" class="admin-form-label">Upload CSV/TXT File</label>
                       <input type="file" name="students_file" id="students_file" class="admin-input" accept=".csv,.txt" required>
-                      <small class="admin-form-label opacity-50">Format: <code>Name,Matric No,Username</code></small>
+                      <small class="admin-form-label opacity-50">Format: <code>firstname,middlename,lastname,email,matric_no,password</code></small>
                       <br>
-                      <a href="download_template.php?type=student_assign" class="admin-btn admin-btn-sm admin-btn-outline mt-1"><i class="bi bi-download"></i> CSV Template</a>
+                      <a href="download_template.php?type=student_bulk" class="admin-btn admin-btn-sm admin-btn-outline mt-1"><i class="bi bi-download"></i> CSV Template</a>
                     </div>
                     <div class="col-md-2 d-flex align-items-end">
                       <button type="submit" name="upload_students" class="admin-btn admin-btn-primary w-100"><i class="bi bi-cloud-upload"></i> Upload</button>
                     </div>
                   </form>
+                </div>
+              </div>
+
+              <!-- Import from School Portal (exeat2) -->
+              <div class="admin-card border mb-4">
+                <div class="admin-section-toggle p-4 pb-0" data-bs-toggle="collapse" data-bs-target="#exeat2ImportSection" aria-expanded="false">
+                  <h3 class="admin-card-title mb-0 outfit text-success"><i class="bi bi-database"></i> Import from School Portal (exeat2)</h3>
+                  <i class="bi bi-chevron-down ms-auto admin-section-chevron"></i>
+                </div>
+                <div class="collapse" id="exeat2ImportSection">
+                  <div class="p-4 pt-3">
+                    <?php if (!$exeat2_db): ?>
+                      <div class="admin-alert admin-alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <span><?= htmlspecialchars($exeat2_error ?: 'School Portal database not reachable.') ?></span>
+                      </div>
+                    <?php else: ?>
+                      <!-- Filters -->
+                      <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
+                        <span class="fw-semibold small text-secondary">FILTERS:</span>
+                        <input type="text" id="exeat2StudentSearch" class="admin-filter-input" style="width:auto;min-width:200px" placeholder="Search by name or email...">
+                        <select id="exeat2Dept" class="admin-filter-input" style="width:auto;min-width:200px">
+                          <option value="">All Departments</option>
+                          <?php foreach ($exeat2_departments as $d): ?>
+                            <option value="<?= $d['id'] ?>"><?= htmlspecialchars($d['name']) ?></option>
+                          <?php endforeach; ?>
+                        </select>
+                        <select id="exeat2Level" class="admin-filter-input" style="width:auto;min-width:120px">
+                          <option value="">All Levels</option>
+                          <?php foreach ($exeat2_levels as $l): ?>
+                            <option value="<?= $l['id'] ?>"><?= htmlspecialchars($l['level']) ?></option>
+                          <?php endforeach; ?>
+                        </select>
+                        <select id="exeat2CourseStudy" class="admin-filter-input" style="width:auto;min-width:200px">
+                          <option value="">All Course Studies</option>
+                        </select>
+                        <button type="button" id="exeat2RefreshBtn" class="admin-btn admin-btn-primary admin-btn-sm">
+                          <i class="bi bi-arrow-repeat"></i> Load Students
+                        </button>
+                        <span id="exeat2LoadMsg" class="small text-secondary d-none"><i class="bi bi-hourglass-split"></i> Loading...</span>
+                      </div>
+
+                      <!-- Exam selector for exeat2 -->
+                      <div class="mb-3">
+                        <label class="admin-form-label fw-semibold">Assign to Exam</label>
+                        <select id="exeat2ExamSelect" class="admin-input admin-select" required>
+                          <option value="">-- Select Exam --</option>
+                          <?php foreach ($exams as $exam): ?>
+                            <option value="<?= $exam['id'] ?>"><?= htmlspecialchars($exam['name']) ?></option>
+                          <?php endforeach; ?>
+                        </select>
+                      </div>
+
+                      <!-- Results -->
+                      <div id="exeat2Empty" class="admin-empty d-none">
+                        <div class="admin-empty-icon"><i class="bi bi-inbox"></i></div>
+                        <div class="admin-empty-title">No Students Loaded</div>
+                        <div class="admin-empty-desc">Select filters above and click Load Students to fetch students from the school portal.</div>
+                      </div>
+                      <div id="exeat2Error" class="admin-empty d-none">
+                        <div class="admin-empty-icon"><i class="bi bi-exclamation-triangle text-danger"></i></div>
+                        <div class="admin-empty-title">Error Loading Students</div>
+                        <div id="exeat2ErrorMsg" class="admin-empty-desc"></div>
+                      </div>
+                      <div id="exeat2TableWrapper" class="table-responsive d-none">
+                        <table class="admin-table" id="exeat2Table">
+                          <thead>
+                            <tr>
+                              <th width="40"><input type="checkbox" id="exeat2MasterCb" class="form-check-input"></th>
+                              <th>Matric No</th>
+                              <th>Name</th>
+                              <th>Email</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody id="exeat2TableBody"></tbody>
+                        </table>
+                      </div>
+                      <div class="d-flex flex-wrap gap-2 align-items-center mt-3" id="exeat2Actions">
+                        <button type="button" id="exeat2ImportSelectedBtn" class="admin-btn admin-btn-primary admin-btn-sm" disabled>
+                          <i class="bi bi-person-check"></i> Import Selected
+                        </button>
+                        <button type="button" id="exeat2ImportAllBtn" class="admin-btn admin-btn-success admin-btn-sm" disabled>
+                          <i class="bi bi-person-plus-fill"></i> Import All
+                        </button>
+                      </div>
+                    <?php endif; ?>
+                  </div>
                 </div>
               </div>
 
@@ -865,6 +1013,22 @@ foreach ($exams as $exam) {
     </div>
   </div>
 
+  <!-- exeat2 Import Result Modal -->
+  <div class="modal fade" id="exeat2ImportResultModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-check-circle text-success"></i> Import Complete</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="exeat2ImportResultBody"></div>
+        <div class="modal-footer">
+          <button type="button" class="admin-btn admin-btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <?php include 'footer.php'; ?>
 
   <script src="assets/js/bootstrap.bundle.min.js"></script>
@@ -983,6 +1147,240 @@ foreach ($exams as $exam) {
       if (examExaminers.length === 0) html = '<div class="admin-empty"><div class="admin-empty-icon"><i class="bi bi-person-badge admin-empty-icon-lg"></i></div><div class="admin-empty-title">No examiners assigned</div></div>';
       document.getElementById('examinersModalBody').innerHTML = html;
       new bootstrap.Modal(document.getElementById('examinersModal')).show();
+    }
+
+    // ─── exeat2: search on Enter key ───
+    var exeat2StudentSearch = document.getElementById('exeat2StudentSearch');
+    if (exeat2StudentSearch) {
+      exeat2StudentSearch.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') document.getElementById('exeat2RefreshBtn').click();
+      });
+    }
+
+    // ─── exeat2: course study cascading dropdown ───
+    var exeat2Dept = document.getElementById('exeat2Dept');
+    if (exeat2Dept) {
+      exeat2Dept.addEventListener('change', function () {
+        var deptId = this.value;
+        var csSelect = document.getElementById('exeat2CourseStudy');
+        csSelect.innerHTML = '<option value="">All Course Studies</option>';
+        if (!deptId) return;
+        fetch('includes/fetch_exeat2_course_studies.php?department_id=' + deptId)
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            data.forEach(function (cs) {
+              var opt = document.createElement('option');
+              opt.value = cs.id;
+              opt.textContent = cs.name;
+              csSelect.appendChild(opt);
+            });
+          })
+          .catch(function () {});
+      });
+    }
+
+    // ─── exeat2: fetch and render students ───
+    var exeat2Students = [];
+    var exeat2RefreshBtn = document.getElementById('exeat2RefreshBtn');
+    if (exeat2RefreshBtn) {
+      exeat2RefreshBtn.addEventListener('click', function () {
+        var search = document.getElementById('exeat2StudentSearch').value.trim();
+        var dept = document.getElementById('exeat2Dept').value;
+        var level = document.getElementById('exeat2Level').value;
+        var courseStudyId = document.getElementById('exeat2CourseStudy').value;
+
+        var url = 'includes/fetch_exeat2_students.php';
+        var sep = '?';
+        if (search) { url += sep + 'search=' + encodeURIComponent(search); sep = '&'; }
+        if (dept) { url += sep + 'department_id=' + dept; sep = '&'; }
+        if (level) { url += sep + 'level_id=' + level; sep = '&'; }
+        if (courseStudyId) { url += sep + 'course_study_id=' + courseStudyId; sep = '&'; }
+
+        var msgEl = document.getElementById('exeat2LoadMsg');
+        msgEl.classList.remove('d-none');
+
+        fetch(url)
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            msgEl.classList.add('d-none');
+            if (data.error) {
+              showExeat2Error(data.error);
+              return;
+            }
+            exeat2Students = data;
+            renderExeat2Table(data);
+          })
+          .catch(function (err) {
+            msgEl.classList.add('d-none');
+            showExeat2Error('Failed to fetch students: ' + err.message);
+          });
+      });
+    }
+
+    function showExeat2Error(msg) {
+      document.getElementById('exeat2Empty').classList.add('d-none');
+      document.getElementById('exeat2TableWrapper').classList.add('d-none');
+      document.getElementById('exeat2ErrorMsg').textContent = msg;
+      document.getElementById('exeat2Error').classList.remove('d-none');
+      document.getElementById('exeat2ImportSelectedBtn').disabled = true;
+      document.getElementById('exeat2ImportAllBtn').disabled = true;
+    }
+
+    function renderExeat2Table(data) {
+      document.getElementById('exeat2Error').classList.add('d-none');
+      var tbody = document.getElementById('exeat2TableBody');
+      tbody.innerHTML = '';
+
+      if (!data || data.length === 0) {
+        document.getElementById('exeat2Empty').classList.remove('d-none');
+        document.getElementById('exeat2TableWrapper').classList.add('d-none');
+        document.getElementById('exeat2ImportSelectedBtn').disabled = true;
+        document.getElementById('exeat2ImportAllBtn').disabled = true;
+        return;
+      }
+
+      document.getElementById('exeat2Empty').classList.add('d-none');
+      document.getElementById('exeat2TableWrapper').classList.remove('d-none');
+      document.getElementById('exeat2ImportSelectedBtn').disabled = false;
+      document.getElementById('exeat2ImportAllBtn').disabled = false;
+
+      var statusLabels = {
+        'new': '<span class="admin-badge admin-badge-primary"><i class="bi bi-plus-circle"></i> New</span>',
+        'exists_exeat2': '<span class="admin-badge admin-badge-info"><i class="bi bi-arrow-repeat"></i> Exists (exeat2)</span>',
+        'exists_upload': '<span class="admin-badge admin-badge-warning"><i class="bi bi-exclamation-circle"></i> Exists (upload)</span>',
+        'exists_manual': '<span class="admin-badge admin-badge-warning"><i class="bi bi-exclamation-circle"></i> Exists (manual)</span>',
+        'assigned': '<span class="admin-badge admin-badge-success"><i class="bi bi-check-circle"></i> Already Assigned</span>'
+      };
+
+      data.forEach(function (stu) {
+        var tr = document.createElement('tr');
+        var label = statusLabels[stu.status] || '<span class="admin-badge admin-badge-neutral">Unknown</span>';
+        var canSelect = (stu.status !== 'assigned');
+        tr.innerHTML =
+          '<td><input type="checkbox" class="exeat2-checkbox form-check-input" value="' + stu.exeat2_id + '"' + (canSelect ? '' : ' disabled') + '></td>' +
+          '<td>' + escHtml(stu.matric_no) + '</td>' +
+          '<td>' + escHtml(stu.name) + '</td>' +
+          '<td>' + escHtml(stu.email || '') + '</td>' +
+          '<td>' + label + '</td>';
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ─── exeat2 master checkbox ───
+    var exeat2MasterCb = document.getElementById('exeat2MasterCb');
+    if (exeat2MasterCb) {
+      exeat2MasterCb.addEventListener('change', function () {
+        document.querySelectorAll('.exeat2-checkbox:not(:disabled)').forEach(function (cb) {
+          cb.checked = this.checked;
+        }.bind(this));
+      });
+    }
+
+    // ─── exeat2: Import Selected ───
+    var exeat2ImportSelectedBtn = document.getElementById('exeat2ImportSelectedBtn');
+    if (exeat2ImportSelectedBtn) {
+      exeat2ImportSelectedBtn.addEventListener('click', function () {
+        var examId = document.getElementById('exeat2ExamSelect').value;
+        if (!examId) {
+          Swal.fire({ title: 'No Exam Selected', text: 'Please select an exam to assign students to.', icon: 'warning', confirmButtonColor: '#198754' });
+          return;
+        }
+        var checked = document.querySelectorAll('.exeat2-checkbox:checked');
+        if (checked.length === 0) {
+          Swal.fire({ title: 'No Selection', text: 'Select at least one student.', icon: 'warning', confirmButtonColor: '#198754' });
+          return;
+        }
+        var ids = [];
+        checked.forEach(function (cb) { ids.push(parseInt(cb.value)); });
+        doExeat2Import(ids, examId);
+      });
+    }
+
+    // ─── exeat2: Import All ───
+    var exeat2ImportAllBtn = document.getElementById('exeat2ImportAllBtn');
+    if (exeat2ImportAllBtn) {
+      exeat2ImportAllBtn.addEventListener('click', function () {
+        var examId = document.getElementById('exeat2ExamSelect').value;
+        if (!examId) {
+          Swal.fire({ title: 'No Exam Selected', text: 'Please select an exam to assign students to.', icon: 'warning', confirmButtonColor: '#198754' });
+          return;
+        }
+        var ids = exeat2Students.map(function (s) { return s.exeat2_id; });
+        Swal.fire({
+          title: 'Import All?',
+          text: 'This will import ' + ids.length + ' student(s) from the school portal and assign to the selected exam.',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#198754',
+          confirmButtonText: 'Yes, import all'
+        }).then(function (result) {
+          if (result.isConfirmed) doExeat2Import(ids, examId);
+        });
+      });
+    }
+
+    function doExeat2Import(ids, examId) {
+      var btn = document.getElementById('exeat2ImportSelectedBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="btn-spinner"></span> Importing...';
+      document.getElementById('exeat2ImportAllBtn').disabled = true;
+
+      fetch('includes/import_exeat2_student.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'student_ids=' + encodeURIComponent(JSON.stringify(ids)) + '&exam_id=' + examId
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-person-check"></i> Import Selected';
+        document.getElementById('exeat2ImportAllBtn').disabled = false;
+
+        if (res.error) {
+          Swal.fire({ title: 'Import Error', text: res.error, icon: 'error', confirmButtonColor: '#198754' });
+          return;
+        }
+
+        var html = '';
+        html += '<div class="mb-3">';
+        html += '<div class="d-flex justify-content-around text-center">';
+        html += '<div><span class="fs-4 text-success">' + (res.imported ?? 0) + '</span><br><small>Newly Imported</small></div>';
+        html += '<div><span class="fs-4 text-info">' + (res.updated ?? 0) + '</span><br><small>Updated</small></div>';
+        html += '<div><span class="fs-4 text-warning">' + (res.skipped_upload ?? 0) + '</span><br><small>Skipped (upload)</small></div>';
+        html += '<div><span class="fs-4 text-warning">' + (res.skipped_manual ?? 0) + '</span><br><small>Skipped (manual)</small></div>';
+        html += '</div></div>';
+        html += '<div class="d-flex justify-content-around text-center mt-2">';
+        html += '<div><span class="fs-5 text-secondary">' + (res.passport_found ?? 0) + '</span><br><small>Passports Found</small></div>';
+        html += '<div><span class="fs-5 text-success">' + (res.passport_saved ?? 0) + '</span><br><small>Passports Saved</small></div>';
+        html += '</div>';
+        html += '<p class="text-center fw-bold">Total: ' + (res.total ?? 0) + ' students processed</p>';
+
+        if (res.details && res.details.length > 0) {
+          html += '<hr><ul class="small" style="max-height:200px;overflow-y:auto">';
+          res.details.forEach(function (d) {
+            var icon = d.status === 'imported' ? '&#10004;' : d.status === 'updated' ? '&#128260;' : '&#9201;';
+            html += '<li>' + icon + ' ' + escHtml(d.name) + ' (' + escHtml(d.matric_no) + ') — ' + d.status + '</li>';
+          });
+          html += '</ul>';
+        }
+
+        document.getElementById('exeat2ImportResultBody').innerHTML = html;
+        var modal = new bootstrap.Modal(document.getElementById('exeat2ImportResultModal'));
+        modal.show();
+      })
+      .catch(function (err) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-person-check"></i> Import Selected';
+        document.getElementById('exeat2ImportAllBtn').disabled = false;
+        Swal.fire({ title: 'Import Error', text: err.message, icon: 'error', confirmButtonColor: '#198754' });
+      });
+    }
+
+    function escHtml(str) {
+      if (!str) return '';
+      var d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
     }
   </script>
   <script>

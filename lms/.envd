@@ -1,0 +1,60 @@
+# # Database Configuration
+# DB_HOST=localhost
+# DB_PORT=3306
+# DB_NAME=backup_db_pre_implementation
+# DB_USER=root
+# DB_PASS=
+# DB_CHARSET=utf8mb4
+
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=exam_lms
+DB_USER=root
+DB_PASS=
+DB_CHARSET=utf8mb4
+
+# Application Configuration
+APP_ENV=development
+SESSION_LIFETIME=1800
+
+# School Portal DB (exeat2)
+EXEAT2_DB_HOST=localhost
+EXEAT2_DB_PORT=3306
+EXEAT2_DB_NAME=exeat2
+EXEAT2_DB_USER=root
+EXEAT2_DB_PASS=
+EXEAT2_DB_CHARSET=utf8mb4
+
+
+# # Database Configuration
+# DB_HOST=127.0.0.1
+# DB_PORT=3306
+# DB_NAME=dbnhedghziuzs9
+# DB_USER=un1mtnf5uvkod
+# DB_PASS='k1`~%,8w&8oz'
+# DB_CHARSET=utf8mb4
+
+# # # Application Configuration
+# APP_ENV=development
+# SESSION_LIFETIME=1800
+
+
+
+
+# DB_CONNECTION=mysql
+# DB_HOST=127.0.0.1
+# DB_PORT=3306
+# DB_DATABASE=dbinv2oggorg69
+# DB_USERNAME=uwee0g3bir9pr
+# DB_PASSWORD=4&e21%61sh11
+
+# School Portal DB (ONLINE DB SCHOOL DB)
+
+# DB_CONNECTION=mysql
+# EXEAT2_DB_HOST=127.0.0.1
+# EXEAT2_DB_PORT=3306
+# EXEAT2_DB_NAME=dbinv2oggorg69
+# EXEAT2_DB_USER=uwee0g3bir9pr
+# EXEAT2_DB_PASS=
+# EXEAT2_DB_CHARSET=utf8mb4

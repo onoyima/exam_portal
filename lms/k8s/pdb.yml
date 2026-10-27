@@ -1,0 +1,49 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: lms-app-pdb
+  namespace: veritas-lms
+  labels:
+    app: veritas-lms
+    component: pdb
+  annotations:
+    description: "Ensures minimum pod availability during voluntary disruptions"
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: veritas-lms
+      tier: backend
+      component: app
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: lms-queue-pdb
+  namespace: veritas-lms
+  labels:
+    app: veritas-lms
+    component: pdb-queue
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: veritas-lms
+      tier: backend
+      component: queue
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: lms-db-pdb
+  namespace: veritas-lms
+  labels:
+    app: veritas-lms
+    component: pdb-db
+spec:
+  maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: veritas-lms
+      tier: data
+      component: mysql
