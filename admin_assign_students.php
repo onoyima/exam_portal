@@ -2,10 +2,12 @@
 require 'db.php';
 require 'db_exeat2.php';
 require 'auth.php';
-check_auth('admin');
+check_auth(['admin', 'examiner']);
+require_once 'includes/access.php';
 $exam_id = isset($_GET['exam_id']) ? intval($_GET['exam_id']) : 0;
 if (!$exam_id)
   die('No exam selected.');
+acc_require_exam($db, $exam_id);
 $exam = $db->prepare("SELECT * FROM exams WHERE id=? AND deleted_at IS NULL");
 $exam->execute([$exam_id]);
 $exam = $exam->fetch(PDO::FETCH_ASSOC);
@@ -14,6 +16,7 @@ if (!$exam)
 
 // Handle assignment
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  cs_guard_exam($db, $exam_id, 'admin_assign_students?exam_id=' . $exam_id);
   if (isset($_POST['bulk_action']) && isset($_POST['student_ids'])) {
     $sids = $_POST['student_ids'];
     if ($_POST['bulk_action'] === 'assign') {
@@ -70,6 +73,7 @@ $assigned = $db->prepare("SELECT student_id FROM exam_students WHERE exam_id=?")
 $assigned->execute([$exam_id]);
 $assigned_ids = array_column($assigned->fetchAll(PDO::FETCH_ASSOC), 'student_id');
 $name = $_SESSION['user'] ?? 'Admin';
+$back_url = ($exam['type'] ?? '') === 'objective' ? 'exam_overview?exam_id=' . $exam_id : (acc_is_admin() ? 'admin_exams' : acc_home());
 
 // Fetch exeat2 filter options
 $exeat2_departments = [];
@@ -94,12 +98,12 @@ if ($exeat2_db) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>
-  <?php include 'admin_sidebar.php'; ?>
+  <?php include acc_sidebar(); ?>
   <div class="main-content">
 
     <!-- Unified Admin Navbar -->
@@ -109,7 +113,7 @@ if ($exeat2_db) {
           <button class="admin-navbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
             <i class="bi bi-list"></i>
           </button>
-          <a href="admin_exams" class="admin-back-btn" aria-label="Back to Exams">
+          <a href="<?= htmlspecialchars($back_url) ?>" class="admin-back-btn" aria-label="Back">
             <i class="bi bi-arrow-left"></i>
           </a>
           <h1 class="admin-navbar-title">Assign Students</h1>
@@ -131,9 +135,9 @@ if ($exeat2_db) {
       <!-- Breadcrumb -->
       <nav class="admin-breadcrumb" aria-label="Breadcrumb">
         <ol>
-          <li><a href="admin_dashboard"><i class="bi bi-house-door"></i> Dashboard</a></li>
+          <li><a href="<?= acc_home() ?>"><i class="bi bi-house-door"></i> <?= acc_is_admin() ? 'Dashboard' : 'My exams' ?></a></li>
           <li class="sep">/</li>
-          <li><a href="admin_exams">Exams</a></li>
+          <li><a href="<?= htmlspecialchars($back_url) ?>"><?= htmlspecialchars($exam['name']) ?></a></li>
           <li class="sep">/</li>
           <li class="current">Assign Students</li>
         </ol>
@@ -190,7 +194,7 @@ if ($exeat2_db) {
             <label class="btn btn-outline-primary" for="src_local">Exam Portal DB</label>
             <input type="radio" class="btn-check" name="source_selector" id="src_exeat2" value="exeat2" <?= $exeat2_db ? '' : 'disabled' ?>>
             <label class="btn btn-outline-primary" for="src_exeat2">School Portal (exeat2)</label>
-            <a href="admin_upload" class="btn btn-outline-primary btn-sm">Upload CSV</a>
+            <?php if (acc_is_admin()): ?><a href="admin_upload" class="btn btn-outline-primary btn-sm">Upload CSV</a><?php endif; ?>
           </div>
           <?php if (!$exeat2_db): ?>
             <span class="small text-danger"><i class="bi bi-exclamation-triangle"></i> <?= htmlspecialchars($exeat2_error ?: 'School Portal DB not reachable') ?></span>

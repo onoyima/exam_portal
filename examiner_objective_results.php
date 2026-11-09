@@ -1,16 +1,18 @@
 <?php
+require 'auth.php';
+check_auth(['admin', 'examiner']);
 require 'db.php';
-require_once 'exam_logic.php';
-session_start();
+require_once __DIR__ . '/includes/student_import_helper.php';
+require_once __DIR__ . '/includes/access.php';
 $role = $_SESSION['role'] ?? '';
-if (!in_array($role, ['admin', 'examiner'])) {
-  die('Access denied.');
-}
 $name = $_SESSION['user'] ?? $role;
-$back_url = ($role === 'admin') ? 'admin_dashboard' : 'assess';
+$back_url = acc_home();
 
-$exams = $db->query("SELECT * FROM exams WHERE type='objective' AND is_active=1 AND deleted_at IS NULL ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+$exams = $db->query("SELECT e.* FROM exams e WHERE e.type='objective' AND e.is_active=1 AND e.deleted_at IS NULL AND " . acc_exam_sql($db) . " ORDER BY e.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 $exam_id = isset($_GET['exam_id']) ? intval($_GET['exam_id']) : 0;
+if ($exam_id) {
+  acc_require_exam($db, $exam_id);
+}
 $selected_exam = null;
 foreach ($exams as $ex)
   if ($ex['id'] == $exam_id)
@@ -20,58 +22,55 @@ if ($exam_id) {
   auto_finalize_expired_attempts($db, $exam_id);
 }
 
-if ($exam_id && isset($_GET['download'])) {
+/** Marked rows for every student who has finished, in name order. */
+function eor_rows(PDO $db, array $exam, array $questions): array
+{
+  $results = qe_exam_results($db, $exam, $questions);
+  if (!$results) {
+    return [];
+  }
+  $answers = qe_load_answers($db, (int) $exam['id']);
+  $st = $db->prepare("SELECT s.* FROM students s JOIN exam_students es ON s.id = es.student_id
+      WHERE s.deleted_at IS NULL AND es.exam_id = ? ORDER BY s.name");
+  $st->execute([$exam['id']]);
+  $rows = [];
+  foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $stu) {
+    $res = $results[(int) $stu['id']] ?? null;
+    if ($res) {
+      $res['answers'] = $res['attempt_no'] !== null ? ($answers[(int) $stu['id']][$res['attempt_no']] ?? []) : null;
+      $rows[] = ['student' => $stu, 'result' => $res];
+    }
+  }
+  return $rows;
+}
+
+if ($exam_id && $selected_exam && isset($_GET['download'])) {
   header('Content-Type: text/csv');
   header('Content-Disposition: attachment; filename="objective_exam_results_' . $exam_id . '.csv"');
   $out = fopen('php://output', 'w');
-  $qs = $db->prepare("SELECT * FROM objective_questions WHERE exam_id=? AND deleted_at IS NULL ORDER BY id");
-  $qs->execute([$exam_id]);
-  $questions = $qs->fetchAll(PDO::FETCH_ASSOC);
+  $questions = qe_load_questions($db, $exam_id);
   $header = ['First Name', 'Middle Name', 'Last Name', 'Matric No'];
-  foreach ($questions as $q)
+  foreach ($questions as $q) {
     $header[] = strip_tags($q['question_text']);
+  }
   $header[] = 'Score';
+  $header[] = 'Total';
   fputcsv($out, $header);
-
-  $students = $db->prepare("SELECT DISTINCT s.* FROM students s 
-      JOIN exam_students es ON s.id=es.student_id 
-      JOIN objective_attempts oa ON s.id = oa.student_id 
-      WHERE s.deleted_at IS NULL AND es.exam_id=? AND oa.exam_id=? AND oa.finished_at IS NOT NULL 
-      ORDER BY s.name");
-  $students->execute([$exam_id, $exam_id]);
-  $students = $students->fetchAll(PDO::FETCH_ASSOC);
-  $q_mark_map = [];
-  foreach ($questions as $q)
-    $q_mark_map[$q['id']] = (isset($q['mark']) ? floatval($q['mark']) : 1);
-
-  foreach ($students as $stu) {
-    $row = [$stu['firstname'], $stu['middlename'], $stu['lastname'], $stu['matric_no']];
-    $att_stmt = $db->prepare("SELECT attempt_no, question_order FROM objective_attempts WHERE exam_id=? AND student_id=? AND finished_at IS NOT NULL ORDER BY attempt_no DESC LIMIT 1");
-    $att_stmt->execute([$exam_id, $stu['id']]);
-    $latest_att = $att_stmt->fetch(PDO::FETCH_ASSOC);
-    $score = 0; $total_possible = 0;
-    $assigned_ids = [];
-    if ($latest_att) {
-      $assigned_ids = explode(',', $latest_att['question_order']);
-      foreach ($assigned_ids as $qid) $total_possible += ($q_mark_map[$qid] ?? 1);
-    } else {
-      foreach ($questions as $q) $total_possible += (isset($q['mark']) ? floatval($q['mark']) : 1);
+  foreach (eor_rows($db, $selected_exam, $questions) as $r) {
+    [$first_name, $middle_name, $last_name] = sih_display_name_parts($r['student']);
+    $row = [$first_name, $middle_name, $last_name, $r['student']['matric_no']];
+    foreach ($questions as $qid => $q) {
+      $item = $r['result']['items'][$qid];
+      if ($item === null) {
+        $row[] = '-';
+      } elseif ($r['result']['answers'] === null) {
+        $row[] = round($item['awarded'], 2);
+      } else {
+        $row[] = qe_answer_label($q, $r['result']['answers'][$qid] ?? '');
+      }
     }
-    foreach ($questions as $q) {
-      if ($latest_att && !in_array($q['id'], $assigned_ids)) { $row[] = '-'; continue; }
-      $ans = $db->prepare("SELECT selected_option FROM objective_answers WHERE exam_id=? AND student_id=? AND question_id=? AND attempt_no=?");
-      $ans->execute([$exam_id, $stu['id'], $q['id'], $latest_att['attempt_no'] ?? 1]);
-      $sel = $ans->fetchColumn();
-      $row[] = $sel ? strtoupper($sel) : '';
-      if ($sel && strtoupper($sel) === strtoupper($q['correct_option']))
-        $score += (isset($q['mark']) ? floatval($q['mark']) : 1);
-    }
-    $display_score = $score; $display_total = $total_possible;
-    if (isset($selected_exam['total_mark']) && $selected_exam['total_mark'] > 0 && $total_possible > 0) {
-      $display_score = ($score / $total_possible) * $selected_exam['total_mark'];
-      $display_total = $selected_exam['total_mark'];
-    }
-    $row[] = round($display_score, 2) . "/" . round($display_total, 2);
+    $row[] = round($r['result']['score'], 2);
+    $row[] = round($r['result']['total'], 2);
     fputcsv($out, $row);
   }
   fclose($out);
@@ -85,11 +84,11 @@ if ($exam_id && isset($_GET['download'])) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
 </head>
 <body>
-  <?php include 'examiner_sidebar.php'; ?>
+  <?php include acc_sidebar(); ?>
   <div class="main-content">
     <nav class="admin-navbar">
       <div class="admin-navbar-inner">
@@ -158,25 +157,17 @@ if ($exam_id && isset($_GET['download'])) {
       </div>
 
       <?php if ($selected_exam):
-        $qs = $db->prepare("SELECT * FROM objective_questions WHERE exam_id=? AND deleted_at IS NULL ORDER BY id");
-        $qs->execute([$exam_id]);
-        $questions = $qs->fetchAll(PDO::FETCH_ASSOC);
-        $students = $db->prepare("SELECT DISTINCT s.* FROM students s 
-            JOIN exam_students es ON s.id=es.student_id 
-            JOIN objective_attempts oa ON s.id = oa.student_id 
-            WHERE s.deleted_at IS NULL AND es.exam_id=? AND oa.exam_id=? AND oa.finished_at IS NOT NULL 
-            ORDER BY s.name");
-        $students->execute([$exam_id, $exam_id]);
-        $students = $students->fetchAll(PDO::FETCH_ASSOC);
+        $questions = qe_load_questions($db, $exam_id);
+        $rows = eor_rows($db, $selected_exam, $questions);
       ?>
         <div class="admin-card">
           <div class="admin-card-header">
             <h3 class="admin-card-title">
               <i class="bi bi-table"></i> <?= htmlspecialchars($selected_exam['name']) ?>
             </h3>
-            <span class="admin-badge admin-badge-primary"><?= count($students) ?> Submissions</span>
+            <span class="admin-badge admin-badge-primary"><?= count($rows) ?> Submissions</span>
           </div>
-          <?php if (empty($students)): ?>
+          <?php if (empty($rows)): ?>
             <div class="admin-card-body">
               <div class="admin-empty">
                 <div class="admin-empty-icon"><i class="bi bi-inbox"></i></div>
@@ -184,10 +175,13 @@ if ($exam_id && isset($_GET['download'])) {
                 <div class="admin-empty-desc">No students have submitted this exam.</div>
               </div>
             </div>
-          <?php else:
-            $q_mark_map = [];
-            foreach ($questions as $q) $q_mark_map[$q['id']] = (isset($q['mark']) ? floatval($q['mark']) : 1);
-          ?>
+          <?php else: ?>
+            <div class="admin-card-body pb-0 small text-muted">
+              Cells show the student's answer (MTF: one letter per statement, in authoring order).
+              <span class="text-success fw-bold">Green</span> full marks ·
+              <span class="text-warning fw-bold">amber</span> partial ·
+              <span class="text-danger">red</span> no marks. Hover a cell for the marks awarded.
+            </div>
             <div class="admin-card-body-flush">
               <div class="table-responsive">
                 <table class="admin-table mb-0">
@@ -197,54 +191,37 @@ if ($exam_id && isset($_GET['download'])) {
                       <th>Middle Name</th>
                       <th>Last Name</th>
                       <th>Matric No</th>
-                      <?php foreach ($questions as $q): ?>
-                        <th class="text-center" title="<?= htmlspecialchars(strip_tags($q['question_text'])) ?>">
-                          Q<?= $q['id'] ?>
+                      <?php $n = 0; foreach ($questions as $q): $n++; ?>
+                        <th class="text-center" title="<?= htmlspecialchars(qe_type_label($q['question_type']) . ': ' . strip_tags($q['question_text'])) ?>">
+                          Q<?= $n ?><?= $q['question_type'] === 'mtf' ? '<div class="small fw-normal text-muted">MTF</div>' : '' ?>
                         </th>
                       <?php endforeach; ?>
                       <th class="text-center">Score</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <?php foreach ($students as $stu):
-                      $att_stmt = $db->prepare("SELECT attempt_no, question_order FROM objective_attempts WHERE exam_id=? AND student_id=? AND finished_at IS NOT NULL ORDER BY attempt_no DESC LIMIT 1");
-                      $att_stmt->execute([$exam_id, $stu['id']]);
-                      $latest_att = $att_stmt->fetch(PDO::FETCH_ASSOC);
-                      $score = 0; $total_possible = 0;
-                      $assigned_ids = [];
-                      if ($latest_att) {
-                        $assigned_ids = explode(',', $latest_att['question_order']);
-                        foreach ($assigned_ids as $qid) $total_possible += ($q_mark_map[$qid] ?? 1);
-                      } else {
-                        foreach ($questions as $q) $total_possible += (isset($q['mark']) ? floatval($q['mark']) : 1);
-                      }
-                    ?>
+                    <?php foreach ($rows as $r):
+                      [$stu_first, $stu_middle, $stu_last] = sih_display_name_parts($r['student']);
+                      $res = $r['result']; ?>
                       <tr>
-                        <td class="fw-medium"><?= htmlspecialchars($stu['firstname']) ?></td>
-                        <td><?= htmlspecialchars($stu['middlename'] ?? '') ?></td>
-                        <td><?= htmlspecialchars($stu['lastname']) ?></td>
-                        <td class="text-muted small"><?= htmlspecialchars($stu['matric_no']) ?></td>
-                        <?php foreach ($questions as $q):
-                          if ($latest_att && !in_array($q['id'], $assigned_ids)):
+                        <td class="fw-medium"><?= htmlspecialchars($stu_first) ?></td>
+                        <td><?= htmlspecialchars($stu_middle) ?></td>
+                        <td><?= htmlspecialchars($stu_last) ?></td>
+                        <td class="text-muted small"><?= htmlspecialchars($r['student']['matric_no']) ?></td>
+                        <?php foreach ($questions as $qid => $q):
+                          $item = $res['items'][$qid];
+                          if ($item === null) {
                             echo '<td class="text-center text-muted">-</td>';
                             continue;
-                          endif;
-                          $ans = $db->prepare("SELECT selected_option FROM objective_answers WHERE exam_id=? AND student_id=? AND question_id=? AND attempt_no=?");
-                          $ans->execute([$exam_id, $stu['id'], $q['id'], $latest_att['attempt_no']]);
-                          $sel = $ans->fetchColumn();
-                          $is_correct = $sel && strtoupper($sel) === strtoupper($q['correct_option']);
-                          if ($is_correct) $score += (isset($q['mark']) ? floatval($q['mark']) : 1);
-                          echo '<td class="text-center ' . ($is_correct ? 'text-success fw-bold' : ($sel ? 'text-danger' : 'text-muted')) . '">';
-                          echo $sel ? strtoupper($sel) : '-';
-                          echo '</td>';
-                        endforeach;
-                        $display_score = $score; $display_total = $total_possible;
-                        if (isset($selected_exam['total_mark']) && $selected_exam['total_mark'] > 0 && $total_possible > 0) {
-                          $display_score = ($score / $total_possible) * $selected_exam['total_mark'];
-                          $display_total = $selected_exam['total_mark'];
-                        }
-                        ?>
-                        <td class="text-center fw-bold"><?= round($display_score, 2) ?>/<?= round($display_total, 2) ?></td>
+                          }
+                          $label = $res['answers'] === null ? round($item['awarded'], 2) : qe_answer_label($q, $res['answers'][$qid] ?? '');
+                          $cls = ['correct' => 'text-success fw-bold', 'partial' => 'text-warning fw-bold', 'wrong' => 'text-danger', 'unanswered' => 'text-muted'][$item['status']] ?? '';
+                          if ($res['answers'] === null) {
+                            $cls = $item['awarded'] > 0 ? 'text-success' : 'text-danger';
+                          } ?>
+                          <td class="text-center font-monospace <?= $cls ?>" title="<?= round($item['awarded'], 2) ?> / <?= round($q['mark'], 2) ?>"><?= htmlspecialchars((string) $label) ?></td>
+                        <?php endforeach; ?>
+                        <td class="text-center fw-bold"><?= round($res['score'], 2) ?>/<?= round($res['total'], 2) ?></td>
                       </tr>
                     <?php endforeach; ?>
                   </tbody>

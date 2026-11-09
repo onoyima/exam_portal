@@ -5,6 +5,15 @@ require 'db.php';
 
 // Handle create/edit/delete
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  validate_csrf();
+  if (!empty($_POST['id'])) {
+    cs_guard_exam($db, (int) $_POST['id'], 'admin_objective_exams');
+  }
+  $partial = isset($_POST['partial_scoring']) ? 1 : 0;
+  $math = isset($_POST['math_notation']) ? 1 : 0;
+  $late = trim((string) ($_POST['late_start_minutes'] ?? ''));
+  $late = ($late === '' || (int) $late <= 0) ? null : (int) $late;
+  $grading_ok = ['highest', 'average', 'first', 'last'];
   if (isset($_POST['create'])) {
     $name = trim($_POST['name']);
     $desc = trim($_POST['description']);
@@ -15,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $total_mark = floatval($_POST['total_mark']);
     $duration = intval($_POST['duration_minutes']);
     $max_attempts = intval($_POST['max_attempts']);
-    $grading_method = $_POST['grading_method'];
+    $grading_method = in_array($_POST['grading_method'] ?? '', $grading_ok, true) ? $_POST['grading_method'] : 'highest';
     $is_strict = isset($_POST['is_strict']) ? 1 : 0;
     $shuffle_opts = isset($_POST['shuffle_options']) ? 1 : 0;
     $p_fs = isset($_POST['proctor_fullscreen']) ? 1 : 0;
@@ -29,8 +38,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $end_time = !empty($_POST['end_time']) ? $_POST['end_time'] : null;
 
     $session_id = $_POST['session_id'];
-    $stmt = $db->prepare("INSERT INTO exams (name, description, is_active, type, session_id, student_can_view_score, total_mark, duration_minutes, shuffle_objective, questions_to_show, max_attempts, grading_method, is_strict, shuffle_options, proctor_fullscreen, proctor_tab_lock, proctor_kb_lock, proctor_auto_submit, proctor_browser_check, proctor_webcam, proctor_live_video, start_time, end_time) VALUES (?, ?, ?, 'objective', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$name, $desc, $is_active, $session_id, $student_can_view_score, $total_mark, $duration, $shuffle, $q_to_show, $max_attempts, $grading_method, $is_strict, $shuffle_opts, $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time]);
+    $stmt = $db->prepare("INSERT INTO exams (name, description, is_active, type, session_id, student_can_view_score, total_mark, duration_minutes, shuffle_objective, questions_to_show, max_attempts, grading_method, is_strict, shuffle_options, partial_scoring, proctor_fullscreen, proctor_tab_lock, proctor_kb_lock, proctor_auto_submit, proctor_browser_check, proctor_webcam, proctor_live_video, start_time, end_time, late_start_minutes, math_notation) VALUES (?, ?, ?, 'objective', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$name, $desc, $is_active, $session_id, $student_can_view_score, $total_mark, $duration, $shuffle, $q_to_show, $max_attempts, $grading_method, $is_strict, $shuffle_opts, $partial, $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time, $late, $math]);
     header('Location: admin_objective_exams?success=created');
     exit;
   }
@@ -45,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $total_mark = floatval($_POST['total_mark']);
     $duration = intval($_POST['duration_minutes']);
     $max_attempts = intval($_POST['max_attempts']);
-    $grading_method = $_POST['grading_method'];
+    $grading_method = in_array($_POST['grading_method'] ?? '', $grading_ok, true) ? $_POST['grading_method'] : 'highest';
     $is_strict = isset($_POST['is_strict']) ? 1 : 0;
     $shuffle_opts = isset($_POST['shuffle_options']) ? 1 : 0;
     $p_fs = isset($_POST['proctor_fullscreen']) ? 1 : 0;
@@ -59,8 +68,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $end_time = !empty($_POST['end_time']) ? $_POST['end_time'] : null;
 
     $session_id = $_POST['session_id'];
-    $stmt = $db->prepare("UPDATE exams SET name=?, description=?, is_active=?, session_id=?, student_can_view_score=?, total_mark=?, duration_minutes=?, shuffle_objective=?, questions_to_show=?, max_attempts=?, grading_method=?, is_strict=?, shuffle_options=?, proctor_fullscreen=?, proctor_tab_lock=?, proctor_kb_lock=?, proctor_auto_submit=?, proctor_browser_check=?, proctor_webcam=?, proctor_live_video=?, start_time=?, end_time=? WHERE id=? AND type='objective'");
-    $stmt->execute([$name, $desc, $is_active, $session_id, $student_can_view_score, $total_mark, $duration, $shuffle, $q_to_show, $max_attempts, $grading_method, $is_strict, $shuffle_opts, $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time, $id]);
+    $stmt = $db->prepare("UPDATE exams SET name=?, description=?, is_active=?, session_id=?, student_can_view_score=?, total_mark=?, duration_minutes=?, shuffle_objective=?, questions_to_show=?, max_attempts=?, grading_method=?, is_strict=?, shuffle_options=?, partial_scoring=?, proctor_fullscreen=?, proctor_tab_lock=?, proctor_kb_lock=?, proctor_auto_submit=?, proctor_browser_check=?, proctor_webcam=?, proctor_live_video=?, start_time=?, end_time=?, late_start_minutes=?, math_notation=? WHERE id=? AND type='objective'");
+    $stmt->execute([$name, $desc, $is_active, $session_id, $student_can_view_score, $total_mark, $duration, $shuffle, $q_to_show, $max_attempts, $grading_method, $is_strict, $shuffle_opts, $partial, $p_fs, $p_tab, $p_kb, $p_auto, $p_browser, $p_webcam, $p_live, $start_time, $end_time, $late, $math, $id]);
     header('Location: admin_objective_exams?success=edited');
     exit;
   }
@@ -86,8 +95,8 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>
@@ -204,6 +213,7 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
                         <i class="bi bi-pencil"></i>
                       </button>
                       <form method="post" class="d-inline" data-swal="Delete this exam?">
+<?php csrf_field(); ?>
                         <input type="hidden" name="id" value="<?= $exam['id'] ?>">
                         <button type="submit" name="delete" class="admin-btn admin-btn-sm admin-btn-danger" title="Delete">
                           <i class="bi bi-trash"></i>
@@ -235,6 +245,7 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
       <div class="modal-dialog modal-lg">
         <div class="modal-content">
           <form method="post">
+<?php csrf_field(); ?>
             <input type="hidden" name="id" value="<?= $exam['id'] ?>">
             <div class="modal-header">
               <h5 class="modal-title"><i class="bi bi-pencil-square"></i> Edit Exam</h5>
@@ -318,6 +329,17 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
                       value="<?= $exam['end_time'] ? date('Y-m-d\TH:i', strtotime($exam['end_time'])) : '' ?>">
                   </div>
                 </div>
+                <div class="col-12">
+                  <div class="admin-form-group">
+                    <label class="admin-form-label">Late entry</label>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                      <span class="small">Students may start up to</span>
+                      <input type="number" name="late_start_minutes" class="admin-input" style="width:110px" min="1" step="1"
+                        placeholder="any time" value="<?= $exam['late_start_minutes'] !== null ? (int) $exam['late_start_minutes'] : '' ?>">
+                      <span class="small">minutes after the Start Time. Leave blank to allow starting at any time while the exam is open.</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <ul class="nav nav-tabs mb-3" id="editTab<?= $exam['id'] ?>" role="tablist">
@@ -344,7 +366,15 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
                     </label>
                     <label class="admin-checkbox">
                       <input type="checkbox" name="shuffle_options" <?= ($exam['shuffle_options'] ?? 0) ? 'checked' : '' ?>>
-                      <i class="bi bi-arrow-left-right"></i> Shuffle choices (A,B,C,D)
+                      <i class="bi bi-arrow-left-right"></i> Shuffle choices and MTF statements
+                    </label>
+                    <label class="admin-checkbox">
+                      <input type="checkbox" name="partial_scoring" <?= ($exam['partial_scoring'] ?? 1) ? 'checked' : '' ?>>
+                      <i class="bi bi-pie-chart"></i> Partial credit for Multiple True/False and multiple-answer questions
+                    </label>
+                    <label class="admin-checkbox" title="For maths, physics and chemistry papers">
+                      <input type="checkbox" name="math_notation" <?= ($exam['math_notation'] ?? 0) ? 'checked' : '' ?>>
+                      <i class="bi bi-calculator"></i> Maths &amp; science notation: $x^2$ formulas, x^2 and H_2O shorthand
                     </label>
                     <label class="admin-checkbox">
                       <input type="checkbox" name="is_active" <?= $exam['is_active'] ? 'checked' : '' ?>>
@@ -417,6 +447,7 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <form method="post">
+<?php csrf_field(); ?>
           <div class="modal-header">
             <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Create Objective Exam</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -493,6 +524,16 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
                   <input type="datetime-local" name="end_time" class="admin-input">
                 </div>
               </div>
+              <div class="col-12">
+                <div class="admin-form-group">
+                  <label class="admin-form-label">Late entry</label>
+                  <div class="d-flex flex-wrap align-items-center gap-2">
+                    <span class="small">Students may start up to</span>
+                    <input type="number" name="late_start_minutes" class="admin-input" style="width:110px" min="1" step="1" placeholder="any time">
+                    <span class="small">minutes after the Start Time. Leave blank to allow starting at any time while the exam is open.</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <ul class="nav nav-tabs mb-3" id="createTab" role="tablist">
@@ -523,7 +564,15 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
                   </label>
                   <label class="admin-checkbox">
                     <input type="checkbox" name="shuffle_options" id="shuffleOptsNew" checked>
-                    <i class="bi bi-arrow-left-right"></i> Shuffle choices (A,B,C,D)
+                    <i class="bi bi-arrow-left-right"></i> Shuffle choices and MTF statements
+                  </label>
+                  <label class="admin-checkbox">
+                    <input type="checkbox" name="partial_scoring" id="partialNew" checked>
+                    <i class="bi bi-pie-chart"></i> Partial credit for Multiple True/False and multiple-answer questions
+                  </label>
+                  <label class="admin-checkbox" title="For maths, physics and chemistry papers">
+                    <input type="checkbox" name="math_notation" id="mathNew">
+                    <i class="bi bi-calculator"></i> Maths &amp; science notation: $x^2$ formulas, x^2 and H_2O shorthand
                   </label>
                   <label class="admin-checkbox">
                     <input type="checkbox" name="student_can_view_score" id="viewScoreCreate">

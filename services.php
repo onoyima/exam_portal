@@ -13,7 +13,7 @@ $role = $_SESSION['role'] ?? '';
   <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <style>
     .hero-section {
       background: linear-gradient(135deg, var(--primary-color) 0%, #667eea 100%);
@@ -100,7 +100,7 @@ $role = $_SESSION['role'] ?? '';
       flex-shrink: 0;
     }
   </style>
-  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+  <link href="assets/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>

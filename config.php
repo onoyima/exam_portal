@@ -44,6 +44,14 @@ if (!defined('DB_USER'))    define('DB_USER',    'root');
 if (!defined('DB_PASS'))    define('DB_PASS',    '');
 if (!defined('DB_CHARSET')) define('DB_CHARSET', 'utf8mb4');
 if (!defined('SESSION_LIFETIME')) define('SESSION_LIFETIME', 1800);
+if (!defined('APP_TIMEZONE')) define('APP_TIMEZONE', 'Africa/Lagos');
+
+// PHP and MySQL must agree on the clock, otherwise exam open/close times and
+// remaining-time calculations drift by the difference (XAMPP ships PHP set to
+// Europe/Berlin). db.php applies the same offset to the MySQL session.
+if (!@date_default_timezone_set(APP_TIMEZONE)) {
+    date_default_timezone_set('Africa/Lagos');
+}
 
 // exeat2 school portal DB fallbacks — only used when .env is missing
 if (!defined('EXEAT2_DB_HOST')) define('EXEAT2_DB_HOST', $env_loaded ? '' : 'localhost');

@@ -6,6 +6,28 @@ require 'db.php';
 $name = $_SESSION['user'] ?? 'Admin';
 $back_url = 'admin_dashboard';
 
+// ── CSV downloads: the current list, or one archived reset ──
+if (isset($_GET['export'])) {
+    header('Content-Type: text/csv; charset=utf-8');
+    if ($_GET['export'] === 'log' && !empty($_GET['at'])) {
+        $at = date('Y-m-d H:i:s', strtotime($_GET['at']));
+        header('Content-Disposition: attachment; filename="approved_computers_' . date('Y-m-d_His', strtotime($at)) . '.csv"');
+        $rows = $db->prepare("SELECT ip_address, status, device_info, first_seen, last_seen, reset_at, reset_by FROM device_approval_log WHERE reset_at = ? ORDER BY status, ip_address");
+        $rows->execute([$at]);
+        $rows = $rows->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        header('Content-Disposition: attachment; filename="computers_' . date('Y-m-d_His') . '.csv"');
+        $rows = $db->query("SELECT ip_address, status, device_info, created_at AS first_seen, last_seen FROM approved_devices ORDER BY status, ip_address")->fetchAll(PDO::FETCH_ASSOC);
+    }
+    $out = fopen('php://output', 'w');
+    fputcsv($out, $rows ? array_keys($rows[0]) : ['ip_address', 'status', 'device_info', 'first_seen', 'last_seen']);
+    foreach ($rows as $r) {
+        fputcsv($out, $r);
+    }
+    fclose($out);
+    exit;
+}
+
 // ── AJAX Actions ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
     header('Content-Type: application/json');
@@ -21,6 +43,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
     } elseif ($action === 'approve_all') {
         $db->exec("UPDATE approved_devices SET status='approved' WHERE status='pending'");
         echo json_encode(['success' => true]);
+    } elseif ($action === 'reset') {
+        // Archive every approval, then clear the list so the next exam starts
+        // from zero. The server's own browser is kept so the admin is not locked out.
+        $db->beginTransaction();
+        $at = date('Y-m-d H:i:s');
+        $db->prepare("INSERT INTO device_approval_log (reset_at, reset_by, ip_address, device_info, status, first_seen, last_seen)
+            SELECT ?, ?, ip_address, device_info, status, created_at, last_seen FROM approved_devices WHERE ip_address NOT IN ('127.0.0.1', '::1')")
+            ->execute([$at, $name]);
+        $n = $db->exec("DELETE FROM approved_devices WHERE ip_address NOT IN ('127.0.0.1', '::1')");
+        $db->commit();
+        echo json_encode(['success' => true, 'cleared' => $n, 'at' => $at]);
     } elseif ($action === 'delete') {
         $db->prepare("DELETE FROM approved_devices WHERE ip_address=?")->execute([$ip]);
         echo json_encode(['success' => true]);
@@ -35,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
   <title>Device Authorization - Admin</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
 </head>
 <body>
@@ -79,7 +112,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
         <button class="admin-btn admin-btn-primary" onclick="approveAll()">
           <i class="bi bi-check-all me-1"></i> Approve All Pending
         </button>
-        <button class="admin-btn admin-btn-outline" onclick="location.reload()">
+        <a class="admin-btn admin-btn-outline" href="admin_devices?export=current"><i class="bi bi-download me-1"></i> Download list</a>
+        <button class="admin-btn admin-btn-danger" onclick="resetApprovals()">
+          <i class="bi bi-arrow-counterclockwise me-1"></i> Reset for next exam
+        </button>
+        <button class="admin-btn admin-btn-outline" onclick="location.reload()" title="Refresh">
           <i class="bi bi-arrow-clockwise"></i>
         </button>
       </div>
@@ -216,6 +253,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
 
 <?php include 'footer.php'; ?>
 
+<?php
+  $resets = $db->query("SELECT reset_at, reset_by, COUNT(*) AS n,
+        SUM(status = 'approved') AS approved, SUM(status = 'pending') AS pending, SUM(status = 'rejected') AS rejected
+      FROM device_approval_log GROUP BY reset_at, reset_by ORDER BY reset_at DESC LIMIT 30")->fetchAll(PDO::FETCH_ASSOC);
+?>
+<div class="admin-content pt-0">
+  <div class="admin-card">
+    <div class="admin-card-header">
+      <h3 class="admin-card-title mb-0"><i class="bi bi-clock-history me-2"></i>Previous resets</h3>
+      <span class="small text-muted">Each reset keeps a record of the computers that had been allowed, so you can trace them later.</span>
+    </div>
+    <div class="admin-card-body-flush">
+      <table class="admin-table mb-0">
+        <thead><tr><th>Reset at</th><th>By</th><th>Approved</th><th>Pending</th><th>Rejected</th><th class="actions-cell">Record</th></tr></thead>
+        <tbody>
+          <?php if (!$resets): ?>
+            <tr><td colspan="6" class="text-muted">No resets yet. Use <strong>Reset for next exam</strong> after an exam to clear every approval.</td></tr>
+          <?php endif; ?>
+          <?php foreach ($resets as $r): ?>
+            <tr>
+              <td><?= date('j M Y, g:i A', strtotime($r['reset_at'])) ?></td>
+              <td><?= htmlspecialchars($r['reset_by'] ?? '') ?></td>
+              <td><?= (int) $r['approved'] ?></td>
+              <td><?= (int) $r['pending'] ?></td>
+              <td><?= (int) $r['rejected'] ?></td>
+              <td class="actions-cell"><a class="admin-btn admin-btn-sm admin-btn-outline" href="admin_devices?export=log&amp;at=<?= urlencode($r['reset_at']) ?>"><i class="bi bi-download"></i> CSV</a></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
 <script src="assets/js/bootstrap.bundle.min.js"></script>
 <script src="assets/js/admin-swal.js"></script>
 <script src="assets/js/admin-common.js"></script>
@@ -255,6 +325,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
       await fetch('admin_devices?action=approve_all', { method: 'POST', body: fd });
       location.reload();
     }
+  }
+
+  async function resetApprovals() {
+    const result = await Swal.fire({
+      title: 'Reset all approvals?',
+      html: 'Every computer will need approval again before it can open the portal.<br>A record of the current list is kept under <b>Previous resets</b>.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc3545',
+      confirmButtonText: 'Yes, reset'
+    });
+    if (!result.isConfirmed) return;
+    const res = await fetch('admin_devices?action=reset', { method: 'POST', body: new FormData() });
+    const data = await res.json().catch(() => ({}));
+    await Swal.fire({ title: 'Approvals cleared', text: (data.cleared || 0) + ' computer(s) removed. Their record has been saved.', icon: 'success' });
+    location.reload();
   }
 
   function filterDevices(status) {

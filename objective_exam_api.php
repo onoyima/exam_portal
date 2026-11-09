@@ -3,97 +3,104 @@ require 'auth.php';
 require 'db.php';
 
 header('Content-Type: application/json');
+header('Cache-Control: no-store');
 
+function api_out(array $data): void
+{
+    echo json_encode($data);
+    exit;
+}
+
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'student' || !isset($_SESSION['student_id'])) {
+    http_response_code(401);
+    api_out(['success' => false, 'error' => 'Unauthorized', 'auth' => false]);
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     validate_csrf();
 }
 
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'student' || !isset($_SESSION['student_id'])) {
-    echo json_encode(['success' => false, 'error' => 'Unauthorized']);
-    exit;
-}
+$student_id = (int) $_SESSION['student_id'];
+// Nothing below writes to the session; releasing the lock lets this student's
+// heartbeat and answer requests run in parallel instead of queueing.
+session_write_close();
 
-$student_id = $_SESSION['student_id'];
 $action = $_GET['action'] ?? '';
+$exam_id = (int) ($_REQUEST['exam_id'] ?? 0);
+$attempt_no = (int) ($_REQUEST['attempt_no'] ?? 1);
 
 try {
-    // Shared scheduling check for API actions
-    $exam_id_check = isset($_REQUEST['exam_id']) ? intval($_REQUEST['exam_id']) : 0;
-    if ($exam_id_check > 0) {
-        $stmt = $db->prepare("SELECT start_time, end_time FROM exams WHERE id = ? AND deleted_at IS NULL");
-        $stmt->execute([$exam_id_check]);
-        $exam_data = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($exam_data) {
-            $now = time();
-            $start = !empty($exam_data['start_time']) ? strtotime($exam_data['start_time']) : null;
-            $end = !empty($exam_data['end_time']) ? strtotime($exam_data['end_time']) : null;
-
-            if ($start && $now < $start) {
-                echo json_encode(['success' => false, 'error' => 'Exam access period has not started yet.']);
-                exit;
-            }
-            if ($end && $now > $end) {
-                echo json_encode(['success' => false, 'error' => 'Exam access period has ended.']);
-                exit;
-            }
-        }
+    $st = $db->prepare("SELECT e.*, oa.id AS attempt_id, oa.finished_at, oa.is_locked, oa.question_order, oa.time_used, oa.started_at
+        FROM exams e
+        LEFT JOIN objective_attempts oa ON oa.exam_id = e.id AND oa.student_id = ? AND oa.attempt_no = ?
+        WHERE e.id = ? AND e.deleted_at IS NULL");
+    $st->execute([$student_id, $attempt_no, $exam_id]);
+    $ctx = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$ctx) {
+        api_out(['success' => false, 'error' => 'Exam not found']);
     }
 
-    if ($action === 'save_answer') {
-        $exam_id = intval($_POST['exam_id']);
-        $question_id = intval($_POST['question_id']);
-        $attempt_no = intval($_POST['attempt_no'] ?? 1);
-        $option = $_POST['option'];
-        $now = date('Y-m-d H:i:s');
-
-        // HIGH-PERFORMANCE WRITE: 
-        // We use INSERT ... ON DUPLICATE KEY UPDATE because we added a 
-        // UNIQUE INDEX (exam_id, student_id, attempt_no, question_id).
-        // This is 2x faster than a separate DELETE + INSERT under heavy load.
-        $stmt = $db->prepare("
-            INSERT INTO objective_answers (exam_id, student_id, attempt_no, question_id, selected_option, submitted_at) 
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE selected_option = VALUES(selected_option), submitted_at = VALUES(submitted_at)
-        ");
-        $stmt->execute([$exam_id, $student_id, $attempt_no, $question_id, $option, $now]);
-
-        echo json_encode(['success' => true]);
-    } elseif ($action === 'start_attempt') {
-        $exam_id = intval($_POST['exam_id']);
-
-        // Check if attempt already exists
-        $stmt = $db->prepare("SELECT started_at FROM objective_attempts WHERE exam_id=? AND student_id=?");
-        $stmt->execute([$exam_id, $student_id]);
-        $existing = $stmt->fetch();
-
-        if (!$existing) {
-            $stmt = $db->prepare("INSERT INTO objective_attempts (exam_id, student_id, attempt_no, started_at) VALUES (?, ?, 1, NOW())");
-            $stmt->execute([$exam_id, $student_id]);
-            echo json_encode(['success' => true, 'started_at' => date('Y-m-d H:i:s')]);
-        } else {
-            echo json_encode(['success' => true, 'started_at' => $existing['started_at']]);
+    if ($action === 'save_answer' || $action === 'save_answers') {
+        if (!$ctx['attempt_id']) {
+            api_out(['success' => false, 'error' => 'Attempt not found']);
         }
-    } elseif ($action === 'get_remaining_time') {
-        $exam_id = intval($_GET['exam_id']);
-
-        $stmt = $db->prepare("SELECT e.duration_minutes, a.started_at FROM exams e JOIN objective_attempts a ON e.id = a.exam_id WHERE e.id=? AND a.student_id=? ORDER BY a.attempt_no DESC LIMIT 1");
-        $stmt->execute([$exam_id, $student_id]);
-        $data = $stmt->fetch();
-
-        if ($data) {
-            $duration_seconds = $data['duration_minutes'] * 60;
-            $start_timestamp = strtotime($data['started_at']);
-            $current_timestamp = time();
-            $elapsed = $current_timestamp - $start_timestamp;
-            $remaining = max(0, $duration_seconds - $elapsed);
-
-            echo json_encode(['success' => true, 'remaining_seconds' => $remaining]);
-        } else {
-            echo json_encode(['success' => false, 'error' => 'Attempt not found']);
+        if ($ctx['finished_at']) {
+            api_out(['success' => false, 'error' => 'This attempt has already been submitted.', 'finished' => true]);
         }
-    } else {
-        echo json_encode(['success' => false, 'error' => 'Invalid action']);
+        if ($ctx['is_locked']) {
+            api_out(['success' => false, 'error' => 'This attempt is locked.', 'locked' => true]);
+        }
+        if (!empty($ctx['end_time']) && time() > strtotime($ctx['end_time']) + 120) {
+            api_out(['success' => false, 'error' => 'Exam access period has ended.', 'closed' => true]);
+        }
+        $duration = (int) $ctx['duration_minutes'] * 60;
+        if ($duration > 0 && (int) $ctx['time_used'] > $duration + 60) {
+            api_out(['success' => false, 'error' => 'Time is up for this attempt.', 'time_up' => true]);
+        }
+
+        if ($action === 'save_answer') {
+            $incoming = [(int) ($_POST['question_id'] ?? 0) => (string) ($_POST['option'] ?? '')];
+        } else {
+            $incoming = json_decode((string) ($_POST['answers'] ?? ''), true);
+            if (!is_array($incoming)) {
+                api_out(['success' => false, 'error' => 'Bad request']);
+            }
+        }
+
+        $questions = qe_load_questions($db, $exam_id);
+        $allowed = array_flip(qe_attempt_question_ids(['question_order' => $ctx['question_order']], $questions));
+        $saved = [];
+        $rejected = [];
+        $db->beginTransaction();
+        foreach ($incoming as $qid => $raw) {
+            $qid = (int) $qid;
+            if (!isset($allowed[$qid]) || !is_scalar($raw)) {
+                $rejected[] = $qid;
+                continue;
+            }
+            if (qe_save_answer($db, $questions[$qid], $exam_id, $student_id, $attempt_no, $raw)) {
+                $saved[] = $qid;
+            } else {
+                $rejected[] = $qid;
+            }
+        }
+        $db->commit();
+        api_out(['success' => true, 'saved' => $saved, 'rejected' => $rejected]);
     }
-} catch (Exception $e) {
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+
+    if ($action === 'get_remaining_time') {
+        if (!$ctx['attempt_id']) {
+            api_out(['success' => false, 'error' => 'Attempt not found']);
+        }
+        $rem = qe_remaining_seconds($ctx, $ctx);
+        api_out(['success' => true, 'remaining_seconds' => $rem, 'untimed' => $rem === null]);
+    }
+
+    api_out(['success' => false, 'error' => 'Invalid action']);
+} catch (Throwable $e) {
+    if ($db->inTransaction()) {
+        $db->rollBack();
+    }
+    error_log('objective_exam_api: ' . $e->getMessage());
+    http_response_code(500);
+    api_out(['success' => false, 'error' => 'Server busy, retrying.']);
 }

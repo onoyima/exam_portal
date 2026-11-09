@@ -5,6 +5,25 @@ require 'db.php';
 
 $name = $_SESSION['user'] ?? 'Admin';
 
+// log files are not served directly (logs/.htaccess); admins read them here
+if (isset($_GET['raw_log'])) {
+  $file = __DIR__ . '/logs/' . basename((string) $_GET['raw_log']);
+  if (substr($file, -4) !== '.log' || !is_file($file)) {
+    http_response_code(404);
+    exit('Log not found.');
+  }
+  header('Content-Type: text/plain; charset=utf-8');
+  header('X-Content-Type-Options: nosniff');
+  $size = filesize($file);
+  $fh = fopen($file, 'rb');
+  if ($size > 2 * 1024 * 1024) {
+    fseek($fh, -2 * 1024 * 1024, SEEK_END); // the last 2 MB is what matters
+    echo "... (older lines not shown)\n";
+  }
+  fpassthru($fh);
+  exit;
+}
+
 // Initialize audit tables if they don't exist
 $db->exec("
     CREATE TABLE IF NOT EXISTS audit_trail (
@@ -91,7 +110,7 @@ $back_url = 'admin_dashboard';
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="assets/favicon.ico">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
 </head>
 <body>
@@ -173,7 +192,7 @@ $back_url = 'admin_dashboard';
                           <td class="text-muted small"><?= $flog['size'] ?></td>
                           <td class="text-muted small"><?= $flog['date'] ?></td>
                           <td>
-                            <a href="logs/<?= htmlspecialchars($flog['name']) ?>" target="_blank" class="btn btn-sm btn-link text-primary fw-bold text-decoration-none">View RAW</a>
+                            <a href="admin_audit_trail?raw_log=<?= urlencode($flog['name']) ?>" target="_blank" class="btn btn-sm btn-link text-primary fw-bold text-decoration-none">View RAW</a>
                           </td>
                         </tr>
                       <?php endforeach; ?>

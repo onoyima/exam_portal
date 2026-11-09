@@ -185,12 +185,7 @@
         if (inferenceVideo.readyState < 2) return; // Video not ready
 
         try {
-            const predictions = await detector.estimateFaces(inferenceVideo, false);
-            const faces = predictions.filter(p =>
-                Array.isArray(p.probability)
-                    ? p.probability[0] >= FACE_CONFIDENCE_THRESH
-                    : (p.probability ?? 1) >= FACE_CONFIDENCE_THRESH
-            );
+            const faces = await detector.detect(inferenceVideo, FACE_CONFIDENCE_THRESH);
             const count = faces.length;
             consecutiveErrors = 0;
 
@@ -223,13 +218,13 @@
     // ─── Model Initialisation ─────────────────────────────────────────────────
     async function loadModel() {
         try {
-            if (typeof blazeface === 'undefined') {
-                console.warn('[AI Proctor] BlazeFace library not loaded.');
+            if (typeof window.cbtFaceDetector === 'undefined' || typeof tf === 'undefined') {
+                console.warn('[AI Proctor] Face detector not loaded.');
                 return false;
             }
-            console.log('[AI Proctor] Loading BlazeFace model…');
-            detector = await blazeface.load();
-            console.log('[AI Proctor] ✅ BlazeFace model ready.');
+            // The model ships with the portal, so this works on an offline exam LAN.
+            detector = await window.cbtFaceDetector.load('assets/vendor/blazeface/model/blazeface-front.json');
+            console.log('[AI Proctor] Face detection model ready.');
             return true;
         } catch (e) {
             console.warn('[AI Proctor] Model load failed:', e.message);

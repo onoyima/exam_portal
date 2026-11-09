@@ -6,7 +6,7 @@ if (isset($_SESSION['role'])) {
         header("Location: admin_dashboard");
         exit;
     } elseif ($_SESSION['role'] === 'examiner') {
-        header("Location: assess");
+        header("Location: examiner_dashboard");
         exit;
     }
 }
@@ -21,12 +21,14 @@ $portal_image = $settings['portal_image'] ?? 'assets/img/login_bg.jpg';
 $staff_content = $settings['staff_login_content'] ?? 'Authorized Staff only. Enter your administrative credentials to manage sessions and grades.';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    validate_csrf();
+    // No validate_csrf() here on purpose: a login form left open past the
+    // session lifetime would otherwise refuse correct credentials. The
+    // password is the proof; the session id is renewed on success below.
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
 
     // Fetch by username only — never pass password to SQL
-    $stmt = $db->prepare("SELECT * FROM examiners WHERE username = ? AND deleted_at IS NULL");
+    $stmt = $db->prepare("SELECT * FROM examiners WHERE username = ? AND deleted_at IS NULL AND (source IS NULL OR source <> 'center')");
     $stmt->execute([$username]);
     $user = $stmt->fetch();
 
@@ -43,10 +45,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // examiners created for a grouped exam: only while it runs, one computer at a time
+    if ($authenticated && !empty($user['group_id'])) {
+        $why = group_examiner_problem($db, $user);
+        if ($why === null && examiner_session_busy($user)) {
+            $why = 'This examiner account is already signed in on another computer. Sign out there, or ask the centre manager to reset your session.';
+        }
+        if ($why !== null) {
+            $authenticated = false;
+            $error = $why;
+        }
+    }
+
     if ($authenticated) {
+        session_regenerate_id(true);
         $_SESSION['user'] = $user['username'];
         $_SESSION['role'] = $user['role'];
         $_SESSION['examiner_id'] = $user['id'];
+        unset($_SESSION['group_examiner']);
+        if (!empty($user['group_id'])) {
+            $_SESSION['group_examiner'] = (int) $user['group_id'];
+            $db->prepare("UPDATE examiners SET session_token = ?, last_seen_at = NOW() WHERE id = ?")->execute([session_id(), $user['id']]);
+        }
 
         try {
             $db->prepare("INSERT INTO login_history (username, user_type, ip_address, user_agent, status) VALUES (?, ?, ?, ?, 'success')")
@@ -55,10 +75,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             error_log("Login history insert failed: " . $e->getMessage());
         }
 
-        header("Location: " . ($user['role'] === 'admin' ? 'admin_dashboard' : 'assess'));
+        header("Location: " . ($user['role'] === 'admin' ? 'admin_dashboard' : 'examiner_dashboard'));
         exit;
     }
-    $error = "Invalid username or password.";
+    $error = $error ?? "Invalid username or password.";
+}
+if (!isset($error) && !empty($_SESSION['auth_error'])) {
+    $error = $_SESSION['auth_error'];
+    unset($_SESSION['auth_error']);
 }
 ?>
 <!DOCTYPE html>
@@ -68,8 +92,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="<?= htmlspecialchars($portal_favicon) ?>" type="image/x-icon">
     <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="assets/vendor/fonts/fonts.css" rel="stylesheet">
     <style>
         :root {
             --primary: #092c19;
@@ -201,6 +225,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <script src="assets/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="assets/js/sweetalert2.all.min.js"></script>
 </body>
 </html>

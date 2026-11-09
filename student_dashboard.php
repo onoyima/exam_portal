@@ -2,311 +2,227 @@
 require 'auth.php';
 check_auth('student');
 require 'db.php';
-require_once 'exam_logic.php';
+require_once __DIR__ . '/includes/student_exams.php';
 
-$student_id = $_SESSION['student_id'];
+$student_id = (int) $_SESSION['student_id'];
 $name = $_SESSION['student_name'];
 $matric = $_SESSION['matric_no'];
 
-// Auto-finalize any expired attempts before loading the dashboard
 auto_finalize_expired_attempts($db, null, $student_id);
-
-// Fetch all active exams (Objective and Practical) assigned to this student
-$stmt = $db->prepare("SELECT e.*, 
-    (SELECT COUNT(*) FROM objective_attempts oa WHERE oa.exam_id = e.id AND oa.student_id = ? AND oa.finished_at IS NOT NULL) as finished_attempts,
-    (SELECT COUNT(*) FROM objective_attempts oa WHERE oa.exam_id = e.id AND oa.student_id = ?) as total_attempts,
-    (SELECT COUNT(*) FROM objective_attempts oa WHERE oa.exam_id = e.id AND oa.student_id = ? AND oa.is_locked = 1) as locked_attempts
-    FROM exams e JOIN exam_students es ON e.id=es.exam_id 
-    WHERE es.student_id=? AND e.is_active=1 AND e.deleted_at IS NULL ORDER BY e.created_at DESC");
-$stmt->execute([$student_id, $student_id, $student_id, $student_id]);
-$all_exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-// Separate exams by type
-$active_exams = array_filter($all_exams, fn($e) => $e['type'] === 'objective');
-$practical_exams = array_filter($all_exams, fn($e) => $e['type'] !== 'objective');
+$sd_cards = sd_student_exams($db, $student_id);
 
 $requires_media = false;
-foreach($active_exams as $e) {
-    if (!empty($e['proctor_webcam']) || !empty($e['proctor_live_video']) || !empty($e['is_strict'])) {
-        $requires_media = true;
-        break;
-    }
+foreach ($sd_cards as $c) {
+  $e = $c['exam'];
+  if (!empty($e['proctor_webcam']) || !empty($e['proctor_live_video']) || !empty($e['is_strict'])) {
+    $requires_media = true;
+  }
 }
+$first = explode(' ', trim($name))[0] ?: $name;
+$hour = (int) date('G');
+$greeting = $hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good evening');
+$in_progress = array_filter($sd_cards, fn($c) => $c['state'] === 'progress');
+$open_now = array_filter($sd_cards, fn($c) => in_array($c['state'], ['open', 'progress'], true) || ($c['primary']['kind'] ?? '') === 'reattempt');
 ?>
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
   <meta charset="UTF-8">
-  <title>Student Dashboard - Assessment Portal</title>
+  <title>My Exams - Assessment Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="assets/favicon.ico">
-  <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link href="style_enhanced.css" rel="stylesheet">
+  <link href="assets/vendor/fonts/fonts.css" rel="stylesheet">
+  <link href="assets/css/student.css?v=2" rel="stylesheet">
 </head>
 
-<body>
-  <?php include 'student_sidebar.php'; ?>
+<body class="sd">
+  <div class="sd-layout">
+    <?php include 'student_sidebar.php'; ?>
 
-  <div class="main-content">
-    <nav class="admin-navbar">
-      <div class="admin-navbar-inner">
-        <div class="admin-navbar-start">
-          <button class="admin-navbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar"><i class="bi bi-list"></i></button>
-          <h1 class="admin-navbar-title">Student Portal</h1>
-        </div>
-        <div class="admin-navbar-end">
-          <div class="admin-user-badge">
-            <img src="passport_image.php?type=student&id=<?= $student_id ?? 0 ?>"
-                 class="admin-user-avatar rounded-circle" style="width:32px;height:32px;object-fit:cover"
-                 alt="<?= htmlspecialchars($name) ?>"
-                 onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">
-            <span class="admin-user-avatar d-none"><?= strtoupper(substr($name, 0, 1)) ?></span>
-            <span class="admin-user-name"><?= htmlspecialchars($name) ?></span>
-          </div>
-          <a href="student_logout" class="admin-logout-btn" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
-        </div>
-      </div>
-    </nav>
+    <div class="sd-main">
+      <header class="sd-top">
+        <button type="button" class="sd-menu-btn" data-sd-menu aria-label="Menu">
+          <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5h14M3 10h14M3 15h14"/></svg>
+        </button>
+        <h1>My exams</h1>
+        <span class="sd-clock" id="sdClock"><?= date('D j M · g:i A') ?></span>
+      </header>
 
-    <div class="admin-content">
-      <nav class="admin-breadcrumb">
-        <ol>
-          <li class="current" aria-current="page"><i class="bi bi-house"></i> Dashboard</li>
-        </ol>
-      </nav>
+      <main class="sd-content">
+        <?php if (!empty($_GET['error'])): ?>
+          <div class="sd-flash is-warn"><span><?= htmlspecialchars($_GET['error']) ?></span><button onclick="this.parentElement.remove()" aria-label="Close">&times;</button></div>
+        <?php endif; ?>
+        <?php if (!empty($_SESSION['auth_error'])): ?>
+          <div class="sd-flash is-warn"><span><?= htmlspecialchars($_SESSION['auth_error']) ?></span><button onclick="this.parentElement.remove()" aria-label="Close">&times;</button></div>
+          <?php unset($_SESSION['auth_error']); ?>
+        <?php endif; ?>
 
-      <div class="admin-page-header">
-        <h2 class="admin-page-title">Your Objective Examinations</h2>
-        <div class="admin-page-actions">
-          <span class="admin-badge admin-badge-primary"><i class="bi bi-award"></i> Active: <?= count($active_exams) ?> Objective &bull; <?= count($practical_exams) ?> Practical</span>
-        </div>
-      </div>
+        <h2 class="sd-hello"><?= $greeting ?>, <?= htmlspecialchars($first) ?>.</h2>
+        <p class="sd-hello-sub">
+          <?php if ($in_progress): ?>
+            You have an exam in progress. Your remaining time has been kept — press <strong>Continue exam</strong> to carry on.
+          <?php elseif ($open_now): ?>
+            <?= count($open_now) ?> exam<?= count($open_now) === 1 ? ' is' : 's are' ?> open for you now.
+          <?php elseif ($sd_cards): ?>
+            No exam is open for you right now.
+          <?php else: ?>
+            You have not been registered for any exam yet.
+          <?php endif; ?>
+        </p>
 
-      <p class="text-muted mb-4">Review and attempt your active assigned exams below.</p>
-
-      <?php display_auth_errors(); ?>
-
-      <div class="row g-4">
-        <?php if (empty($active_exams)): ?>
-          <div class="col-12 mt-5">
-            <div class="admin-card">
-              <div class="admin-card-body text-center py-5">
-              <i class="bi bi-journal-x text-muted mb-3 exam-empty-icon"></i>
-              <h3 class="fw-bold">No Active Exams</h3>
-              <p class="text-muted mx-auto exam-empty-text">
-                You don't have any active objective exams assigned to you at the moment. Please check back later.
-              </p>
-            </div>
-          </div>
+        <?php if (!$sd_cards): ?>
+          <div class="sd-empty">
+            <strong>No exams yet</strong>
+            When the examination office registers you for an exam, it will appear here.
           </div>
         <?php else: ?>
-          <?php foreach ($active_exams as $exam):
-            $has_finished = $exam['finished_attempts'] > 0;
-            $can_recompute = $exam['finished_attempts'] < ($exam['max_attempts'] ?? 1);
-            $is_active = $exam['total_attempts'] > $exam['finished_attempts'];
-            $is_locked = ($exam['locked_attempts'] ?? 0) > 0;
-
-            // Scheduling Logic
-            $now = time();
-            $start_ts = $exam['start_time'] ? strtotime($exam['start_time']) : null;
-            $end_ts = $exam['end_time'] ? strtotime($exam['end_time']) : null;
-
-            $is_started = !$start_ts || ($now >= $start_ts);
-            $is_ended = $end_ts && ($now > $end_ts);
-
-            // Security features for this exam
-            $sec_features = [];
-            if (($exam['proctor_fullscreen'] ?? 0) || ($exam['is_strict'] ?? 0)) $sec_features[] = ['icon' => 'bi-arrows-fullscreen', 'label' => 'Fullscreen'];
-            if (($exam['proctor_tab_lock'] ?? 0) || ($exam['is_strict'] ?? 0)) $sec_features[] = ['icon' => 'bi-window-stack', 'label' => 'Tab Lock'];
-            if (($exam['proctor_kb_lock'] ?? 0) || ($exam['is_strict'] ?? 0)) $sec_features[] = ['icon' => 'bi-keyboard', 'label' => 'KB Lock'];
-            if (($exam['proctor_webcam'] ?? 0) || ($exam['is_strict'] ?? 0)) $sec_features[] = ['icon' => 'bi-camera-video', 'label' => 'Webcam'];
-            if (($exam['proctor_live_video'] ?? 0) || ($exam['is_strict'] ?? 0)) $sec_features[] = ['icon' => 'bi-broadcast', 'label' => 'Live Monitor'];
-            if ($exam['proctor_auto_submit'] ?? 0) $sec_features[] = ['icon' => 'bi-send-clock', 'label' => 'Auto Submit'];
-            if ($exam['proctor_browser_check'] ?? 0) $sec_features[] = ['icon' => 'bi-browser-chrome', 'label' => 'Browser Check'];
-            ?>
-            <div class="col-12 col-md-6 col-lg-4" id="exam-<?= $exam['id'] ?>">
-              <div class="exam-card-student position-relative">
-                <div class="exam-status-overlay">
-                  <?php if ($is_locked): ?>
-                    <span class="badge bg-dark rounded-pill shadow"><i class="bi bi-lock-fill me-1"></i> LOCKED</span>
-                  <?php elseif ($has_finished): ?>
-                    <span class="badge bg-success rounded-pill shadow">Attempted (<?= $exam['finished_attempts'] ?>)</span>
-                  <?php elseif (!$is_started): ?>
-                    <span class="badge bg-secondary rounded-pill shadow">NOT YET AVAILABLE</span>
-                  <?php elseif ($is_ended): ?>
-                    <span class="badge bg-danger rounded-pill shadow">EXAM CLOSED</span>
+          <div class="sd-exams">
+            <?php foreach ($sd_cards as $c):
+              $e = $c['exam'];
+              $p = $c['primary'];
+              $s = $c['secondary'];
+              $dur = (int) $e['duration_minutes'];
+              $modal = [
+                'name' => $e['name'],
+                'href' => $p['href'] ?? '',
+                'reattempt' => ($p['kind'] ?? '') === 'reattempt',
+                'questions' => $c['questions'],
+                'duration' => $dur > 0 ? $dur . ' min' : 'No limit',
+                'attempt' => ($c['attempts_used'] + 1) . ' of ' . $c['attempts_max'],
+                'fullscreen' => !empty($e['proctor_fullscreen']) || !empty($e['is_strict']),
+                'webcam' => !empty($e['proctor_webcam']) || !empty($e['is_strict']),
+                'closes' => !empty($e['end_time']) ? date('g:i A', strtotime($e['end_time'])) : null,
+              ];
+              ?>
+              <article class="sd-exam is-<?= $c['state'] ?>" id="exam-<?= (int) $e['id'] ?>">
+                <div>
+                  <?php if (!empty($e['group_name'])): ?><div class="sd-exam-group"><?= htmlspecialchars($e['group_name']) ?></div><?php endif; ?>
+                  <h3 class="sd-exam-name"><?= htmlspecialchars($e['name']) ?><span class="sd-state is-<?= $c['state'] ?>"><?= htmlspecialchars($c['label']) ?></span></h3>
+                  <?php if (!empty($e['description'])): ?><p class="sd-exam-desc"><?= htmlspecialchars($e['description']) ?></p><?php endif; ?>
+                  <div class="sd-facts">
+                    <span><b><?= $c['questions'] ?></b> questions</span>
+                    <span><b><?= $dur > 0 ? $dur . ' min' : 'No time limit' ?></b></span>
+                    <span>Attempts <b><?= $c['attempts_used'] ?> / <?= $c['attempts_max'] ?></b></span>
+                    <?php if (!empty($e['start_time'])): ?><span>Opens <b><?= date('j M, g:i A', strtotime($e['start_time'])) ?></b></span><?php endif; ?>
+                    <?php if (!empty($e['end_time'])): ?><span>Closes <b><?= date('j M, g:i A', strtotime($e['end_time'])) ?></b></span><?php endif; ?>
+                    <?php if ($c['state'] === 'progress' && $c['remaining'] !== null): ?><span>Time left <b><?= sd_fmt_minutes($c['remaining']) ?></b></span><?php endif; ?>
+                  </div>
+                </div>
+                <div class="sd-actions">
+                  <?php if ($c['score']): ?>
+                    <div class="sd-score">Your score <b><?= round($c['score']['value'], 2) ?></b> / <?= round($c['score']['total'], 2) ?></div>
+                  <?php endif; ?>
+                  <?php if ($p): ?>
+                    <?php if (!empty($p['disabled'])): ?>
+                      <button class="sd-btn sd-btn-<?= $p['kind'] ?>" disabled><?= htmlspecialchars($p['label']) ?></button>
+                    <?php elseif (!empty($p['confirm'])): ?>
+                      <button type="button" class="sd-btn sd-btn-<?= $p['kind'] ?>" data-start='<?= htmlspecialchars(json_encode($modal), ENT_QUOTES) ?>'><?= htmlspecialchars($p['label']) ?></button>
+                    <?php else: ?>
+                      <a class="sd-btn sd-btn-<?= $p['kind'] ?>" href="<?= htmlspecialchars($p['href']) ?>"><?= htmlspecialchars($p['label']) ?></a>
+                    <?php endif; ?>
+                  <?php endif; ?>
+                  <?php if ($s): ?>
+                    <a class="sd-btn sd-btn-ghost sd-btn-sm" href="<?= htmlspecialchars($s['href']) ?>"><?= htmlspecialchars($s['label']) ?></a>
                   <?php endif; ?>
                 </div>
-
-                <div class="card-exam-header">
-                  <h4 class="fw-bold mb-1 text-white text-truncate"><?= htmlspecialchars($exam['name']) ?></h4>
-                  <div class="small opacity-75"><i class="bi bi-clock me-1"></i> <?= $exam['duration_minutes'] ?> Minutes
-                  </div>
-                </div>
-
-                <div class="card-exam-body">
-                  <p class="text-muted small mb-4 exam-desc">
-                    <?= htmlspecialchars($exam['description'] ?: 'No description provided.') ?>
-                  </p>
-
-                  <?php if (!empty($sec_features)): ?>
-                  <div class="mb-3">
-                    <div class="d-flex flex-wrap gap-1">
-                      <?php foreach ($sec_features as $sf): ?>
-                      <span class="badge bg-light text-dark fw-normal px-2 py-1 small sec-feature-badge">
-                        <i class="bi <?= $sf['icon'] ?> me-1 text-primary"></i><?= $sf['label'] ?>
-                      </span>
-                      <?php endforeach; ?>
-                    </div>
-                  </div>
-                  <?php endif; ?>
-
-                  <div class="vstack gap-3 mb-4">
-                    <div class="d-flex justify-content-between align-items-center">
-                      <span class="small text-muted fw-semibold">Max Attempts:</span>
-                      <span class="badge bg-light text-dark fw-bold"><?= $exam['max_attempts'] ?? 1 ?></span>
-                    </div>
-                  </div>
-
-                  <div class="d-grid gap-2">
-                    <?php if ($is_locked): ?>
-                      <button class="btn btn-secondary py-3 rounded-4 fw-bold" disabled><i class="bi bi-lock-fill me-1"></i> LOCKED — CONTACT ADMIN</button>
-                    <?php elseif ($is_active): ?>
-                      <a href="student_objective_exam?exam_id=<?= $exam['id'] ?>&resume=1" class="btn btn-warning py-3 rounded-4 shadow-sm fw-bold">RESUME EXAM</a>
-                    <?php elseif ($can_recompute): ?>
-                      <?php if (!$is_started || $is_ended): ?>
-                        <button class="btn btn-light py-3 rounded-4 disabled opacity-75 fw-bold border">UNAVAILABLE</button>
-                      <?php else: ?>
-                        <button type="button" class="btn btn-primary py-3 rounded-4 shadow-sm fw-bold" onclick="confirmExamStart('<?= $exam['name'] ?>', 'student_objective_exam.php?exam_id=<?= $exam['id'] ?><?= $has_finished ? '&start_new=1' : '&start=1' ?>')">START</button>
-                      <?php endif; ?>
-                    <?php endif; ?>
-                    <?php if ($has_finished): ?>
-                      <a href="student_objective_exam?exam_id=<?= $exam['id'] ?>&view_result=1" class="btn btn-outline-info py-2 rounded-4 fw-bold">VIEW RESULTS</a>
-                    <?php endif; ?>
-                  </div>
-                </div>
-              </div>
-            </div>
-          <?php endforeach; ?>
+              </article>
+            <?php endforeach; ?>
+          </div>
         <?php endif; ?>
-      </div>
-
+      </main>
     </div>
   </div>
 
-  <!-- Start Confirmation Modal -->
-  <div class="modal fade" id="startExamModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content border-0 rounded-5 shadow-lg overflow-hidden">
-        <div class="modal-body p-5 text-center">
-          <div class="mb-4">
-            <div class="bg-primary-light p-4 rounded-circle d-inline-block">
-              <i class="bi bi-journal-check text-primary fs-1"></i>
-            </div>
-          </div>
-          <h3 class="fw-bold mb-3 text-dark">Ready to Start?</h3>
-          <p class="text-muted mb-4 fs-5">You are about to begin: <br><b id="modalExamName" class="text-primary"></b>
-          </p>
-          <div class="alert alert-warning border-0 rounded-4 px-3 py-2 small d-flex align-items-center gap-2 mb-5">
-            <i class="bi bi-exclamation-triangle-fill fs-5"></i>
-            <span class="text-start">Once you start, the timer will begin immediately and cannot be paused. Make sure
-              you have a stable connection.</span>
-          </div>
-          <div class="vstack gap-3 px-2">
-            <a id="confirmStartBtn" href="#" class="btn btn-primary btn-lg rounded-pill py-3 fw-bold shadow">
-              Yes, Start Examination <i class="bi bi-play-fill ms-2"></i>
-            </a>
-            <button type="button" class="btn btn-link text-muted fw-bold text-decoration-none" data-bs-dismiss="modal">
-              Not Now
-            </button>
-          </div>
-        </div>
+  <div class="sd-modal" id="sdStart" hidden role="dialog" aria-modal="true" aria-labelledby="sdStartTitle">
+    <div class="sd-modal-box">
+      <h2 id="sdStartTitle">Start exam?</h2>
+      <p class="sd-modal-sub" id="sdStartName"></p>
+      <div class="sd-kv">
+        <div><b id="sdStartQ"></b><span>Questions</span></div>
+        <div><b id="sdStartD"></b><span>Time</span></div>
+        <div><b id="sdStartA"></b><span>Attempt</span></div>
+      </div>
+      <ul class="sd-rules" id="sdStartRules"></ul>
+      <div class="sd-modal-actions">
+        <button type="button" class="sd-btn sd-btn-ghost" id="sdStartCancel">Not now</button>
+        <a class="sd-btn sd-btn-start" id="sdStartGo" href="#">Start</a>
       </div>
     </div>
   </div>
 
-  <script src="assets/js/bootstrap.bundle.min.js"></script>
   <script>
-    const startModal = new bootstrap.Modal(document.getElementById('startExamModal'));
-
-    function confirmExamStart(name, url) {
-      document.getElementById('modalExamName').textContent = name;
-      document.getElementById('confirmStartBtn').href = url;
-      startModal.show();
-    }
-
-    // Hash-based highlighting
-    function checkHash() {
-      const hash = window.location.hash;
-      if (hash) {
-        const el = document.querySelector(hash);
-        if (el) {
-          const card = el.querySelector('.exam-card-student');
-          // Remove highlight from all cards
-          document.querySelectorAll('.exam-card-student').forEach(c => c.classList.remove('highlighted'));
-          // Add to this one
-          if (card) {
-            card.classList.add('highlighted');
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
-        }
-      }
-    }
-    window.addEventListener('hashchange', checkHash);
-    window.addEventListener('load', checkHash);
-
-  </script>
-  
-
-<?php if ($requires_media): ?>
-  <script>
-    /* ── Silent full security pre-authorization ─────────────────────────────────
-       All security setup happens HERE on the dashboard, before the student ever
-       clicks START. This means when they open the exam:
-       - Webcam/mic permission is already granted (no dialog)
-       - Fullscreen permission is primed (user gesture on START click)
-       - AI proctor models can pre-load
-       No student action is required — everything runs in the background.
-    ── */
     (function () {
-        if (sessionStorage.getItem('_portalSecurityReady')) return;
+      var modal = document.getElementById('sdStart');
+      function li(t) { var x = document.createElement('li'); x.textContent = t; return x; }
+      document.querySelectorAll('[data-start]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var d = JSON.parse(b.getAttribute('data-start'));
+          document.getElementById('sdStartTitle').textContent = d.reattempt ? 'Start a new attempt?' : 'Start exam?';
+          document.getElementById('sdStartName').textContent = d.name;
+          document.getElementById('sdStartQ').textContent = d.questions;
+          document.getElementById('sdStartD').textContent = d.duration;
+          document.getElementById('sdStartA').textContent = d.attempt;
+          var rules = document.getElementById('sdStartRules');
+          rules.innerHTML = '';
+          rules.appendChild(li('The timer starts when you press ' + (d.reattempt ? 'Re-attempt' : 'Start') + '.'));
+          if (d.reattempt) rules.appendChild(li('Your previous attempt is kept. The exam\'s grading rule decides which attempt counts.'));
+          rules.appendChild(li('Answers save automatically. If the computer fails, sign in again — your remaining time is kept.'));
+          rules.appendChild(li('Leaving the exam screen, switching windows or copying is recorded.'));
+          if (d.fullscreen) rules.appendChild(li('The exam opens in full screen.'));
+          if (d.webcam) rules.appendChild(li('Your camera will be used for proctoring.'));
+          if (d.closes) rules.appendChild(li('The exam closes at ' + d.closes + '.'));
+          var go = document.getElementById('sdStartGo');
+          go.href = d.href;
+          go.textContent = d.reattempt ? 'Re-attempt' : 'Start';
+          go.className = 'sd-btn ' + (d.reattempt ? 'sd-btn-reattempt' : 'sd-btn-start');
+          modal.hidden = false;
+          go.focus();
+        });
+      });
+      document.getElementById('sdStartCancel').onclick = function () { modal.hidden = true; };
+      modal.addEventListener('click', function (e) { if (e.target === modal) modal.hidden = true; });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') modal.hidden = true; });
+      document.getElementById('sdStartGo').addEventListener('click', function () {
+        this.textContent = 'Opening…';
+        this.classList.add('is-disabled');
+      });
 
-        // 1. Pre-authorize webcam + microphone
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            setTimeout(function () {
-                navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-                    .then(function (stream) {
-                        stream.getTracks().forEach(function (t) { t.stop(); });
-                        sessionStorage.setItem('_portalSecurityReady', '1');
-                        console.log('[Portal] Webcam & mic pre-authorized. Exam access is ready.');
-                    })
-                    .catch(function (err) {
-                        console.warn('[Portal] Camera/mic pre-authorization declined:', err.name);
-                    });
-            }, 1200);
-        }
+      // highlight an exam picked from the sidebar
+      function mark() {
+        document.querySelectorAll('.sd-exam.is-target').forEach(function (x) { x.classList.remove('is-target'); });
+        var t = location.hash && document.querySelector(location.hash);
+        if (t) { t.classList.add('is-target'); t.scrollIntoView({ block: 'center' }); }
+      }
+      window.addEventListener('hashchange', mark);
+      mark();
 
-        // 2. Pre-request fullscreen pointer lock by listening for the first user gesture
-        //    on the dashboard. This primes the browser so fullscreen works instantly
-        //    when the exam page loads.
-        document.addEventListener('click', function fsPrimer() {
-            document.removeEventListener('click', fsPrimer);
-            // Request and immediately exit fullscreen to prime permission
-            if (document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen()
-                    .then(function () { document.exitFullscreen(); })
-                    .catch(function () {});
-            }
-        }, { once: true });
+      var clock = document.getElementById('sdClock');
+      setInterval(function () {
+        var d = new Date();
+        clock.textContent = d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) + ' · ' +
+          d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+      }, 30000);
+      // keep states (opening times, time left) current
+      setTimeout(function () { if (document.getElementById('sdStart').hidden) location.reload(); }, 120000);
     })();
   </script>
-<?php endif; ?>
 
-  <script src="assets/js/admin-common.js"></script>
-  <script src="assets/js/admin-swal.js"></script>
+  <?php if ($requires_media): ?>
+    <script>
+      // Ask for camera/microphone here, before the exam, so no permission pop-up
+      // interrupts the student once the timer is running.
+      (function () {
+        if (sessionStorage.getItem('_portalSecurityReady') || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+        setTimeout(function () {
+          navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(function (stream) {
+            stream.getTracks().forEach(function (t) { t.stop(); });
+            sessionStorage.setItem('_portalSecurityReady', '1');
+          }).catch(function () {});
+        }, 1200);
+      })();
+    </script>
+  <?php endif; ?>
 </body>
-
 
 </html>

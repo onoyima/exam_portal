@@ -66,10 +66,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $where = [];
     $params = [];
     if ($group_id) {
-        $where[] = 'group_id=?';
+        $where[] = 'm.group_id=?';
         $params[] = $group_id;
     } else {
-        $where[] = '((sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?)) AND group_id IS NULL';
+        $where[] = '((sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?)) AND m.group_id IS NULL';
         $params = array_merge($params, [$sender_id, $receiver_id, $receiver_id, $sender_id]);
     }
     $sql = "SELECT m.*, e.name as sender_name FROM chat_messages m JOIN examiners e ON m.sender_id=e.id";

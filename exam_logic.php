@@ -1,64 +1,41 @@
 <?php
 /**
- * Finalizes an objective exam attempt: calculates score and sets finish time.
+ * Objective attempt lifecycle helpers used across the portal.
+ * Marking itself lives in includes/question_engine.php.
+ */
+require_once __DIR__ . '/includes/question_engine.php';
+
+/**
+ * Finalizes an objective attempt: marks it and records the finish time.
+ * Kept with its original signature for existing callers.
  */
 function finalize_objective_attempt($db, $exam_id, $student_id, $attempt_no)
 {
-    // Check if it's already finished
-    $stmt = $db->prepare("SELECT finished_at, started_at FROM objective_attempts WHERE exam_id=? AND student_id=? AND attempt_no=?");
-    $stmt->execute([$exam_id, $student_id, $attempt_no]);
-    $attempt = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if (!$attempt || $attempt['finished_at'])
-        return false;
-
-    // Get exam duration for time_taken fallback
-    $stmt_e = $db->prepare("SELECT duration_minutes FROM exams WHERE id=? AND deleted_at IS NULL");
-    $stmt_e->execute([$exam_id]);
-    $exam = $stmt_e->fetch(PDO::FETCH_ASSOC);
-    $duration_sec = ($exam['duration_minutes'] ?? 0) * 60;
-
-    // Calculate score
-    $qs_stmt = $db->prepare("SELECT id, correct_option, mark FROM objective_questions WHERE exam_id=? AND deleted_at IS NULL ORDER BY id");
-    $qs_stmt->execute([$exam_id]);
-    $questions = $qs_stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    $ans_stmt = $db->prepare("SELECT question_id, selected_option FROM objective_answers WHERE exam_id=? AND student_id=? AND attempt_no=?");
-    $ans_stmt->execute([$exam_id, $student_id, $attempt_no]);
-    $answers = $ans_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
-
-    $calculated_score = 0;
-    foreach ($questions as $q) {
-        if (isset($answers[$q['id']])) {
-            $sel = $answers[$q['id']];
-            if (strtoupper($sel) === strtoupper($q['correct_option'])) {
-                $calculated_score += (isset($q['mark']) ? floatval($q['mark']) : 1);
-            }
-        }
-    }
-
-    // Update attempt as finished
-    $now = date('Y-m-d H:i:s');
-    $time_taken = strtotime($now) - strtotime($attempt['started_at']);
-    // If we are finalising purely because of timeout, cap the time_taken
-    if ($time_taken > $duration_sec && $duration_sec > 0)
-        $time_taken = $duration_sec;
-
-    $finish_stmt = $db->prepare("UPDATE objective_attempts SET finished_at=NOW(), time_taken=?, score=? WHERE exam_id=? AND student_id=? AND attempt_no=? AND finished_at IS NULL");
-    return $finish_stmt->execute([$time_taken, $calculated_score, $exam_id, $student_id, $attempt_no]);
+    $st = $db->prepare("SELECT id FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ?");
+    $st->execute([$exam_id, $student_id, $attempt_no]);
+    $id = $st->fetchColumn();
+    return $id ? qe_finalize_attempt($db, (int) $id) : false;
 }
 
 /**
- * Automatically find and finalize all expired attempts for an exam or student.
+ * Closes attempts whose time is used up or whose exam window has closed.
+ *
+ * Time is measured from the attempt's own used-time counter, not from the
+ * wall clock, so a student who was cut off keeps the minutes they had left.
  */
 function auto_finalize_expired_attempts($db, $exam_id = null, $student_id = null)
 {
-    $sql = "SELECT oa.exam_id, oa.student_id, oa.attempt_no 
-            FROM objective_attempts oa 
-            JOIN exams e ON oa.exam_id = e.id 
-            WHERE oa.finished_at IS NULL 
-            AND TIMESTAMPDIFF(SECOND, oa.started_at, NOW()) > (e.duration_minutes * 60) + 30"; // 30s grace period
-
+    $sql = "SELECT oa.id
+            FROM objective_attempts oa
+            JOIN exams e ON oa.exam_id = e.id
+            WHERE oa.finished_at IS NULL
+            AND (
+                (e.duration_minutes > 0 AND oa.time_used
+                    + IF(oa.last_tick_at IS NOT NULL AND TIMESTAMPDIFF(SECOND, oa.last_tick_at, NOW()) <= " . QE_TICK_GAP . ",
+                         TIMESTAMPDIFF(SECOND, oa.last_tick_at, NOW()), 0)
+                    >= e.duration_minutes * 60 + 30)
+                OR (e.end_time IS NOT NULL AND NOW() > DATE_ADD(e.end_time, INTERVAL 2 MINUTE))
+            )";
     $params = [];
     if ($exam_id) {
         $sql .= " AND oa.exam_id = ?";
@@ -71,11 +48,11 @@ function auto_finalize_expired_attempts($db, $exam_id = null, $student_id = null
 
     $stmt = $db->prepare($sql);
     $stmt->execute($params);
-    $expired = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    foreach ($expired as $att) {
-        finalize_objective_attempt($db, $att['exam_id'], $att['student_id'], $att['attempt_no']);
+    $closed = 0;
+    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $attempt_id) {
+        if (qe_finalize_attempt($db, (int) $attempt_id)) {
+            $closed++;
+        }
     }
-    return count($expired);
+    return $closed;
 }
-?>

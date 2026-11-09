@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/staff_guard.php';
+if (!acc_is_admin()) { http_response_code(403); exit(json_encode(['error' => 'Administrators only.'])); }
 require_once __DIR__ . '/../db_exeat2.php';
 require_once __DIR__ . '/../db.php';
 

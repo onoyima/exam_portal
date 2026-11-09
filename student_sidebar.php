@@ -1,168 +1,85 @@
 <?php
-// This sidebar expects $active_exams and $practical_exams to be populated from the main page
-$student_logo = 'assets/favicon.ico';
-$student_title = 'Student';
+// Student sidebar. Uses $sd_cards when the page already built it.
+require_once __DIR__ . '/includes/student_exams.php';
+
+$sd_logo = 'assets/favicon.ico';
+$sd_title = 'Assessment Portal';
 if (isset($db)) {
     try {
-        $sidebar_settings = $db->query("SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('portal_logo', 'portal_title')")->fetchAll(PDO::FETCH_KEY_PAIR);
-        if (!empty($sidebar_settings['portal_logo']) && file_exists($sidebar_settings['portal_logo'])) {
-            $student_logo = $sidebar_settings['portal_logo'];
+        $sd_settings = $db->query("SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('portal_logo', 'portal_title')")->fetchAll(PDO::FETCH_KEY_PAIR);
+        if (!empty($sd_settings['portal_logo']) && file_exists($sd_settings['portal_logo'])) {
+            $sd_logo = $sd_settings['portal_logo'];
         }
-        if (!empty($sidebar_settings['portal_title'])) {
-            $student_title = $sidebar_settings['portal_title'];
+        if (!empty($sd_settings['portal_title'])) {
+            $sd_title = $sd_settings['portal_title'];
         }
-    } catch (Exception $e) {}
+    } catch (Exception $e) {
+    }
+    if (!isset($sd_cards)) {
+        $sd_cards = sd_student_exams($db, (int) ($_SESSION['student_id'] ?? 0));
+    }
 }
+$sd_name = $_SESSION['student_name'] ?? ($_SESSION['user'] ?? 'Student');
+$sd_matric = $_SESSION['matric_no'] ?? '';
+$sd_page = basename($_SERVER['PHP_SELF']);
+$sd_current_exam = (int) ($_GET['exam_id'] ?? 0);
 ?>
-<div class="sidebar student-sidebar d-flex flex-column p-3" id="studentSidebar">
-    <div class="sidebar-brand">
-        <a href="student_dashboard" class="text-decoration-none">
-            <img src="<?= htmlspecialchars($student_logo) ?>" alt="Logo">
-            <h4 class="fw-bold mb-0 small text-dark mt-1 text-truncate" title="<?= htmlspecialchars($student_title) ?>"><?= htmlspecialchars($student_title) ?></h4>
+<aside class="sd-side" id="sdSide" aria-label="Main menu">
+  <a class="sd-brand" href="student_dashboard">
+    <img src="<?= htmlspecialchars($sd_logo) ?>" alt="">
+    <span><?= htmlspecialchars($sd_title) ?></span>
+  </a>
+
+  <div class="sd-me">
+    <img src="passport_image.php?type=student&id=<?= (int) ($_SESSION['student_id'] ?? 0) ?>" alt=""
+         onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'sd-initial',textContent:<?= htmlspecialchars(json_encode(strtoupper(mb_substr($sd_name, 0, 1))), ENT_QUOTES) ?>}))">
+    <div style="min-width:0">
+      <div class="sd-me-name"><?= htmlspecialchars($sd_name) ?></div>
+      <div class="sd-me-matric"><?= htmlspecialchars($sd_matric) ?></div>
+    </div>
+  </div>
+
+  <nav class="sd-nav">
+    <a href="student_dashboard" class="<?= $sd_page === 'student_dashboard.php' ? 'is-active' : '' ?>">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9.5 10 3l7 6.5V17a1 1 0 0 1-1 1h-4v-5H8v5H4a1 1 0 0 1-1-1V9.5Z"/></svg>
+      <span class="sd-nav-text">My exams</span>
+    </a>
+
+    <?php if (!empty($sd_cards)): ?>
+      <div class="sd-nav-label">Objective exams</div>
+      <?php foreach ($sd_cards as $c):
+        $dot = ['progress' => 'is-progress', 'done' => 'is-done', 'locked' => 'is-locked'][$c['state']] ?? ''; ?>
+        <a href="student_dashboard#exam-<?= (int) $c['exam']['id'] ?>" class="<?= $sd_current_exam === (int) $c['exam']['id'] ? 'is-active' : '' ?>" title="<?= htmlspecialchars($c['exam']['name'] . ' — ' . $c['label']) ?>">
+          <i class="sd-dot <?= $dot ?>"></i>
+          <span class="sd-nav-text"><?= htmlspecialchars($c['exam']['name']) ?></span>
         </a>
-    </div>
+      <?php endforeach; ?>
+    <?php endif; ?>
 
-    <div class="student-info text-center">
-        <img src="passport_image.php?type=student&id=<?= $_SESSION['student_id'] ?? 0 ?>"
-             class="profile-icon mx-auto mb-2 rounded-circle" style="width:50px;height:50px;object-fit:cover"
-             alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <div class="profile-icon mx-auto mb-2 d-none"
-             style="width:50px;height:50px;border-radius:50%;background:#e9ecef;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:1.2rem;">
-            <?= strtoupper(substr($name ?? 'S', 0, 1)) ?>
-        </div>
-        <div class="student-name"><?= htmlspecialchars($name ?? 'Student') ?></div>
-        <div class="student-matric"><?= htmlspecialchars($matric ?? '') ?></div>
-    </div>
+    <div class="sd-nav-label">Learning</div>
+    <a href="lms/public/" target="_blank">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4h5a2 2 0 0 1 2 2v11a2 2 0 0 0-2-2H3V4Z"/><path d="M17 4h-5a2 2 0 0 0-2 2v11a2 2 0 0 1 2-2h5V4Z"/></svg>
+      <span class="sd-nav-text">Course materials (LMS)</span>
+    </a>
+  </nav>
 
-    <ul class="nav nav-pills flex-column mb-auto">
-        <li class="nav-section-label small text-uppercase fw-bold text-muted mb-2 px-3">Main</li>
-        <li>
-            <a href="student_dashboard"
-                class="nav-link<?= basename($_SERVER['PHP_SELF']) == 'student_dashboard.php' ? ' active' : '' ?>">
-                <i class="bx bx-home-alt me-2"></i> <span>Dashboard</span>
-            </a>
-        </li>
-
-        <li class="nav-section-label small text-uppercase fw-bold text-muted mb-2 mt-4 px-3">Your Objective Exams</li>
-        <?php if (empty($active_exams)): ?>
-            <li class="px-3"><span class="text-muted small">No active exams</span></li>
-        <?php else: ?>
-            <?php foreach ($active_exams as $exam): ?>
-                <li>
-                    <a href="student_dashboard#exam-<?= $exam['id'] ?>"
-                        class="nav-link d-flex justify-content-between align-items-center <?= (isset($_GET['exam_id']) && $_GET['exam_id'] == $exam['id']) ? 'active' : '' ?>">
-                        <span class="text-truncate mr-2">
-                            <?= htmlspecialchars($exam['name']) ?>
-                        </span>
-                        <?php if ($exam['finished_attempts'] > 0): ?>
-                            <span class="badge bg-success rounded-pill sidebar-badge">Done</span>
-                        <?php elseif ($exam['total_attempts'] > 0): ?>
-                            <span class="badge bg-warning text-dark rounded-pill sidebar-badge">Started</span>
-                        <?php else: ?>
-                            <i class="bx bx-circle small opacity-50 sidebar-badge-dot"></i>
-                        <?php endif; ?>
-                    </a>
-                </li>
-            <?php endforeach; ?>
-        <?php endif; ?>
-
-        <!-- Practical Exams section removed from student view -->
-
-        <li class="nav-section-label small text-uppercase fw-bold text-muted mb-2 mt-4 px-3">Learning Management</li>
-        <li>
-            <a href="lms/public/" target="_blank" class="nav-link">
-                <i class="bx bx-book-open me-2"></i> <span>Open LMS</span>
-            </a>
-        </li>
-
-        <li class="mt-4">
-            <hr>
-        </li>
-        <li>
-            <a href="student_logout" class="nav-link text-danger">
-                <i class="bx bx-log-out me-2"></i> <span>Logout</span>
-            </a>
-        </li>
-    </ul>
-
-    <!-- System Status -->
-    <div class="mt-auto pt-3 border-top sidebar-footer-status">
-        <div class="small text-muted sidebar-status-text">
-            <div class="d-flex align-items-center mb-1">
-                <span class="status-dot online me-2"></span>
-                <div class="status-text">Portal Online</div>
-            </div>
-            <div class="d-flex align-items-center">
-                <span class="status-dot online me-2"></span>
-                <div class="status-text">Secure Session</div>
-            </div>
-        </div>
-    </div>
-</div>
-<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
-
+  <div class="sd-side-foot">
+    <div class="sd-online"><i></i> Connected to exam server</div>
+    <a href="student_logout">
+      <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 3H4v14h4"/><path d="M13 6l4 4-4 4"/><path d="M17 10H8"/></svg>
+      Sign out
+    </a>
+  </div>
+</aside>
+<div class="sd-scrim" id="sdScrim" hidden></div>
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const sidebar = document.getElementById('studentSidebar');
-        const mainContent = document.querySelector('.main-content');
-        const desktopToggle = document.getElementById('desktopStudentSidebarToggle');
-        const mobileClose = document.getElementById('mobileSidebarClose');
-        const sidebarBackdrop = document.getElementById('sidebarBackdrop');
-
-        // Restore state from localStorage
-        const IS_COLLAPSED = localStorage.getItem('studentSidebarCollapsed') === 'true';
-        if (IS_COLLAPSED && window.innerWidth >= 992) {
-            if (sidebar) sidebar.classList.add('collapsed');
-            if (mainContent) mainContent.classList.add('sidebar-collapsed');
-            const icon = desktopToggle ? desktopToggle.querySelector('i') : null;
-            if (icon) icon.classList.replace('bi-chevron-left', 'bi-chevron-right');
-        }
-
-        // Broad search for mobile toggle defined in student_dashboard.php
-        function setupMobileToggle() {
-            const mobileToggle = document.getElementById('sidebarToggle');
-            if (mobileToggle) {
-                mobileToggle.onclick = null;
-                mobileToggle.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    sidebar.classList.toggle('show');
-                    if (sidebarBackdrop) sidebarBackdrop.classList.toggle('show');
-                });
-            }
-        }
-        setupMobileToggle();
-        setTimeout(setupMobileToggle, 500);
-
-        // Desktop Toggle
-        if (desktopToggle) {
-            desktopToggle.addEventListener('click', function () {
-                sidebar.classList.toggle('collapsed');
-                if (mainContent) mainContent.classList.toggle('sidebar-collapsed');
-                const isCollapsed = sidebar.classList.contains('collapsed');
-                localStorage.setItem('studentSidebarCollapsed', isCollapsed);
-                const icon = desktopToggle.querySelector('i');
-                icon.classList.replace(isCollapsed ? 'bi-chevron-left' : 'bi-chevron-right', isCollapsed ? 'bi-chevron-right' : 'bi-chevron-left');
-            });
-        }
-
-        // Mobile Close Logic
-        if (mobileClose) {
-            mobileClose.addEventListener('click', function () {
-                sidebar.classList.remove('show');
-                if (sidebarBackdrop) sidebarBackdrop.classList.remove('show');
-            });
-        }
-
-        if (sidebarBackdrop) {
-            sidebarBackdrop.addEventListener('click', function () {
-                sidebar.classList.remove('show');
-                sidebarBackdrop.classList.remove('show');
-            });
-        }
+  (function () {
+    var side = document.getElementById('sdSide'), scrim = document.getElementById('sdScrim');
+    function set(open) { side.classList.toggle('is-open', open); scrim.hidden = !open; }
+    document.addEventListener('click', function (e) {
+      if (e.target.closest('[data-sd-menu]')) { set(!side.classList.contains('is-open')); }
     });
+    scrim.addEventListener('click', function () { set(false); });
+  })();
 </script>
-<!-- Dependencies for Secure Mode -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<!-- Phase 5: Global Student Lockdown -->
 <script src="assets/js/student_lockdown.js"></script>

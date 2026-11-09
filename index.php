@@ -8,7 +8,7 @@ if (isset($_SESSION['role'])) {
     if ($r === 'admin')
         header("Location: admin_dashboard");
     elseif ($r === 'examiner')
-        header("Location: assess");
+        header("Location: examiner_dashboard");
     elseif ($r === 'student')
         header("Location: student_dashboard");
     exit;
@@ -52,16 +52,14 @@ try {
     <link rel="icon" href="<?= htmlspecialchars($portal_favicon) ?>" type="image/x-icon">
 
     <!-- Premium Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+        href="assets/vendor/fonts/fonts.css"
         rel="stylesheet">
 
     <!-- UI Plugins -->
     <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="assets/vendor/aos/aos.css" rel="stylesheet">
     <link href="style_enhanced.css" rel="stylesheet">
 
     <style>
@@ -449,7 +447,7 @@ try {
             footer .row.g-5 { gap: 0 !important; }
         }
     </style>
-    <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+    <link href="assets/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
 </head>
 
 <body>
@@ -1086,7 +1084,7 @@ try {
     </footer>
 
     <script src="assets/js/bootstrap.bundle.min.js"></script>
-    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script src="assets/vendor/aos/aos.js"></script>
     <script>
         AOS.init({ duration: 1000, once: true });
 

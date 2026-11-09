@@ -3,10 +3,16 @@ require 'auth.php';
 check_auth('admin');
 require 'db.php';
 require 'db_exeat2.php';
+require_once __DIR__ . '/includes/student_import_helper.php';
 $name = $_SESSION['user'] ?? 'Admin';
 
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  // a centre may switch received exams on/off and choose examiners; the content stays as the main server sent it
+  $cs_free = ['activate', 'deactivate', 'assign_examiners', 'examiners', 'remove_examiner'];
+  if (!empty($_POST['exam_id']) && !array_intersect($cs_free, array_keys($_POST))) {
+    cs_guard_exam($db, (int) $_POST['exam_id'], 'admin_exams');
+  }
   if (isset($_POST['create_exam'])) {
     // Step 1: Create exam only
     $p_fs = isset($_POST['proctor_fullscreen']) ? 1 : 0;
@@ -56,84 +62,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Step 2: Upload bulk students to existing exam
     $exam_id = $_POST['exam_id'];
     $uploaded_count = 0;
+    $updated_count = 0;
+    $skipped_count = 0;
 
     if (isset($_FILES['students_file']) && $_FILES['students_file']['tmp_name']) {
-      $file = $_FILES['students_file']['tmp_name'];
-      $handle = fopen($file, 'r');
+      [$col_map, $header_found, $records] = sih_read_student_csv($_FILES['students_file']['tmp_name']);
 
-      $first_row = fgetcsv($handle);
-      if (!$first_row) { fclose($handle); $error = 'Empty file.'; }
-      else {
-        // Header-based mapping
-        $db_columns = ['firstname', 'middlename', 'lastname', 'email', 'matric_no', 'password'];
-        $normalized = array_map(function ($h) { return strtolower(trim($h)); }, $first_row);
-        $col_map = [];
-        foreach ($normalized as $idx => $col) {
-          if (in_array($col, $db_columns)) {
-            $col_map[$col] = $idx;
+      if (empty($records)) {
+        $error = 'Empty file or no readable rows.';
+      } else {
+        $parsed = [];
+        foreach ($records as $record) {
+          $fields = sih_parse_fields($record, $col_map, $header_found);
+          if ($fields['matric_no'] === '') {
+            $skipped_count++;
+            continue;
           }
-        }
-        $header_found = !empty($col_map);
-        if (!$header_found) {
-          rewind($handle);
+          $parsed[] = $fields;
         }
 
-        while (($row = fgetcsv($handle)) !== false) {
-          if (count($row) < 3) continue;
+        $school_by_matric = sih_exeat2_lookup($exeat2_db, array_column($parsed, 'matric_no'));
 
-          if ($header_found) {
-            $fname  = isset($col_map['firstname'])  ? trim($row[$col_map['firstname']] ?? '') : '';
-            $mname  = isset($col_map['middlename']) ? trim($row[$col_map['middlename']] ?? '') : '';
-            $lname  = isset($col_map['lastname'])   ? trim($row[$col_map['lastname']] ?? '') : '';
-            $email  = isset($col_map['email'])      ? trim($row[$col_map['email']] ?? '') : '';
-            $matric_no = isset($col_map['matric_no'])  ? trim($row[$col_map['matric_no']] ?? '') : '';
-            $pass   = isset($col_map['password'])   ? trim($row[$col_map['password']] ?? '') : '12345';
-          } else {
-            $fname  = trim($row[0] ?? '');
-            $mname  = trim($row[1] ?? '');
-            $lname  = trim($row[2] ?? '');
-            $email  = trim($row[3] ?? '');
-            $matric_no = trim($row[4] ?? '');
-            $pass   = trim($row[5] ?? '12345');
-          }
+        foreach ($parsed as $fields) {
+          $matric = $fields['matric_no'];
+          $school = $school_by_matric[$matric] ?? null;
 
-          if (empty($matric_no)) continue;
-
-          $full_name = trim("$fname $mname $lname");
-          $full_name = preg_replace('/\s+/', ' ', $full_name);
-          if (empty($full_name)) $full_name = $matric_no;
-
-          // Look up by matric_no (including soft-deleted)
-          $stmt = $db->prepare("SELECT * FROM students WHERE matric_no = ?");
-          $stmt->execute([$matric_no]);
-          $existing_student = $stmt->fetch();
-
-          if ($existing_student) {
-            $sid = $existing_student['id'];
-            // NULL-fill merge: only update NULL DB fields with CSV values
-            $m_fname = $fname ?: $existing_student['firstname'];
-            $m_mname = $mname ?: $existing_student['middlename'];
-            $m_lname = $lname ?: $existing_student['lastname'];
-            $m_email = $email ?: $existing_student['email'];
-            $m_pass  = $pass  ?: $existing_student['password'];
-            $m_full  = trim("$m_fname $m_mname $m_lname");
-            $m_full  = preg_replace('/\s+/', ' ', $m_full) ?: $matric_no;
-
-            $stmt = $db->prepare("UPDATE students SET name=?, firstname=?, middlename=?, lastname=?, email=?, password=?, deleted_at=NULL WHERE id=?");
-            $stmt->execute([$m_full, $m_fname, $m_mname, $m_lname, $m_email, $m_pass, $sid]);
-          } else {
-            $stmt = $db->prepare("INSERT INTO students (name, firstname, middlename, lastname, email, matric_no, username, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$full_name, $fname, $mname, $lname, $email, $matric_no, $matric_no, $pass]);
-            $sid = $db->lastInsertId();
-          }
+          $saved = sih_upsert_student(
+            $db,
+            $fields,
+            $school,
+            true,
+            !empty($fields['password_provided'])
+          );
+          $sid = $saved['id'];
+          $saved['created'] ? $uploaded_count++ : $updated_count++;
 
           // Assign student to exam
           $db->prepare("INSERT IGNORE INTO exam_students(exam_id, student_id) VALUES (?, ?)")->execute([$exam_id, $sid]);
-          $uploaded_count++;
         }
+
+        $success = "$uploaded_count new student(s) imported, $updated_count updated, and assigned to the exam"
+          . ($skipped_count ? " ($skipped_count row(s) skipped without a matric number)." : ".");
       }
-      fclose($handle);
-      $success = "$uploaded_count students uploaded and assigned to exam successfully!";
     } else {
       $error = "Please select a file to upload.";
     }
@@ -278,7 +248,7 @@ foreach ($exams as $exam) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
 </head>
 

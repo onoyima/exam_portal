@@ -1,8 +1,8 @@
 <?php
 require 'auth.php';
-check_auth('admin');
-
 $type = isset($_GET['type']) ? trim($_GET['type']) : '';
+// examiners may fetch the question templates for the exams they manage
+check_auth(strpos($type, 'objective_') === 0 ? ['admin', 'examiner'] : 'admin');
 
 if (empty($type)) {
     die('Error: Missing template type specifier.');
@@ -76,6 +76,86 @@ switch ($type) {
         echo "C. PHP\r\n";
         echo "D. JavaScript\r\n";
         echo "ANSWER: C\r\n";
+        exit;
+
+    case 'objective_mtf_txt':
+        header('Content-Type: text/plain; charset=utf-8');
+        header('Content-Disposition: attachment; filename="objective_mtf_template.txt"');
+        echo implode("\r\n", [
+            'TYPE: MTF',
+            'MARK: 4',
+            'Concerning the human heart:',
+            'a) It has four chambers. [T]',
+            'b) The right ventricle pumps blood into the aorta. [F]',
+            'c) The mitral valve has two cusps. [T]',
+            'd) The SA node is located in the left atrium. [F]',
+            '',
+            'TYPE: MTF',
+            'MARK: 5',
+            'SCORING: ALL',
+            'Regarding malaria:',
+            'a) It is caused by a protozoan parasite.',
+            'b) It is transmitted by the male Anopheles mosquito.',
+            'c) Plasmodium falciparum causes the most severe form.',
+            'd) Artemisinin combination therapy is first-line treatment.',
+            'e) It is spread through contaminated water.',
+            'ANSWER: T F T T F',
+            '',
+        ]);
+        exit;
+
+    case 'objective_mixed_txt':
+        header('Content-Type: text/plain; charset=utf-8');
+        header('Content-Disposition: attachment; filename="objective_all_types_template.txt"');
+        echo implode("\r\n", [
+            'TYPE: MCQ',
+            'MARK: 1',
+            'What is the default port of a MySQL server?',
+            'A. 80',
+            'B. 443',
+            'C. 3306',
+            'D. 8080',
+            'ANSWER: C',
+            '',
+            'TYPE: MULTI',
+            'MARK: 2',
+            'Which of the following are prime numbers?',
+            'A. 2',
+            'B. 4',
+            'C. 7',
+            'D. 9',
+            'ANSWER: A, C',
+            '',
+            'TYPE: TF',
+            'MARK: 1',
+            'Water boils at 100 degrees Celsius at sea level.',
+            'ANSWER: TRUE',
+            '',
+            'TYPE: MTF',
+            'MARK: 4',
+            'Concerning the liver:',
+            'a) It is the largest gland in the body. [T]',
+            'b) It produces insulin. [F]',
+            'c) It stores glycogen. [T]',
+            'd) It is located in the left iliac fossa. [F]',
+            '',
+            'Plain Aiken questions (no TYPE line) are still accepted:',
+            'A. Yes',
+            'B. No',
+            'ANSWER: A',
+            '',
+        ]);
+        exit;
+
+    case 'objective_docx':
+        $file = __DIR__ . '/assets/templates/objective_science_template.docx';
+        if (!is_file($file)) {
+            die('Error: the Word template is missing from assets/templates.');
+        }
+        header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        header('Content-Disposition: attachment; filename="objective_questions_template.docx"');
+        header('Content-Length: ' . filesize($file));
+        readfile($file);
         exit;
 
     case 'objective_images_zip':

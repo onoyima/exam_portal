@@ -1,156 +1,149 @@
 <?php
+/**
+ * Exam heartbeat. Called by the exam page every ~15 seconds and whenever a
+ * security event happens. It keeps the attempt's used-time counter moving,
+ * records violations and hands back anything the proctor has queued for the
+ * student (warnings, live-view requests, lock state).
+ */
 require 'auth.php';
 check_auth('student');
 require 'db.php';
+
+header('Content-Type: application/json');
+header('Cache-Control: no-store');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     validate_csrf();
 }
 
-$student_id = $_SESSION['student_id'];
-$exam_id = isset($_POST['exam_id']) ? intval($_POST['exam_id']) : 0;
-$status = isset($_POST['status']) ? $_POST['status'] : 'active';
-$violation_type = isset($_POST['violation_type']) ? $_POST['violation_type'] : null;
-$details = isset($_POST['details']) ? $_POST['details'] : null;
-$attempt_no = isset($_POST['attempt_no']) ? intval($_POST['attempt_no']) : 1;
+$student_id = (int) $_SESSION['student_id'];
+$my_session = session_id();
+session_write_close();
 
-// Status should be one of: active, blur, disconnected, submitted
-if (!in_array($status, ['active', 'blur', 'disconnected', 'submitted'])) {
-    $status = 'active';
-}
+$exam_id = (int) ($_POST['exam_id'] ?? 0);
+$attempt_no = (int) ($_POST['attempt_no'] ?? 1);
+$status = in_array($_POST['status'] ?? '', ['active', 'blur', 'disconnected', 'submitted'], true) ? $_POST['status'] : 'active';
+$violation_type = isset($_POST['violation_type']) ? substr(preg_replace('/[^A-Z0-9_]/', '', strtoupper($_POST['violation_type'])), 0, 50) : null;
+$details = isset($_POST['details']) ? substr((string) $_POST['details'], 0, 500) : null;
+$client_elapsed = (int) ($_POST['client_elapsed'] ?? 0);
+const MAX_VIOLATIONS = 5;
 
-// BUG FIX: $stored_session was previously undefined — fetch from DB now
-$session_stmt = $db->prepare("SELECT current_session_id FROM students WHERE id = ?");
-$session_stmt->execute([$student_id]);
-$stored_session = $session_stmt->fetchColumn() ?: null;
-
-if ($stored_session !== session_id() && $stored_session !== null) {
-    echo json_encode(['status' => 'FORCED_LOGOUT', 'message' => 'This account has been logged in on another device.']);
+function ping_out(array $data): void
+{
+    echo json_encode($data + ['time_ping' => date('H:i:s')]);
     exit;
 }
 
-// 1b. Check if Attempt is Finished
-$stmt = $db->prepare("SELECT finished_at FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ?");
-$stmt->execute([$exam_id, $student_id, $attempt_no]);
-$finished_at = $stmt->fetchColumn();
+try {
+    $st = $db->prepare("SELECT oa.id, oa.finished_at, oa.time_used, oa.violation_count, oa.is_locked,
+               s.current_session_id, e.duration_minutes, e.end_time
+        FROM objective_attempts oa
+        JOIN students s ON s.id = oa.student_id
+        JOIN exams e ON e.id = oa.exam_id
+        WHERE oa.exam_id = ? AND oa.student_id = ? AND oa.attempt_no = ?");
+    $st->execute([$exam_id, $student_id, $attempt_no]);
+    $att = $st->fetch(PDO::FETCH_ASSOC);
 
-if ($finished_at) {
-    echo json_encode(['status' => 'SUBMITTED', 'message' => 'Your assessment has been submitted.']);
-    exit;
-}
+    if (!$att) {
+        ping_out(['status' => 'NO_ATTEMPT']);
+    }
+    if ($att['current_session_id'] !== null && $att['current_session_id'] !== $my_session) {
+        ping_out(['status' => 'FORCED_LOGOUT', 'message' => 'This account has been logged in on another device.']);
+    }
+    if ($att['finished_at']) {
+        ping_out(['status' => 'SUBMITTED', 'message' => 'Your assessment has been submitted.']);
+    }
+    $attempt_id = (int) $att['id'];
 
-// 2. Update Heartbeat, Snapshot, and Proctor Status
-$snapshot_base64 = isset($_POST['webcam_snapshot']) ? $_POST['webcam_snapshot'] : null;
-$snapshot_path = null;
+    if ($att['is_locked']) {
+        // A locked student is waiting for the invigilator: keep the clock
+        // still, but stay in touch so an unlock is picked up straight away.
+        $db->prepare("UPDATE objective_attempts SET last_tick_at = NOW(), last_active = NOW(), proctor_status = 'blur' WHERE id = ?")
+            ->execute([$attempt_id]);
+        ping_out(['status' => 'LOCKED', 'message' => 'Your exam interface is locked. Please contact the invigilator.', 'count' => (int) $att['violation_count']]);
+    }
 
-if ($snapshot_base64 && strpos($snapshot_base64, 'data:image') === 0) {
-    try {
-        // Process Base64 to File
-        $data = explode(',', $snapshot_base64);
-        if (isset($data[1])) {
-            $decoded = base64_decode($data[1]);
-            if ($decoded) {
-                $dir = "uploads/snapshots";
-                if (!is_dir($dir)) {
-                    mkdir($dir, 0777, true);
-                }
-                $filename = "snap_" . $student_id . "_" . $exam_id . ".jpg";
-                $full_path = $dir . "/" . $filename;
-                if (file_put_contents($full_path, $decoded)) {
-                    $snapshot_path = $full_path;
-                }
+    // Webcam thumbnail goes to disk; the row only keeps the path.
+    $snapshot_path = null;
+    $snap = $_POST['webcam_snapshot'] ?? '';
+    if ($snap !== '' && strpos($snap, 'data:image/jpeg;base64,') === 0 && strlen($snap) < 400000) {
+        $bin = base64_decode(substr($snap, 23), true);
+        if ($bin !== false) {
+            $dir = __DIR__ . '/uploads/snapshots';
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0755, true);
+            }
+            $file = "uploads/snapshots/snap_{$student_id}_{$exam_id}.jpg";
+            if (@file_put_contents(__DIR__ . '/' . $file, $bin) !== false) {
+                $snapshot_path = $file;
             }
         }
-    } catch (Exception $e) {
-        // Silently fail if file write fails, continue with status update
-        error_log("Snapshot save error: " . $e->getMessage());
     }
-}
 
-// Update DB - Using path instead of blob for performance
-if ($snapshot_path) {
-    // Clear the binary blob (webcam_snapshot) and use the path instead
-    $update = $db->prepare("UPDATE objective_attempts SET last_active = NOW(), proctor_status = ?, snapshot_path = ?, webcam_snapshot = NULL WHERE exam_id = ? AND student_id = ? AND attempt_no = ? AND finished_at IS NULL");
-    $update->execute([$status, $snapshot_path, $exam_id, $student_id, $attempt_no]);
-} else {
-    $update = $db->prepare("UPDATE objective_attempts SET last_active = NOW(), proctor_status = ? WHERE exam_id = ? AND student_id = ? AND attempt_no = ? AND finished_at IS NULL");
-    $update->execute([$status, $exam_id, $student_id, $attempt_no]);
-}
+    qe_tick_attempt($db, $attempt_id, $client_elapsed);
+    if ($snapshot_path) {
+        $db->prepare("UPDATE objective_attempts SET proctor_status = ?, snapshot_path = ?, webcam_snapshot = NULL WHERE id = ?")
+            ->execute([$status, $snapshot_path, $attempt_id]);
+    } else {
+        $db->prepare("UPDATE objective_attempts SET proctor_status = ? WHERE id = ?")->execute([$status, $attempt_id]);
+    }
 
-// 2b. Check for Admin Warnings
-$warn_stmt = $db->prepare("SELECT warning_message, last_warning_at FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ? AND last_warning_at > DATE_SUB(NOW(), INTERVAL 30 SECOND)");
-$warn_stmt->execute([$exam_id, $student_id, $attempt_no]);
-$warning = $warn_stmt->fetch(PDO::FETCH_ASSOC);
+    if ($violation_type) {
+        $db->prepare("INSERT INTO exam_violations (attempt_id, student_id, exam_id, violation_type, details) VALUES (?, ?, ?, ?, ?)")
+            ->execute([$attempt_id, $student_id, $exam_id, $violation_type, $details]);
+        $db->prepare("UPDATE objective_attempts SET violation_count = violation_count + 1,
+                is_locked = IF(violation_count >= ?, 1, is_locked)
+            WHERE id = ? AND finished_at IS NULL")
+            ->execute([MAX_VIOLATIONS, $attempt_id]);
+    }
 
-$warning_to_send = null;
-if ($warning && !empty($warning['warning_message'])) {
-    $warning_to_send = $warning['warning_message'];
-    // Clear warning after retrieval so it doesn't pop up again unless set again by examiner
-    $clear_stmt = $db->prepare("UPDATE objective_attempts SET warning_message = NULL, last_warning_at = NULL WHERE exam_id = ? AND student_id = ? AND attempt_no = ?");
-    $clear_stmt->execute([$exam_id, $student_id, $attempt_no]);
-}
+    $st = $db->prepare("SELECT time_used, violation_count, is_locked, is_live_requested, warning_message, last_warning_at, remote_command
+        FROM objective_attempts WHERE id = ?");
+    $st->execute([$attempt_id]);
+    $now = $st->fetch(PDO::FETCH_ASSOC);
 
-// 3. Log Violation if sent
-if ($violation_type) {
-    // Log in violations table
-    $v_stmt = $db->prepare("INSERT INTO exam_violations (attempt_id, student_id, exam_id, violation_type, details) 
-                            SELECT id, ?, ?, ?, ? FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ?");
-    $v_stmt->execute([$student_id, $exam_id, $violation_type, $details, $exam_id, $student_id, $attempt_no]);
+    $warning = null;
+    $command = $now['remote_command'] ?: null;
+    if (!empty($now['warning_message']) && strtotime((string) $now['last_warning_at']) > time() - 60) {
+        $warning = $now['warning_message'];
+    }
+    if ($warning !== null || $command !== null || !empty($now['warning_message'])) {
+        $db->prepare("UPDATE objective_attempts SET warning_message = NULL, last_warning_at = NULL, remote_command = NULL WHERE id = ?")
+            ->execute([$attempt_id]);
+    }
 
-    // Increment violation count in attempts table
-    $inc_stmt = $db->prepare("UPDATE objective_attempts SET violation_count = violation_count + 1 WHERE exam_id = ? AND student_id = ? AND attempt_no = ? AND finished_at IS NULL");
-    $inc_stmt->execute([$exam_id, $student_id, $attempt_no]);
+    if ($now['is_locked'] || (int) $now['violation_count'] >= MAX_VIOLATIONS) {
+        ping_out([
+            'status' => 'LOCKED',
+            'message' => 'Your exam interface has been locked due to repeated security violations. Please contact the administrator.',
+            'count' => (int) $now['violation_count'],
+        ]);
+    }
 
-    // Check total violations or if record is already locked
-    $check_stmt = $db->prepare("SELECT violation_count, is_locked FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ?");
-    $check_stmt->execute([$exam_id, $student_id, $attempt_no]);
-    $attempt_record = $check_stmt->fetch(PDO::FETCH_ASSOC);
-    $count = $attempt_record['violation_count'] ?? 0;
-    $is_db_locked = $attempt_record['is_locked'] ?? 0;
-
-    if ($count >= 5 || $is_db_locked) {
-        // Phase 4: Enforce persistent lock
-        if (!$is_db_locked) {
-            $db->prepare("UPDATE objective_attempts SET is_locked = 1 WHERE exam_id = ? AND student_id = ? AND attempt_no = ?")->execute([$exam_id, $student_id, $attempt_no]);
+    $remaining = qe_remaining_seconds($att, $now);
+    $duration = (int) $att['duration_minutes'] * 60;
+    $overshoot = $duration > 0 ? (int) $now['time_used'] - $duration : 0;
+    if ($remaining === 0) {
+        // The page normally submits itself at zero (so its last answers go
+        // with it). If it hasn't after a short grace, close the attempt here.
+        $closed_window = !empty($att['end_time']) && time() > strtotime($att['end_time']) + 60;
+        if ($overshoot > 20 || $closed_window) {
+            qe_finalize_attempt($db, $attempt_id);
+            ping_out(['status' => 'SUBMITTED', 'message' => 'Time is up. Your answers have been submitted.']);
         }
-        echo json_encode(['status' => 'LOCKED', 'message' => 'Your exam interface has been locked due to repeated security violations. Please contact the administrator.', 'count' => $count]);
-        exit;
+        ping_out(['status' => 'TIME_UP', 'remaining_seconds' => 0]);
     }
-} else {
-    // Even if no violation was just sent, check if it's already locked from a previous ping or manual lock
-    $check_stmt = $db->prepare("SELECT violation_count, is_locked FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ?");
-    $check_stmt->execute([$exam_id, $student_id, $attempt_no]);
-    $attempt_record = $check_stmt->fetch(PDO::FETCH_ASSOC);
-    if ($attempt_record && ($attempt_record['is_locked'] || $attempt_record['violation_count'] >= 5)) {
-        echo json_encode(['status' => 'LOCKED', 'message' => 'Your exam interface is locked.', 'count' => $attempt_record['violation_count']]);
-        exit;
-    }
+
+    ping_out([
+        'status' => 'OK',
+        'violation_count' => (int) $now['violation_count'],
+        'is_live_requested' => (int) $now['is_live_requested'],
+        'warning' => $warning,
+        'remote_command' => $command,
+        'remaining_seconds' => $remaining,
+    ]);
+} catch (Throwable $e) {
+    error_log('proctor_ping: ' . $e->getMessage());
+    http_response_code(500);
+    ping_out(['status' => 'ERROR']);
 }
-
-// Get current violation count and live request status
-$count_stmt = $db->prepare("SELECT violation_count, is_live_requested FROM objective_attempts WHERE id = (SELECT id FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ? AND finished_at IS NULL LIMIT 1)");
-$count_stmt->execute([$exam_id, $student_id, $attempt_no]);
-$attempt_info = $count_stmt->fetch(PDO::FETCH_ASSOC);
-$current_count = $attempt_info['violation_count'] ?? 0;
-$is_live_requested = $attempt_info['is_live_requested'] ?? 0;
-
-// 4. Remote Command Check (Admin-to-Student)
-$remote_cmd = null;
-$cmd_stmt = $db->prepare("SELECT remote_command FROM objective_attempts WHERE exam_id = ? AND student_id = ? AND attempt_no = ? AND finished_at IS NULL");
-$cmd_stmt->execute([$exam_id, $student_id, $attempt_no]);
-$cmd_res = $cmd_stmt->fetch(PDO::FETCH_ASSOC);
-
-if ($cmd_res && $cmd_res['remote_command']) {
-    $remote_cmd = $cmd_res['remote_command'];
-    // Clear command immediately after consumption
-    $db->prepare("UPDATE objective_attempts SET remote_command = NULL WHERE exam_id = ? AND student_id = ? AND attempt_no = ?")->execute([$exam_id, $student_id, $attempt_no]);
-}
-
-echo json_encode([
-    'status' => 'OK',
-    'violation_count' => $current_count,
-    'is_live_requested' => (int) $is_live_requested,
-    'warning' => $warning_to_send,
-    'remote_command' => $remote_cmd,
-    'time_ping' => date('H:i:s')
-]);

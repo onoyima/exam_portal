@@ -1,0 +1,97 @@
+/* Live monitor: a camera wall in the style of a CCTV desk. */
+
+.lm-page { background: #0e1513; min-height: 100vh; color: #dce7e1; display: flex; flex-direction: column; }
+.lm-page .admin-navbar-toggle { color: #dce7e1; background: transparent; border: 1px solid #2a3a34; }
+
+.lm-bar { display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-bottom: 1px solid #1f2c27; background: #111a17; position: sticky; top: 0; z-index: 30; }
+.lm-bar h1 { font-size: 1.05rem; margin: 0; font-weight: 700; color: #fff; letter-spacing: 0.02em; }
+.lm-clock { margin-left: auto; font-variant-numeric: tabular-nums; color: #8fa69a; font-size: 0.85rem; }
+.lm-counts { display: flex; flex-wrap: wrap; gap: 6px; }
+.lm-count { font-size: 0.75rem; padding: 3px 10px; border-radius: 999px; background: #1a2622; color: #b8cbc1; border: 1px solid #263731; }
+.lm-count b { color: #fff; margin-right: 3px; }
+.lm-count.is-alert { background: #3a1513; border-color: #6d2621; color: #ffb4ab; }
+.lm-count.is-away { border-color: #5c4615; color: #f3c766; }
+
+.lm-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 20px; border-bottom: 1px solid #1f2c27; background: #101816; }
+.lm-input { background: #17221f; border: 1px solid #2a3a34; color: #e6efe9; border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; min-width: 180px; }
+.lm-input::placeholder { color: #6f857a; }
+.lm-seg { display: inline-flex; border: 1px solid #2a3a34; border-radius: 8px; overflow: hidden; }
+.lm-seg button { background: #17221f; color: #a9bdb3; border: 0; padding: 7px 12px; font-size: 0.8rem; cursor: pointer; }
+.lm-seg button + button { border-left: 1px solid #2a3a34; }
+.lm-seg button.is-on { background: #1f6b4a; color: #fff; }
+.lm-check { font-size: 0.8rem; color: #a9bdb3; display: inline-flex; gap: 6px; align-items: center; margin: 0; }
+.lm-spacer { flex: 1; }
+.lm-btn { background: #17221f; color: #dce7e1; border: 1px solid #2f413a; border-radius: 8px; padding: 7px 12px; font-size: 0.82rem; cursor: pointer; text-decoration: none; display: inline-flex; gap: 6px; align-items: center; }
+.lm-btn:hover { border-color: #4c6a5d; color: #fff; }
+.lm-btn:disabled { opacity: 0.4; cursor: default; }
+.lm-btn-primary { background: #1f6b4a; border-color: #1f6b4a; color: #fff; }
+.lm-btn-danger { background: #5a1d19; border-color: #7d2a24; color: #ffd6d1; }
+
+/* the wall */
+.lm-wall { display: grid; gap: 10px; padding: 14px 20px 30px; grid-template-columns: repeat(auto-fill, minmax(var(--tile, 240px), 1fr)); align-content: start; }
+.lm-size-s { --tile: 170px; }
+.lm-size-m { --tile: 240px; }
+.lm-size-l { --tile: 340px; }
+.lm-empty { color: #7d9489; text-align: center; padding: 60px 20px; }
+
+.lm-tile { position: relative; aspect-ratio: 4 / 3; background: #050807; border-radius: 8px; overflow: hidden; cursor: pointer; border: 2px solid #1d2a25; transition: border-color 0.2s; }
+.lm-tile:hover { border-color: #3c5a4d; }
+.lm-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lm-tile .lm-nocam { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; color: #4f6359; font-size: 0.75rem; gap: 6px; }
+.lm-tile .lm-nocam span { width: 46px; height: 46px; border-radius: 50%; background: #16211d; color: #8aa598; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 700; }
+.lm-tile-top { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding: 6px 7px; background: linear-gradient(rgba(0, 0, 0, 0.55), transparent); font-size: 0.68rem; }
+.lm-state { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #cfe3d8; }
+.lm-state i { width: 7px; height: 7px; border-radius: 50%; background: #3ccf84; box-shadow: 0 0 0 2px rgba(60, 207, 132, 0.25); }
+.lm-tile.is-away .lm-state i { background: #f0b429; box-shadow: 0 0 0 2px rgba(240, 180, 41, 0.25); }
+.lm-tile.is-offline .lm-state i { background: #6b7d75; box-shadow: none; }
+.lm-tile.is-locked .lm-state i, .lm-tile.is-alert .lm-state i { background: #ff5a4f; }
+.lm-tile.is-submitted .lm-state i { background: #7aa7ff; box-shadow: none; }
+.lm-strikes { background: rgba(0, 0, 0, 0.55); border-radius: 999px; padding: 1px 7px; font-weight: 700; color: #ffd0c9; }
+.lm-strikes.is-zero { color: #9fb5aa; }
+.lm-rec { color: #ff6b61; font-weight: 700; margin-left: 6px; }
+.lm-tile-foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 8px 7px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.82)); }
+.lm-tile-name { font-weight: 700; color: #fff; font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.lm-tile-sub { display: flex; justify-content: space-between; gap: 6px; font-size: 0.68rem; color: #b5c8be; margin-top: 2px; }
+.lm-tile-sub .lm-mat { font-family: ui-monospace, Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lm-bar-progress { height: 3px; background: rgba(255, 255, 255, 0.15); border-radius: 2px; margin-top: 5px; overflow: hidden; }
+.lm-bar-progress b { display: block; height: 100%; background: #3ccf84; }
+.lm-size-s .lm-tile-sub .lm-exam { display: none; }
+
+.lm-tile.is-away { border-color: #8a6a1d; }
+.lm-tile.is-offline { border-color: #2c3833; }
+.lm-tile.is-offline img { filter: grayscale(1) brightness(0.55); }
+.lm-tile.is-submitted img { filter: grayscale(0.6) brightness(0.6); }
+.lm-tile.is-locked { border-color: #b93a31; }
+.lm-tile.is-alert { border-color: #ff5a4f; animation: lm-blink 1.2s ease-in-out 4; }
+.lm-tile .lm-alert-text { position: absolute; top: 28px; left: 7px; right: 7px; background: rgba(150, 25, 18, 0.85); color: #fff; font-size: 0.68rem; font-weight: 700; padding: 3px 6px; border-radius: 4px; text-transform: capitalize; }
+@keyframes lm-blink { 50% { border-color: transparent; } }
+
+/* spotlight */
+.lm-spot { position: fixed; inset: 0; z-index: 2000; background: rgba(0, 0, 0, 0.78); display: flex; align-items: center; justify-content: center; padding: 18px; }
+.lm-spot[hidden], .lm-toast[hidden] { display: none; }
+.lm-spot-box { background: #121b18; border: 1px solid #24332d; border-radius: 12px; width: min(1180px, 100%); max-height: 94vh; display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); overflow: hidden; }
+.lm-spot-media { position: relative; background: #000; display: flex; align-items: center; justify-content: center; min-height: 360px; }
+.lm-spot-media img, .lm-spot-media video { width: 100%; height: 100%; max-height: 94vh; object-fit: contain; }
+.lm-live { position: absolute; top: 12px; left: 12px; background: #d93025; color: #fff; font-size: 0.72rem; font-weight: 800; padding: 3px 8px; border-radius: 4px; letter-spacing: 0.08em; }
+.lm-spot-side { padding: 20px; overflow-y: auto; position: relative; color: #dce7e1; }
+.lm-spot-side h2 { font-size: 1.2rem; margin: 0 30px 2px 0; color: #fff; }
+.lm-spot-side h3 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: #7d9489; margin: 18px 0 8px; }
+.lm-spot-matric { font-family: ui-monospace, Consolas, monospace; color: #9fb5aa; font-size: 0.9rem; }
+.lm-x { position: absolute; top: 12px; right: 14px; background: none; border: 0; color: #9fb5aa; font-size: 1.6rem; cursor: pointer; line-height: 1; }
+.lm-dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 14px 0 0; font-size: 0.85rem; }
+.lm-dl dt { color: #7d9489; font-weight: 400; }
+.lm-dl dd { margin: 0; color: #e6efe9; }
+.lm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 16px; }
+.lm-actions .lm-btn { justify-content: center; }
+.lm-recs { display: flex; flex-direction: column; gap: 6px; font-size: 0.8rem; }
+.lm-rec-row { display: flex; align-items: center; gap: 8px; background: #17221f; border: 1px solid #24332d; border-radius: 8px; padding: 7px 9px; }
+.lm-rec-row span { flex: 1; }
+#spPlayer { width: 100%; margin-top: 10px; border-radius: 8px; background: #000; }
+
+.lm-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1f6b4a; color: #fff; padding: 10px 18px; border-radius: 8px; z-index: 2100; font-size: 0.88rem; }
+
+@media (max-width: 860px) {
+  .lm-spot-box { grid-template-columns: 1fr; }
+  .lm-spot-media { min-height: 220px; }
+}
+.swal2-container { z-index: 3000 !important; }

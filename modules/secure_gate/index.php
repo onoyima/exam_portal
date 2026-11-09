@@ -8,9 +8,9 @@ $settings = $db->query("SELECT * FROM seb_settings LIMIT 1")->fetch(PDO::FETCH_A
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure Gate | Veritas Exam Portal</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="../../assets/vendor/fonts/fonts.css" rel="stylesheet">
     <link href="../../assets/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="../../assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
     <style>
         body {
             background: #060d16;

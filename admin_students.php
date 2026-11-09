@@ -52,7 +52,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_student_exams' && isset($
            COUNT(a.id) as questions_graded,
            MAX(a.created_at) as last_activity
     FROM answers a
-    JOIN exams e ON a.exam_id = e.id AND e.deleted_at IS NULL AND e.type = 'viva'
+    JOIN exams e ON a.exam_id = e.id AND e.deleted_at IS NULL AND e.type IN ('viva', 'research')
     WHERE a.student_id = ?
     GROUP BY e.id, e.name, e.type, e.created_at
     ORDER BY e.created_at DESC
@@ -208,7 +208,7 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
 </head>
 <body>
@@ -595,7 +595,7 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
       }
     }
 
-    document.getElementById('studentSearch').addEventListener('keydown', function(e) {
+    document.getElementById('studentSearch')?.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {
         e.preventDefault();
         var q = this.value.trim();
@@ -705,7 +705,7 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
     });
 
     // ─── exeat2: search on Enter key ───
-    document.getElementById('exeat2StudentSearch').addEventListener('keydown', function (e) {
+    document.getElementById('exeat2StudentSearch')?.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') document.getElementById('exeat2RefreshBtn').click();
     });
 
@@ -734,7 +734,7 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
     // ─── exeat2: fetch and render students ───
     var exeat2Students = [];
 
-    document.getElementById('exeat2RefreshBtn').addEventListener('click', function () {
+    document.getElementById('exeat2RefreshBtn')?.addEventListener('click', function () {
       var search = document.getElementById('exeat2StudentSearch').value.trim();
       var dept = document.getElementById('exeat2Dept').value;
       var level = document.getElementById('exeat2Level').value;
@@ -827,7 +827,7 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
     }
 
     // ─── exeat2: Import Selected ───
-    document.getElementById('exeat2ImportSelectedBtn').addEventListener('click', function () {
+    document.getElementById('exeat2ImportSelectedBtn')?.addEventListener('click', function () {
       var checked = document.querySelectorAll('.exeat2-checkbox:checked');
       if (checked.length === 0) {
         Swal.fire({ title: 'No Selection', text: 'Select at least one student.', icon: 'warning', confirmButtonColor: '#198754' });
@@ -839,7 +839,7 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
     });
 
     // ─── exeat2: Import All ───
-    document.getElementById('exeat2ImportAllBtn').addEventListener('click', function () {
+    document.getElementById('exeat2ImportAllBtn')?.addEventListener('click', function () {
       var ids = exeat2Students.map(function (s) { return s.exeat2_id; });
       Swal.fire({
         title: 'Import All?',

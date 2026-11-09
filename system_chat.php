@@ -78,7 +78,7 @@ $back_url = $role === 'admin' ? 'admin_dashboard' : ($role === 'examiner' ? 'ass
   <title>System Assistant - Assessment Portal</title>
   <link rel="icon" href="assets/favicon.ico">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
 </head>
 <body>

@@ -21,10 +21,17 @@ try {
     );
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $db->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
+    $db->exec("SET time_zone = '" . date('P') . "'");
 } catch (PDOException $e) {
     error_log("Database connection failed: " . $e->getMessage());
     http_response_code(503);
     die('Service temporarily unavailable. Please try again later.');
 }
-require_once 'exam_logic.php';
-?>
+require_once __DIR__ . '/exam_logic.php';
+qe_ensure_schema($db);
+if (function_exists('enforce_single_student_session')) {
+    enforce_single_student_session($db);
+}
+if (function_exists('enforce_single_examiner_session')) {
+    enforce_single_examiner_session($db);
+}

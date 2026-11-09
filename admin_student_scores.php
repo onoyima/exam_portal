@@ -10,6 +10,8 @@ $type_filter = $_GET['type'] ?? '';
 $sql = "SELECT * FROM exams WHERE deleted_at IS NULL";
 if ($type_filter === 'viva') {
     $sql .= " AND type='viva'";
+} elseif ($type_filter === 'research') {
+    $sql .= " AND type='research'";
 } else {
     $sql .= " AND (type='practical' OR type IS NULL)";
 }
@@ -87,7 +89,7 @@ $exam_name = ($exam_index !== false && isset($exams[$exam_index]['name'])) ? $ex
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="assets/favicon.ico">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
 </head>
 <body>

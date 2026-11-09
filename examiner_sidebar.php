@@ -32,6 +32,8 @@ if (isset($db) && isset($_SESSION['user'])) {
   } catch (Exception $e) {}
 }
 
+$has_objective = in_array('objective', array_column($assigned_exams, 'type'), true);
+
 $S = '<svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">';
 $E = '</svg>';
 $ICONS = [];
@@ -73,8 +75,16 @@ $ICONS['mic']            = $S.'<rect x="7.5" y="2" width="5" height="9" rx="2.5"
         </div>
         <div class="collapse show" id="navConsole">
           <ul class="nav-sub">
+            <li><a href="examiner_dashboard" class="nav-item<?= $current_page == 'examiner_dashboard.php' ? ' active' : '' ?>">
+              <?= $ICONS['dashboard'] ?><span data-label>My Exams</span></a></li>
             <li><a href="assess" class="nav-item<?= $current_page == 'assess.php' ? ' active' : '' ?>">
               <?= $ICONS['graduation'] ?><span data-label>Grade Students</span></a></li>
+            <?php if ($has_objective): ?>
+            <li><a href="exam_overview" class="nav-item<?= in_array($current_page, ['exam_overview.php', 'admin_objective_questions.php', 'admin_assign_students.php', 'examiner_objective_results.php'], true) ? ' active' : '' ?>">
+              <?= $ICONS['bar-chart'] ?><span data-label>Objective Exams</span></a></li>
+            <li><a href="admin_live_proctor" class="nav-item<?= $current_page == 'admin_live_proctor.php' ? ' active' : '' ?>">
+              <?= $ICONS['laptop'] ?><span data-label>Live Monitor</span></a></li>
+            <?php endif; ?>
           </ul>
         </div>
       </li>
@@ -90,10 +100,10 @@ $ICONS['mic']            = $S.'<rect x="7.5" y="2" width="5" height="9" rx="2.5"
           <ul class="nav-sub">
             <?php foreach ($assigned_exams as $ae): ?>
               <li>
-                <a href="assess?exam_id=<?= $ae['id'] ?>" class="nav-item<?= ($_GET['exam_id'] ?? '') == $ae['id'] ? ' active' : '' ?>">
-                  <?= $ICONS[($ae['type'] ?? 'practical') === 'viva' ? 'mic' : (($ae['type'] ?? 'practical') === 'objective' ? 'check-circle' : 'laptop')] ?>
+                <a href="<?= ($ae['type'] ?? '') === 'objective' ? 'exam_overview' : 'assess' ?>?exam_id=<?= $ae['id'] ?>" class="nav-item<?= ($_GET['exam_id'] ?? '') == $ae['id'] ? ' active' : '' ?>">
+                  <?= $ICONS[in_array($ae['type'] ?? 'practical', ['viva', 'research'], true) ? 'mic' : (($ae['type'] ?? 'practical') === 'objective' ? 'check-circle' : 'laptop')] ?>
                   <span data-label><?= htmlspecialchars($ae['name']) ?></span>
-                  <span class="badge badge-xs badge-<?= $ae['type'] === 'viva' ? 'warning' : ($ae['type'] === 'objective' ? 'info' : 'success') ?> ms-auto"><?= ucfirst($ae['type'] ?? 'prac') ?></span>
+                  <span class="badge badge-xs badge-<?= in_array($ae['type'], ['viva', 'research'], true) ? 'warning' : ($ae['type'] === 'objective' ? 'info' : 'success') ?> ms-auto"><?= ucfirst($ae['type'] ?? 'prac') ?></span>
                 </a>
               </li>
             <?php endforeach; ?>
@@ -102,6 +112,7 @@ $ICONS['mic']            = $S.'<rect x="7.5" y="2" width="5" height="9" rx="2.5"
       </li>
       <?php endif; ?>
 
+      <?php if (empty($_SESSION['group_examiner'])): ?>
       <!-- ── Communication ── -->
       <li class="nav-group">
         <div class="nav-group-header" data-bs-toggle="collapse" data-bs-target="#navComm">
@@ -130,6 +141,7 @@ $ICONS['mic']            = $S.'<rect x="7.5" y="2" width="5" height="9" rx="2.5"
         </div>
       </li>
 
+      <?php endif; ?>
     </ul>
   </nav>
 

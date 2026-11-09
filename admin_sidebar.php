@@ -13,6 +13,13 @@ if (isset($db)) {
     } catch (Exception $e) {}
 }
 $current_page = basename($_SERVER['PHP_SELF']);
+$sidebar_center = false;
+if (isset($db)) {
+    try {
+        $st_role = $db->query("SELECT setting_value FROM system_settings WHERE setting_key = 'server_role' LIMIT 1");
+        $sidebar_center = $st_role && $st_role->fetchColumn() === 'center';
+    } catch (Exception $e) {}
+}
 
 // icon definitions (full SVG elements)
 $S = '<svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">';
@@ -35,6 +42,7 @@ $ICONS['file']           = $S.'<path d="M5 2h6l4 4v12a2 2 0 0 1-2 2H5a2 2 0 0 1-
 $ICONS['chart']          = $S.'<rect x="3" y="12" width="3" height="6" rx=".6"/><rect x="8.5" y="7" width="3" height="11" rx=".6"/><rect x="14" y="3" width="3" height="15" rx=".6"/>'.$E;
 $ICONS['broadcast']      = $S.'<path d="M17 4a14 14 0 0 0-14 0"/><path d="M14.5 7a9 9 0 0 0-9 0"/><path d="M12 10a5 5 0 0 0-4 0"/><circle cx="10" cy="14" r="1.5"/>'.$E;
 $ICONS['devices']        = $S.'<rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M8 14v3"/><path d="M4 17h8"/><rect x="15" y="11" width="5" height="8" rx="1" transform="rotate(15 17 15)"/>'.$E;
+$ICONS['network']        = $S.'<path d="M2 7.5a12 12 0 0 1 16 0"/><path d="M4.8 10.6a8 8 0 0 1 10.4 0"/><path d="M7.6 13.6a4 4 0 0 1 4.8 0"/><circle cx="10" cy="16.5" r="1"/>'.$E;
 $ICONS['shield']         = $S.'<path d="M10 2 3 5.5v5.5c0 5 3.5 8.5 7 10 3.5-1.5 7-5 7-10V5.5L10 2Z"/><path d="m7.5 10.5 2 2 4-4"/>'.$E;
 $ICONS['chat']           = $S.'<path d="M17 8a6 6 0 0 0-6-6H7a6 6 0 0 0-6 6v4a6 6 0 0 0 6 6h2l4 3v-3h2a6 6 0 0 0 6-6V8Z"/>'.$E;
 $ICONS['palette']        = $S.'<circle cx="10" cy="10" r="7.5"/><circle cx="6.5" cy="8" r="1.3" opacity=".8"/><circle cx="12" cy="6.5" r="1.3" opacity=".8"/><circle cx="15" cy="11" r="1.3" opacity=".8"/><circle cx="11.5" cy="14.5" r="1.3" opacity=".8"/><path d="M8.5 10.5a2.5 2.5 0 0 0 5 0"/>'.$E;
@@ -54,7 +62,7 @@ $ICONS['clipboard']      = $S.'<rect x="5" y="2" width="10" height="18" rx="2"/>
     </div>
     <div class="brand-text" data-label>
       <span class="brand-name"><?= htmlspecialchars($admin_title) ?></span>
-      <span class="brand-role">Administrator</span>
+      <span class="brand-role"><?= $sidebar_center ? 'Centre Manager' : 'Administrator' ?></span>
     </div>
   </div>
 
@@ -75,6 +83,8 @@ $ICONS['clipboard']      = $S.'<rect x="5" y="2" width="10" height="18" rx="2"/>
               <?= $ICONS['dashboard'] ?><span data-label>Dashboard</span></a></li>
             <li><a href="admin_analytics" class="nav-item<?= $current_page == 'admin_analytics.php' ? ' active' : '' ?>">
               <?= $ICONS['analytics'] ?><span data-label>Analytics</span></a></li>
+            <li><a href="exam_overview" class="nav-item<?= $current_page == 'exam_overview.php' ? ' active' : '' ?>">
+              <?= $ICONS['chart'] ?><span data-label>Exam Overview</span></a></li>
           </ul>
         </div>
       </li>
@@ -112,7 +122,16 @@ $ICONS['clipboard']      = $S.'<rect x="5" y="2" width="10" height="18" rx="2"/>
             <li><a href="admin_objective_exams" class="nav-item<?= $current_page == 'admin_objective_exams.php' ? ' active' : '' ?>">
               <?= $ICONS['list-check'] ?><span data-label>Manage Objective</span></a></li>
             <li><a href="admin_viva_exams" class="nav-item<?= $current_page == 'admin_viva_exams.php' ? ' active' : '' ?>">
-              <?= $ICONS['mic'] ?><span data-label>Manage Viva</span><span class="badge badge-new" data-label>NEW</span></a></li>
+              <?= $ICONS['mic'] ?><span data-label>Manage Viva</span></a></li>
+            <li><a href="admin_research_exams" class="nav-item<?= $current_page == 'admin_research_exams.php' ? ' active' : '' ?>">
+              <?= $ICONS['book'] ?><span data-label>Manage Research</span></a></li>
+            <?php if ($sidebar_center): ?>
+            <li><a href="center_console" class="nav-item<?= $current_page == 'center_console.php' ? ' active' : '' ?>">
+              <?= $ICONS['network'] ?><span data-label>Center Console</span><span class="badge badge-new" data-label>CENTRE</span></a></li>
+            <?php else: ?>
+            <li><a href="admin_exam_groups" class="nav-item<?= $current_page == 'admin_exam_groups.php' ? ' active' : '' ?>">
+              <?= $ICONS['clipboard'] ?><span data-label>Exam Groups</span><span class="badge badge-new" data-label>NEW</span></a></li>
+            <?php endif; ?>
           </ul>
         </div>
       </li>
@@ -147,6 +166,8 @@ $ICONS['clipboard']      = $S.'<rect x="5" y="2" width="10" height="18" rx="2"/>
               <?= $ICONS['check-circle'] ?><span data-label>Objective Results</span></a></li>
             <li><a href="admin_student_scores?type=viva" class="nav-item<?= ($current_page == 'admin_student_scores.php' && ($_GET['type'] ?? '') == 'viva') ? ' active' : '' ?>">
               <?= $ICONS['mic'] ?><span data-label>Viva Results</span></a></li>
+            <li><a href="admin_student_scores?type=research" class="nav-item<?= ($current_page == 'admin_student_scores.php' && ($_GET['type'] ?? '') == 'research') ? ' active' : '' ?>">
+              <?= $ICONS['book'] ?><span data-label>Research Results</span></a></li>
             <li><a href="all_students_score" class="nav-item<?= $current_page == 'all_students_score.php' ? ' active' : '' ?>">
               <?= $ICONS['sigma'] ?><span data-label>Score Summary (All)</span></a></li>
             <li><a href="report" class="nav-item<?= $current_page == 'report.php' ? ' active' : '' ?>">
@@ -169,6 +190,8 @@ $ICONS['clipboard']      = $S.'<rect x="5" y="2" width="10" height="18" rx="2"/>
               <span class="text-danger"><?= $ICONS['broadcast'] ?></span><span data-label>Live Monitor</span></a></li>
             <li><a href="admin_devices" class="nav-item<?= $current_page == 'admin_devices.php' ? ' active' : '' ?>">
               <span class="text-warning"><?= $ICONS['devices'] ?></span><span data-label>Device Auth</span><span class="badge badge-new" data-label>NEW</span></a></li>
+            <li><a href="admin_network" class="nav-item<?= $current_page == 'admin_network.php' ? ' active' : '' ?>">
+              <span class="text-success"><?= $ICONS['network'] ?></span><span data-label>Network Access</span></a></li>
             <li><a href="admin_exam_audit" class="nav-item<?= $current_page == 'admin_exam_audit.php' ? ' active' : '' ?>">
               <?= $ICONS['shield'] ?><span data-label>Exam Audit Trail</span></a></li>
           </ul>
@@ -281,3 +304,17 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 });
 </script>
+<?php if (!empty($_SESSION['cs_flash'])): ?>
+<div class="cs-lock-note" role="alert">
+  <i class="bi bi-lock-fill"></i>
+  <span><?= htmlspecialchars($_SESSION['cs_flash']) ?></span>
+  <button type="button" aria-label="Close" onclick="this.parentNode.remove()">&times;</button>
+</div>
+<style>
+  .cs-lock-note { position: fixed; z-index: 2000; left: 50%; top: 14px; transform: translateX(-50%); max-width: min(680px, calc(100vw - 24px));
+    display: flex; gap: 10px; align-items: flex-start; background: #10291d; color: #e7f2ec; padding: 12px 16px; border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.18); font-size: .9rem; line-height: 1.45; }
+  .cs-lock-note i { color: #f3c969; margin-top: 2px; }
+  .cs-lock-note button { background: none; border: 0; color: #a9c7b7; font-size: 1.3rem; line-height: 1; margin-left: 6px; }
+</style>
+<?php unset($_SESSION['cs_flash']); endif; ?>

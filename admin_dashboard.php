@@ -2,6 +2,7 @@
 require 'auth.php';
 check_auth('admin');
 require 'db.php';
+require_once __DIR__ . '/includes/network_info.php';
 
 $name = $_SESSION['user'] ?? 'Admin';
 
@@ -11,545 +12,356 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_settings'])) {
   $instruction = trim($_POST['student_login_content']);
   $stmt = $db->prepare("INSERT INTO system_settings (setting_key, setting_value) VALUES ('student_login_content', ?) ON DUPLICATE KEY UPDATE setting_value = ?");
   $stmt->execute([$instruction, $instruction]);
-  $success_msg = "Settings updated successfully!";
+  $success_msg = 'Login instructions saved.';
+}
+$student_login_content = $db->query("SELECT setting_value FROM system_settings WHERE setting_key = 'student_login_content'")->fetchColumn()
+  ?: "1. LOGIN WITH YOUR MATRIC NUMBER\n2. Only your Matric Number is needed.\n3. Make sure you submit before you leave.";
+
+$is_center = cs_is_center($db);
+$now = date('Y-m-d H:i:s');
+$TYPE_LABEL = ['objective' => 'Objective', 'practical' => 'Practical', 'viva' => 'Viva', 'research' => 'Research'];
+
+/* ---------- exams running now ---------- */
+$live = $db->query("SELECT e.id, e.name, e.type, e.start_time, e.end_time, e.duration_minutes, e.group_id, g.name AS group_name,
+      (SELECT COUNT(*) FROM exam_students es WHERE es.exam_id = e.id) AS enrolled,
+      CASE WHEN e.type = 'objective'
+        THEN (SELECT COUNT(DISTINCT a.student_id) FROM objective_attempts a WHERE a.exam_id = e.id AND a.finished_at IS NOT NULL)
+        ELSE (SELECT COUNT(DISTINCT a.student_id) FROM answers a WHERE a.exam_id = e.id) END AS done,
+      CASE WHEN e.type = 'objective'
+        THEN (SELECT COUNT(*) FROM objective_attempts a WHERE a.exam_id = e.id AND a.finished_at IS NULL AND a.last_active > DATE_SUB(NOW(), INTERVAL 2 MINUTE))
+        ELSE 0 END AS writing,
+      CASE WHEN e.type = 'objective'
+        THEN (SELECT COUNT(*) FROM objective_questions q WHERE q.exam_id = e.id AND q.deleted_at IS NULL)
+        ELSE (SELECT COUNT(*) FROM exam_questions eq WHERE eq.exam_id = e.id) END AS questions
+    FROM exams e LEFT JOIN exam_groups g ON g.id = e.group_id
+    WHERE e.is_active = 1 AND e.deleted_at IS NULL
+      AND (e.start_time IS NULL OR e.start_time <= NOW()) AND (e.end_time IS NULL OR e.end_time >= NOW())
+    ORDER BY writing DESC, (e.start_time IS NULL), e.start_time DESC, e.name LIMIT 12")->fetchAll(PDO::FETCH_ASSOC);
+$writing_total = array_sum(array_column($live, 'writing'));
+
+/* ---------- next 7 days ---------- */
+$upcoming = $db->query("SELECT id, name, type, start_time, is_active FROM exams
+    WHERE deleted_at IS NULL AND start_time > NOW() AND start_time <= DATE_ADD(NOW(), INTERVAL 7 DAY)
+    ORDER BY start_time LIMIT 8")->fetchAll(PDO::FETCH_ASSOC);
+
+/* ---------- things to look at ---------- */
+$attention = [];
+$empty_q = $db->query("SELECT e.id, e.name, e.type FROM exams e WHERE e.is_active = 1 AND e.deleted_at IS NULL AND (
+      (e.type = 'objective' AND NOT EXISTS (SELECT 1 FROM objective_questions q WHERE q.exam_id = e.id AND q.deleted_at IS NULL))
+   OR (e.type <> 'objective' AND NOT EXISTS (SELECT 1 FROM exam_questions eq WHERE eq.exam_id = e.id))) LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);
+foreach ($empty_q as $e) {
+  $attention[] = ['warn', 'No questions in an active exam', $e['name'], $e['type'] === 'objective' ? 'admin_objective_questions?exam_id=' . $e['id'] : ($e['type'] === 'practical' ? 'admin_questions?exam_id=' . $e['id'] : ($e['type'] === 'viva' ? 'admin_viva_exams' : 'admin_research_exams'))];
+}
+$empty_s = $db->query("SELECT e.id, e.name FROM exams e WHERE e.is_active = 1 AND e.deleted_at IS NULL
+    AND NOT EXISTS (SELECT 1 FROM exam_students es WHERE es.exam_id = e.id) LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);
+foreach ($empty_s as $e) {
+  $attention[] = ['warn', 'Active exam with no students', $e['name'], 'admin_assign_students?exam_id=' . $e['id']];
+}
+$locked = (int) $db->query("SELECT COUNT(*) FROM objective_attempts WHERE is_locked = 1 AND finished_at IS NULL")->fetchColumn();
+if ($locked) {
+  $attention[] = ['bad', 'Students locked out of their exam', $locked . ' waiting to be unlocked', 'admin_live_proctor'];
+}
+$pending_dev = (int) $db->query("SELECT COUNT(*) FROM approved_devices WHERE status = 'pending'")->fetchColumn();
+if ($pending_dev) {
+  $attention[] = ['warn', 'Computers waiting for approval', $pending_dev . ' device' . ($pending_dev === 1 ? '' : 's'), 'admin_devices'];
+}
+if (!$is_center) {
+  $silent = $db->query("SELECT c.name AS centre, g.name AS grp, g.id FROM center_tokens t JOIN exam_centers c ON c.id = t.center_id
+      JOIN exam_groups g ON g.id = t.group_id AND g.deleted_at IS NULL
+      WHERE t.revoked_at IS NULL AND g.status = 'published' AND t.activated_at IS NULL LIMIT 4")->fetchAll(PDO::FETCH_ASSOC);
+  foreach ($silent as $r) {
+    $attention[] = ['info', 'Centre has not activated its token', $r['centre'] . ' — ' . $r['grp'], 'admin_exam_groups?id=' . $r['id'] . '#centres'];
+  }
+} else {
+  $unsent = $db->query("SELECT l.id, g.name FROM center_links l JOIN exam_groups g ON g.id = l.group_id AND g.deleted_at IS NULL
+      WHERE l.last_sync_at IS NULL OR l.last_sync_at < DATE_SUB(NOW(), INTERVAL 6 HOUR)")->fetchAll(PDO::FETCH_ASSOC);
+  foreach ($unsent as $r) {
+    $attention[] = ['info', 'Results not sent to the main server recently', $r['name'], 'center_console#group-' . $r['id']];
+  }
 }
 
-$student_login_content = $db->query("SELECT setting_value FROM system_settings WHERE setting_key = 'student_login_content'")->fetchColumn() ?: "1. LOGIN WITH YOUR MATRIC NUMBER\n2. Only your Matric Number is needed.\n3. Make sure you submit before you leave.";
+/* ---------- totals ---------- */
+$counts = $db->query("SELECT
+    (SELECT COUNT(*) FROM students WHERE deleted_at IS NULL) AS students,
+    (SELECT COUNT(*) FROM examiners WHERE role = 'examiner' AND deleted_at IS NULL AND (source IS NULL OR source <> 'center')) AS examiners,
+    (SELECT COUNT(*) FROM exams WHERE deleted_at IS NULL) AS exams,
+    (SELECT COUNT(*) FROM exams WHERE deleted_at IS NULL AND is_active = 1) AS active,
+    (SELECT COUNT(*) FROM questions WHERE deleted_at IS NULL) + (SELECT COUNT(*) FROM objective_questions WHERE deleted_at IS NULL) AS questions,
+    (SELECT COUNT(*) FROM exam_groups WHERE deleted_at IS NULL) AS groups")->fetch(PDO::FETCH_ASSOC);
+$by_type = $db->query("SELECT type, COUNT(*) FROM exams WHERE deleted_at IS NULL GROUP BY type")->fetchAll(PDO::FETCH_KEY_PAIR);
 
-// ── KPI Stats ──
-$total_students   = $db->query("SELECT COUNT(*) FROM students WHERE deleted_at IS NULL")->fetchColumn();
-$total_exams      = $db->query("SELECT COUNT(*) FROM exams WHERE deleted_at IS NULL")->fetchColumn();
-$active_exams     = $db->query("SELECT COUNT(*) FROM exams WHERE is_active=1 AND deleted_at IS NULL")->fetchColumn();
-$practical_exams  = $db->query("SELECT COUNT(*) FROM exams WHERE type='practical' AND deleted_at IS NULL")->fetchColumn();
-$objective_exams  = $db->query("SELECT COUNT(*) FROM exams WHERE type='objective' AND deleted_at IS NULL")->fetchColumn();
-$viva_exams       = $db->query("SELECT COUNT(*) FROM exams WHERE type='viva' AND deleted_at IS NULL")->fetchColumn();
-$total_questions  = $db->query("SELECT (SELECT COUNT(*) FROM questions WHERE deleted_at IS NULL)+(SELECT COUNT(*) FROM objective_questions WHERE deleted_at IS NULL)")->fetchColumn();
-$staff_count      = $db->query("SELECT COUNT(*) FROM examiners WHERE role='examiner' AND deleted_at IS NULL")->fetchColumn();
-$assessments_done = $db->query("SELECT (SELECT COUNT(*) FROM answers)+(SELECT COUNT(*) FROM objective_attempts WHERE finished_at IS NOT NULL)")->fetchColumn();
-
-// ── Trend data ──
-try {
-  $this_month = $db->query("SELECT COUNT(*) FROM students WHERE deleted_at IS NULL AND MONTH(created_at)=MONTH(CURDATE()) AND YEAR(created_at)=YEAR(CURDATE())")->fetchColumn();
-} catch (PDOException $e) { $this_month = 0; }
-try {
-  $students_last_month = $db->query("SELECT COUNT(*) FROM students WHERE deleted_at IS NULL AND MONTH(created_at)=MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) AND YEAR(created_at)=YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))")->fetchColumn();
-} catch (PDOException $e) { $students_last_month = 0; }
-
-$exams_this_month = $db->query("SELECT COUNT(*) FROM exams WHERE deleted_at IS NULL AND MONTH(created_at)=MONTH(CURDATE()) AND YEAR(created_at)=YEAR(CURDATE())")->fetchColumn();
-
-try {
-  $assess_this_month = $db->query("SELECT (SELECT COUNT(*) FROM answers WHERE MONTH(created_at)=MONTH(CURDATE()) AND YEAR(created_at)=YEAR(CURDATE()))+(SELECT COUNT(*) FROM objective_attempts WHERE finished_at IS NOT NULL AND MONTH(finished_at)=MONTH(CURDATE()) AND YEAR(finished_at)=YEAR(CURDATE()))")->fetchColumn();
-} catch (PDOException $e) { $assess_this_month = 0; }
-try {
-  $assess_last_month = $db->query("SELECT (SELECT COUNT(*) FROM answers WHERE MONTH(created_at)=MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) AND YEAR(created_at)=YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)))+(SELECT COUNT(*) FROM objective_attempts WHERE finished_at IS NOT NULL AND MONTH(finished_at)=MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) AND YEAR(finished_at)=YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)))")->fetchColumn();
-} catch (PDOException $e) { $assess_last_month = 0; }
-
-try {
-  $active_last_month = $db->query("SELECT COUNT(*) FROM exams WHERE is_active=1 AND deleted_at IS NULL AND created_at < DATE_SUB(CURDATE(), INTERVAL 1 MONTH)")->fetchColumn();
-} catch (PDOException $e) { $active_last_month = 0; }
-
-// ── Chart data: weekly activity ──
-$weekly_activity = [];
-try {
-  $raw = $db->query("
-    SELECT DATE(dt) as day, SUM(cnt) as total FROM (
-      SELECT DATE(created_at) as dt, COUNT(*) as cnt FROM answers WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) GROUP BY DATE(created_at)
-      UNION ALL
-      SELECT DATE(finished_at) as dt, COUNT(*) as cnt FROM objective_attempts WHERE finished_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) GROUP BY DATE(finished_at)
-    ) t GROUP BY day ORDER BY day
-  ")->fetchAll(PDO::FETCH_ASSOC);
-  $weekly_activity = $raw;
-} catch (PDOException $e) { $weekly_activity = []; }
-
-// ── Chart data: monthly trends (last 6 months) ──
-$monthly_trends = [];
-try {
-  $raw = $db->query("
-    SELECT DATE_FORMAT(dt, '%Y-%m') as month, SUM(cnt) as total FROM (
-      SELECT DATE(created_at) as dt, COUNT(*) as cnt FROM answers WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH) GROUP BY DATE(created_at)
-      UNION ALL
-      SELECT DATE(finished_at) as dt, COUNT(*) as cnt FROM objective_attempts WHERE finished_at >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH) GROUP BY DATE(finished_at)
-    ) t GROUP BY month ORDER BY month
-  ")->fetchAll(PDO::FETCH_ASSOC);
-  $monthly_trends = $raw;
-} catch (PDOException $e) { $monthly_trends = []; }
-
-// ── Recent submissions (one row per exam+student, no duplicates) ──
-$recent_activity = [];
-try {
-  $recent = $db->query("
-    (SELECT 'practical' as type, MAX(a.created_at) as dt, s.name as sname, s.matric_no, e.name as ename
-     FROM answers a
-     JOIN students s ON a.student_id=s.id AND s.deleted_at IS NULL
-     JOIN exams e ON a.exam_id=e.id AND e.deleted_at IS NULL AND e.type='practical'
-     GROUP BY a.student_id, a.exam_id, s.name, s.matric_no, e.name
-     ORDER BY dt DESC LIMIT 4)
-    UNION ALL
-    (SELECT 'viva' as type, MAX(a.created_at) as dt, s.name as sname, s.matric_no, e.name as ename
-     FROM answers a
-     JOIN students s ON a.student_id=s.id AND s.deleted_at IS NULL
-     JOIN exams e ON a.exam_id=e.id AND e.deleted_at IS NULL AND e.type='viva'
-     GROUP BY a.student_id, a.exam_id, s.name, s.matric_no, e.name
-     ORDER BY dt DESC LIMIT 4)
-    UNION ALL
-    (SELECT 'objective' as type, MAX(oa.finished_at) as dt, s.name as sname, s.matric_no, e.name as ename
-     FROM objective_attempts oa
-     JOIN students s ON oa.student_id=s.id AND s.deleted_at IS NULL
-     JOIN exams e ON oa.exam_id=e.id AND e.deleted_at IS NULL
-     WHERE oa.finished_at IS NOT NULL
-     GROUP BY oa.student_id, oa.exam_id, s.name, s.matric_no, e.name
-     ORDER BY dt DESC LIMIT 4)
-    ORDER BY dt DESC LIMIT 8
-  ")->fetchAll(PDO::FETCH_ASSOC);
-  $recent_activity = $recent;
-} catch (PDOException $e) { $recent_activity = []; }
-
-// ── Helper for trend display ──
-function trend($current, $previous) {
-  if ($previous == 0) return ['neutral', '—'];
-  $pct = round((($current - $previous) / $previous) * 100, 1);
-  if ($pct > 0) return ['up', '+' . $pct . '%'];
-  if ($pct < 0) return ['down', $pct . '%'];
-  return ['neutral', '0%'];
+/* ---------- last 14 days ---------- */
+$days = [];
+for ($i = 13; $i >= 0; $i--) {
+  $days[date('Y-m-d', strtotime("-$i day"))] = ['obj' => 0, 'mark' => 0];
 }
-$stud_trend = trend($this_month, $students_last_month);
-$exam_trend = trend($exams_this_month, 1);
-$active_trend = trend($active_exams, $active_last_month ?: 1);
-$assess_trend = trend($assess_this_month, $assess_last_month ?: 1);
+foreach ($db->query("SELECT DATE(finished_at) d, COUNT(*) n FROM objective_attempts WHERE finished_at >= DATE_SUB(CURDATE(), INTERVAL 13 DAY) GROUP BY d") as $r) {
+  if (isset($days[$r['d']])) {
+    $days[$r['d']]['obj'] = (int) $r['n'];
+  }
+}
+foreach ($db->query("SELECT DATE(created_at) d, COUNT(DISTINCT exam_id, student_id) n FROM answers WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 13 DAY) GROUP BY d") as $r) {
+  if (isset($days[$r['d']])) {
+    $days[$r['d']]['mark'] = (int) $r['n'];
+  }
+}
+$activity_total = array_sum(array_map(fn($d) => $d['obj'] + $d['mark'], $days));
+
+/* ---------- latest results ---------- */
+$recent = $db->query("
+    (SELECT e.type, MAX(oa.finished_at) AS dt, s.name AS sname, s.matric_no, e.name AS ename, e.id AS eid
+       FROM objective_attempts oa JOIN students s ON s.id = oa.student_id JOIN exams e ON e.id = oa.exam_id AND e.deleted_at IS NULL
+      WHERE oa.finished_at IS NOT NULL GROUP BY oa.student_id, oa.exam_id ORDER BY dt DESC LIMIT 6)
+    UNION ALL
+    (SELECT e.type, MAX(a.created_at) AS dt, s.name, s.matric_no, e.name, e.id
+       FROM answers a JOIN students s ON s.id = a.student_id JOIN exams e ON e.id = a.exam_id AND e.deleted_at IS NULL
+      GROUP BY a.student_id, a.exam_id ORDER BY dt DESC LIMIT 6)
+    ORDER BY dt DESC LIMIT 7")->fetchAll(PDO::FETCH_ASSOC);
+
+$net_all = ni_server_addresses();
+$net_lan = array_values(array_filter($net_all, fn($x) => $x['kind'] === 'lan')) ?: array_values(array_filter($net_all, fn($x) => $x['kind'] === 'public'));
+$net_override = ni_override($db);
+$student_url = $net_override ? ni_base_url_for($net_override) . '/student_login' : ($net_lan ? ni_base_url($net_lan[0]['ip']) . '/student_login' : null);
+
+$hour = (int) date('H');
+$greeting = $hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good evening');
+$monitor_url = fn($e) => $e['type'] === 'objective' ? 'admin_live_proctor?exam_id=' . $e['id'] : 'report?exam_id=' . $e['id'];
+$result_url = fn($e) => $e['type'] === 'objective' ? 'exam_overview?exam_id=' . $e['id'] : 'report?exam_id=' . $e['id'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
-  <title>Dashboard - Assessment Portal</title>
+  <title>Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
+  <link href="assets/css/dashboard.css?v=1" rel="stylesheet">
 </head>
+
 <body>
   <?php include 'admin_sidebar.php'; ?>
   <div class="main-content">
-    <!-- ═══ ENHANCED NAVBAR ═══ -->
     <nav class="admin-navbar">
       <div class="admin-navbar-inner">
         <div class="admin-navbar-start">
-          <button class="admin-navbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
-            <i class="bi bi-list"></i>
-          </button>
-          <h1 class="admin-navbar-title d-none d-md-block">Dashboard</h1>
+          <button class="admin-navbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar"><i class="bi bi-list"></i></button>
+          <h1 class="admin-navbar-title">Dashboard</h1>
         </div>
-
-        <div class="admin-navbar-center">
-          <div class="navbar-search">
-            <i class="bi bi-search"></i>
-            <input type="text" placeholder="Search students, exams..." aria-label="Search">
-          </div>
-        </div>
-
         <div class="admin-navbar-end">
-          <div class="navbar-date-filter">
-            <i class="bi bi-calendar3"></i>
-            <span><?= date('M Y') ?></span>
-            <i class="bi bi-chevron-down" style="font-size:0.65rem;"></i>
-          </div>
-          <a href="admin_analytics" class="navbar-icon-btn" title="Analytics">
-            <i class="bi bi-bar-chart-line"></i>
-          </a>
-          <a href="system_chat" class="navbar-icon-btn" title="System Assistant">
-            <i class="bi bi-robot"></i>
-          </a>
-          <div class="admin-user-badge">
-            <span class="admin-user-avatar"><img src="passport_image.php?type=examiner&amp;id=<?= $_SESSION["examiner_id"] ?? 0 ?>" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.remove();var p=this.parentElement;if(p){var s=p.nextElementSibling;if(s){var c=s.textContent.trim().charAt(0);p.textContent=c?c.toUpperCase():&quot;?&quot;}}"></span>
-            <span class="admin-user-name"><?= htmlspecialchars($name) ?></span>
-          </div>
-          <a href="logout" class="admin-logout-btn" title="Logout">
-            <i class="bi bi-box-arrow-right"></i>
-          </a>
+          <a href="admin_analytics" class="navbar-icon-btn" title="Analytics"><i class="bi bi-graph-up"></i></a>
+          <div class="admin-user-badge"><span class="admin-user-avatar"><?= htmlspecialchars(strtoupper(substr($name, 0, 1))) ?></span><span class="admin-user-name"><?= htmlspecialchars($name) ?></span></div>
+          <a href="logout" class="admin-logout-btn" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
         </div>
       </div>
     </nav>
 
-    <div class="admin-content">
-      <!-- ═══ BREADCRUMB ═══ -->
-      <nav class="admin-breadcrumb" aria-label="Breadcrumb">
-        <ol>
-          <li><a href="admin_dashboard"><i class="bi bi-house"></i></a></li>
-          <li class="sep">/</li>
-          <li class="current" aria-current="page">Dashboard</li>
-        </ol>
-      </nav>
-
-      <!-- ═══ WELCOME ═══ -->
-      <div class="dash-welcome">
-        <h2>Good <?= (int)date('H') < 12 ? 'morning' : ((int)date('H') < 17 ? 'afternoon' : 'evening') ?>, <?= htmlspecialchars(explode(' ', $name)[0]) ?></h2>
-        <p>Here's what's happening across your examination platform.</p>
-      </div>
-
+    <div class="admin-content db-page">
       <?php display_auth_errors(); ?>
 
-      <!-- ═══ KPI STATS ROW ═══ -->
-      <div class="dash-stats">
-        <div class="kpi-card kpi-students">
-          <div class="kpi-top">
-            <span class="kpi-icon"><i class="bi bi-people"></i></span>
-            <span class="kpi-trend <?= $stud_trend[0] ?>"><i class="bi bi-arrow-<?= $stud_trend[0] === 'up' ? 'up' : ($stud_trend[0] === 'down' ? 'down' : 'right') ?>"></i> <?= $stud_trend[1] ?></span>
-          </div>
-          <div>
-            <div class="kpi-label">Total Students</div>
-            <div class="kpi-value"><?= number_format($total_students) ?></div>
-          </div>
+      <header class="db-head">
+        <div>
+          <p class="db-date"><?= date('l, j F Y') ?> · <span data-clock><?= date('g:i A') ?></span></p>
+          <h2><?= $greeting ?>, <?= htmlspecialchars(explode(' ', $name)[0]) ?>.</h2>
+          <p class="db-lead">
+            <?php if ($writing_total): ?><b><?= $writing_total ?></b> student<?= $writing_total === 1 ? ' is' : 's are' ?> writing right now across <?= count(array_filter($live, fn($e) => $e['writing'] > 0)) ?> exam<?= count(array_filter($live, fn($e) => $e['writing'] > 0)) === 1 ? '' : 's' ?>.
+            <?php elseif ($live): ?><?= count($live) ?> exam<?= count($live) === 1 ? ' is' : 's are' ?> open; nobody is writing at the moment.
+            <?php else: ?>No exam is open right now.<?php endif; ?>
+            <?php if ($is_center): ?><span class="db-role"><i class="bi bi-building"></i> Exam centre server</span><?php endif; ?>
+          </p>
         </div>
+        <a class="db-address" href="admin_network" title="Network access and QR code">
+          <span>Students open</span>
+          <?php if ($student_url): ?><b><?= htmlspecialchars($student_url) ?></b><?php else: ?><b class="is-bad">no network found</b><?php endif; ?>
+          <i class="bi bi-qr-code"></i>
+        </a>
+      </header>
 
-        <div class="kpi-card kpi-exams">
-          <div class="kpi-top">
-            <span class="kpi-icon"><i class="bi bi-journal-check"></i></span>
-            <span class="kpi-trend <?= $exam_trend[0] ?>"><i class="bi bi-arrow-<?= $exam_trend[0] === 'up' ? 'up' : ($exam_trend[0] === 'down' ? 'down' : 'right') ?>"></i> <?= $exam_trend[1] ?></span>
-          </div>
-          <div>
-            <div class="kpi-label">Total Exams</div>
-            <div class="kpi-value"><?= $total_exams ?></div>
-          </div>
+      <section class="db-panel">
+        <div class="db-panel-head">
+          <h3>Open now</h3>
+          <a href="admin_live_proctor" class="db-link">Live monitor <i class="bi bi-arrow-right"></i></a>
         </div>
+        <?php if (!$live): ?>
+          <p class="db-empty">Exams appear here while they are switched on and inside their time window.</p>
+        <?php else: ?>
+          <div class="db-live">
+            <?php foreach ($live as $e): $pct = $e['enrolled'] ? min(100, round($e['done'] / $e['enrolled'] * 100)) : 0; ?>
+              <div class="db-live-row">
+                <div class="db-live-name">
+                  <span class="db-type db-t-<?= $e['type'] ?>"><?= $TYPE_LABEL[$e['type']] ?? $e['type'] ?></span>
+                  <a href="<?= $result_url($e) ?>"><?= htmlspecialchars($e['name']) ?></a>
+                  <small><?= $e['group_name'] ? htmlspecialchars($e['group_name']) . ' · ' : '' ?><?= $e['end_time'] ? 'until ' . date('g:i A', strtotime($e['end_time'])) : 'no closing time' ?></small>
+                </div>
+                <div class="db-live-now <?= $e['writing'] ? 'is-on' : '' ?>">
+                  <?php if ($e['type'] === 'objective'): ?><b><?= (int) $e['writing'] ?></b><span>writing</span><?php else: ?><b>—</b><span>marking</span><?php endif; ?>
+                </div>
+                <div class="db-live-bar">
+                  <div class="db-bar"><i style="width:<?= $pct ?>%"></i></div>
+                  <span><?= (int) $e['done'] ?> of <?= (int) $e['enrolled'] ?> <?= $e['type'] === 'objective' ? 'submitted' : 'scored' ?></span>
+                </div>
+                <div class="db-live-act">
+                  <a class="admin-btn admin-btn-sm admin-btn-outline" href="<?= $monitor_url($e) ?>"><?= $e['type'] === 'objective' ? 'Monitor' : 'Scores' ?></a>
+                </div>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
+      </section>
 
-        <div class="kpi-card kpi-active">
-          <div class="kpi-top">
-            <span class="kpi-icon"><i class="bi bi-check-circle"></i></span>
-            <span class="kpi-trend <?= $active_trend[0] ?>"><i class="bi bi-arrow-<?= $active_trend[0] === 'up' ? 'up' : ($active_trend[0] === 'down' ? 'down' : 'right') ?>"></i> <?= $active_trend[1] ?></span>
-          </div>
-          <div>
-            <div class="kpi-label">Active Exams</div>
-            <div class="kpi-value"><?= $active_exams ?></div>
-          </div>
-        </div>
+      <div class="db-cols">
+        <section class="db-panel">
+          <div class="db-panel-head"><h3>Needs attention</h3><span class="db-count"><?= count($attention) ?></span></div>
+          <?php if (!$attention): ?>
+            <p class="db-empty db-ok"><i class="bi bi-check2-circle"></i> Nothing waiting for you.</p>
+          <?php else: ?>
+            <ul class="db-todo">
+              <?php foreach ($attention as [$lvl, $what, $detail, $href]): ?>
+                <li class="is-<?= $lvl ?>"><a href="<?= htmlspecialchars($href) ?>"><b><?= htmlspecialchars($what) ?></b><span><?= htmlspecialchars($detail) ?></span><i class="bi bi-chevron-right"></i></a></li>
+              <?php endforeach; ?>
+            </ul>
+          <?php endif; ?>
+        </section>
 
-        <div class="kpi-card kpi-questions">
-          <div class="kpi-top">
-            <span class="kpi-icon"><i class="bi bi-patch-question"></i></span>
-            <span class="kpi-trend neutral"><i class="bi bi-dash"></i> —</span>
-          </div>
-          <div>
-            <div class="kpi-label">Total Questions</div>
-            <div class="kpi-value"><?= number_format($total_questions) ?></div>
-          </div>
-        </div>
-
-        <div class="kpi-card kpi-staff">
-          <div class="kpi-top">
-            <span class="kpi-icon"><i class="bi bi-person-badge"></i></span>
-            <span class="kpi-trend neutral"><i class="bi bi-dash"></i> —</span>
-          </div>
-          <div>
-            <div class="kpi-label">Staff</div>
-            <div class="kpi-value"><?= $staff_count ?></div>
-          </div>
-        </div>
-
-        <div class="kpi-card kpi-assessments">
-          <div class="kpi-top">
-            <span class="kpi-icon"><i class="bi bi-trophy"></i></span>
-            <span class="kpi-trend <?= $assess_trend[0] ?>"><i class="bi bi-arrow-<?= $assess_trend[0] === 'up' ? 'up' : ($assess_trend[0] === 'down' ? 'down' : 'right') ?>"></i> <?= $assess_trend[1] ?></span>
-          </div>
-          <div>
-            <div class="kpi-label">Assessments</div>
-            <div class="kpi-value"><?= number_format($assessments_done) ?></div>
-          </div>
-        </div>
+        <section class="db-panel">
+          <div class="db-panel-head"><h3>Next 7 days</h3></div>
+          <?php if (!$upcoming): ?>
+            <p class="db-empty">No exam is scheduled to start in the coming week.</p>
+          <?php else: ?>
+            <ol class="db-agenda">
+              <?php foreach ($upcoming as $u): ?>
+                <li>
+                  <time><b><?= date('D j', strtotime($u['start_time'])) ?></b><?= date('g:i A', strtotime($u['start_time'])) ?></time>
+                  <div><span class="db-type db-t-<?= $u['type'] ?>"><?= $TYPE_LABEL[$u['type']] ?? $u['type'] ?></span> <?= htmlspecialchars($u['name']) ?>
+                    <?php if (!$u['is_active']): ?><em>switched off</em><?php endif; ?></div>
+                </li>
+              <?php endforeach; ?>
+            </ol>
+          <?php endif; ?>
+        </section>
       </div>
 
-      <!-- ═══ CHARTS ROW ═══ -->
-      <div class="chart-grid">
-        <div class="chart-card">
-          <div class="chart-card-header">
-            <h3 class="chart-card-title"><i class="bi bi-activity text-primary"></i> Weekly Activity</h3>
-            <span class="admin-badge admin-badge-neutral">Last 7 days</span>
-          </div>
-          <div class="chart-card-body">
-            <div class="chart-container">
-              <canvas id="weeklyChart"></canvas>
-            </div>
-          </div>
+      <section class="db-ledger">
+        <a href="admin_students"><b><?= number_format((int) $counts['students']) ?></b><span>Students</span></a>
+        <a href="admin_staff"><b><?= number_format((int) $counts['examiners']) ?></b><span>Examiners</span></a>
+        <a href="admin_objective_exams"><b><?= (int) $counts['active'] ?><small>/<?= (int) $counts['exams'] ?></small></b><span>Exams switched on</span></a>
+        <div class="db-ledger-types">
+          <?php foreach ($TYPE_LABEL as $t => $l): ?><span><i class="db-dot db-t-<?= $t ?>"></i><?= $l ?> <b><?= (int) ($by_type[$t] ?? 0) ?></b></span><?php endforeach; ?>
         </div>
+        <a href="<?= $is_center ? 'center_console' : 'admin_exam_groups' ?>"><b><?= (int) $counts['groups'] ?></b><span>Exam groups</span></a>
+        <div><b><?= number_format((int) $counts['questions']) ?></b><span>Questions</span></div>
+      </section>
 
-        <div class="chart-card">
-          <div class="chart-card-header">
-            <h3 class="chart-card-title"><i class="bi bi-pie-chart text-info"></i> Exam Distribution</h3>
-            <span class="admin-badge admin-badge-neutral">By type</span>
-          </div>
-          <div class="chart-card-body">
-            <div class="chart-container-sm">
-              <canvas id="examChart"></canvas>
-            </div>
-          </div>
-        </div>
+      <div class="db-cols db-cols-wide">
+        <section class="db-panel">
+          <div class="db-panel-head"><h3>Last 14 days</h3><span class="text-muted small"><?= $activity_total ?> results recorded</span></div>
+          <div class="db-chart"><canvas id="dbChart" aria-label="Results recorded per day"></canvas></div>
+          <div class="db-legend"><span><i class="db-dot db-t-objective"></i>Objective submissions</span><span><i class="db-dot db-t-practical"></i>Students scored by examiners</span></div>
+        </section>
 
-        <div class="chart-card">
-          <div class="chart-card-header">
-            <h3 class="chart-card-title"><i class="bi bi-bar-chart text-warning"></i> Monthly Trends</h3>
-            <span class="admin-badge admin-badge-neutral">6 months</span>
-          </div>
-          <div class="chart-card-body">
-            <div class="chart-container">
-              <canvas id="monthlyChart"></canvas>
-            </div>
-          </div>
-        </div>
-
-        <div class="chart-card">
-          <div class="chart-card-header">
-            <h3 class="chart-card-title"><i class="bi bi-grid text-secondary"></i> Exam Breakdown</h3>
-            <span class="admin-badge admin-badge-neutral"><?= $total_exams ?> total</span>
-          </div>
-          <div class="chart-card-body">
-            <?php $max_type = max($practical_exams, $objective_exams, $viva_exams, 1); ?>
-            <div class="exam-type-bar">
-              <span class="exam-type-icon practical"><i class="bi bi-laptop"></i></span>
-              <div class="exam-type-info">
-                <div class="exam-type-name">Practical</div>
-                <div class="exam-type-count"><?= $practical_exams ?> exams</div>
-              </div>
-              <div class="exam-type-track">
-                <div class="exam-type-fill practical" style="width:<?= round(($practical_exams / $max_type) * 100) ?>%"></div>
-              </div>
-            </div>
-            <div class="exam-type-bar">
-              <span class="exam-type-icon objective"><i class="bi bi-list-check"></i></span>
-              <div class="exam-type-info">
-                <div class="exam-type-name">Objective</div>
-                <div class="exam-type-count"><?= $objective_exams ?> exams</div>
-              </div>
-              <div class="exam-type-track">
-                <div class="exam-type-fill objective" style="width:<?= round(($objective_exams / $max_type) * 100) ?>%"></div>
-              </div>
-            </div>
-            <div class="exam-type-bar">
-              <span class="exam-type-icon viva"><i class="bi bi-mic"></i></span>
-              <div class="exam-type-info">
-                <div class="exam-type-name">Viva</div>
-                <div class="exam-type-count"><?= $viva_exams ?> exams</div>
-              </div>
-              <div class="exam-type-track">
-                <div class="exam-type-fill viva" style="width:<?= round(($viva_exams / $max_type) * 100) ?>%"></div>
-              </div>
-            </div>
-            <div class="mt-3 pt-3 border-top-light">
-              <div class="d-flex justify-content-between align-items-center">
-                <span class="text-muted small">Active Exams</span>
-                <span class="fw-bold text-color-success"><?= $active_exams ?> / <?= $total_exams ?></span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <section class="db-panel">
+          <div class="db-panel-head"><h3>Latest results</h3><a href="report" class="db-link">Reports <i class="bi bi-arrow-right"></i></a></div>
+          <?php if (!$recent): ?>
+            <p class="db-empty">Results appear here as students submit and examiners score.</p>
+          <?php else: ?>
+            <ul class="db-feed">
+              <?php foreach ($recent as $r): ?>
+                <li>
+                  <span class="db-dot db-t-<?= $r['type'] ?>"></span>
+                  <div><b><?= htmlspecialchars($r['sname']) ?></b> <small><?= htmlspecialchars($r['matric_no']) ?></small>
+                    <span><?= htmlspecialchars($r['ename']) ?></span></div>
+                  <time><?= date('j M', strtotime($r['dt'])) === date('j M') ? date('g:i A', strtotime($r['dt'])) : date('j M', strtotime($r['dt'])) ?></time>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+          <?php endif; ?>
+        </section>
       </div>
 
-      <!-- ═══ BOTTOM GRID: Quick Actions + Recent Activity + Settings ═══ -->
-      <div class="dash-bottom">
-        <!-- Quick Actions -->
-        <div class="admin-card">
-          <div class="admin-card-header">
-            <h3 class="admin-card-title"><i class="bi bi-lightning-charge text-warning"></i> Quick Actions</h3>
+      <section class="db-panel">
+        <div class="db-panel-head"><h3>Shortcuts</h3></div>
+        <div class="db-shortcuts">
+          <div>
+            <h4>Prepare</h4>
+            <a href="admin_objective_exams"><i class="bi bi-ui-checks"></i> Objective exams</a>
+            <a href="admin_exams"><i class="bi bi-clipboard2-pulse"></i> Practical exams</a>
+            <a href="admin_viva_exams"><i class="bi bi-mic"></i> Viva</a>
+            <a href="admin_research_exams"><i class="bi bi-journal-richtext"></i> Research</a>
+            <a href="<?= $is_center ? 'center_console' : 'admin_exam_groups' ?>"><i class="bi bi-collection"></i> <?= $is_center ? 'Center Console' : 'Exam groups' ?></a>
           </div>
-          <div class="admin-card-body">
-            <div class="dashboard-actions-grid">
-              <a href="admin_students" class="dashboard-action-card">
-                <span class="dashboard-action-icon" style="background:#e0f2fe;color:#0ea5e9;"><i class="bi bi-people"></i></span>
-                <span class="dashboard-action-label">Students</span>
-              </a>
-              <a href="admin_staff" class="dashboard-action-card">
-                <span class="dashboard-action-icon" style="background:#fce4ec;color:#dc3545;"><i class="bi bi-person-badge"></i></span>
-                <span class="dashboard-action-label">Staff</span>
-              </a>
-              <a href="admin_exams" class="dashboard-action-card">
-                <span class="dashboard-action-icon" style="background:#e8f5e9;color:#198754;"><i class="bi bi-journal-check"></i></span>
-                <span class="dashboard-action-label">Exams</span>
-              </a>
-              <a href="admin_questions" class="dashboard-action-card">
-                <span class="dashboard-action-icon" style="background:#fef3c7;color:#f59e0b;"><i class="bi bi-patch-question"></i></span>
-                <span class="dashboard-action-label">Practical Qs</span>
-              </a>
-              <a href="admin_objective_exams" class="dashboard-action-card">
-                <span class="dashboard-action-icon" style="background:#ede9fe;color:#8b5cf6;"><i class="bi bi-list-check"></i></span>
-                <span class="dashboard-action-label">Objective</span>
-              </a>
-              <a href="report" class="dashboard-action-card">
-                <span class="dashboard-action-icon" style="background:#e0f2fe;color:#0ea5e9;"><i class="bi bi-graph-up"></i></span>
-                <span class="dashboard-action-label">Reports</span>
-              </a>
-            </div>
+          <div>
+            <h4>People</h4>
+            <a href="admin_students"><i class="bi bi-people"></i> Students</a>
+            <a href="admin_staff"><i class="bi bi-person-badge"></i> Staff</a>
+            <a href="admin_roles"><i class="bi bi-diagram-3"></i> Role assignment</a>
+            <a href="admin_upload"><i class="bi bi-cloud-arrow-up"></i> Upload data</a>
+          </div>
+          <div>
+            <h4>Exam day</h4>
+            <a href="admin_live_proctor"><i class="bi bi-camera-video"></i> Live monitor</a>
+            <a href="admin_devices"><i class="bi bi-pc-display"></i> Approve computers</a>
+            <a href="admin_network"><i class="bi bi-wifi"></i> Network &amp; QR code</a>
+            <a href="exam_overview"><i class="bi bi-bar-chart"></i> Exam overview</a>
+          </div>
+          <div>
+            <h4>After</h4>
+            <a href="report"><i class="bi bi-file-earmark-spreadsheet"></i> Reports</a>
+            <a href="admin_student_scores"><i class="bi bi-list-ol"></i> Student scores</a>
+            <a href="admin_session_report"><i class="bi bi-calendar-check"></i> Session reports</a>
+            <a href="admin_analytics"><i class="bi bi-graph-up"></i> Analytics</a>
           </div>
         </div>
+      </section>
 
-        <!-- Recent Activity -->
-        <div class="admin-card">
-          <div class="admin-card-header">
-            <h3 class="admin-card-title"><i class="bi bi-activity"></i> Recent Submissions</h3>
-            <a href="admin_analytics" class="admin-btn admin-btn-sm admin-btn-outline">View All</a>
-          </div>
-          <div class="admin-card-body">
-            <?php if (empty($recent_activity)): ?>
-              <div class="admin-empty-sm">
-                <i class="bi bi-inbox"></i>
-                <div>No recent activity</div>
-              </div>
-            <?php else: ?>
-              <div class="activity-feed">
-                <?php foreach ($recent_activity as $act): ?>
-                  <div class="activity-item">
-                    <span class="activity-dot assessment"></span>
-                    <div class="activity-body">
-                      <div class="activity-text">
-                        <strong><?= htmlspecialchars($act['sname'] ?? 'Student') ?></strong>
-                        submitted <strong><?= htmlspecialchars($act['ename']) ?></strong>
-                        <span class="admin-badge <?= $act['type'] === 'objective' ? 'admin-badge-info' : 'admin-badge-primary' ?> badge-xs"><?= $act['type'] ?></span>
-                      </div>
-                      <div class="activity-time"><?= date('M d, Y g:i A', strtotime($act['dt'])) ?></div>
-                    </div>
-                  </div>
-                <?php endforeach; ?>
-              </div>
-            <?php endif; ?>
-          </div>
-        </div>
-
-        <!-- System Settings -->
-        <div class="admin-card">
-          <div class="admin-card-header">
-            <h3 class="admin-card-title"><i class="bi bi-gear"></i> System Settings</h3>
-          </div>
-          <div class="admin-card-body">
-            <?php if ($success_msg): ?>
-              <div class="admin-alert admin-alert-success">
-                <i class="bi bi-check-circle-fill"></i>
-                <span><?= $success_msg ?></span>
-                <button class="admin-alert-close" onclick="this.parentElement.remove()">&times;</button>
-              </div>
-            <?php endif; ?>
-            <form method="post">
-              <?php csrf_field(); ?>
-              <div class="admin-form-group">
-                <label class="admin-form-label">Student Login Instructions</label>
-                <textarea name="student_login_content" class="admin-input" rows="3"><?= htmlspecialchars($student_login_content) ?></textarea>
-              </div>
-              <button type="submit" name="save_settings" class="admin-btn admin-btn-primary">
-                <i class="bi bi-save"></i> Save Settings
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
+      <details class="db-panel db-settings" <?= $success_msg ? 'open' : '' ?>>
+        <summary><h3>Student login instructions</h3><span class="text-muted small">shown on the student login page</span></summary>
+        <?php if ($success_msg): ?><div class="admin-alert admin-alert-success mt-3"><i class="bi bi-check-circle-fill"></i><span><?= $success_msg ?></span></div><?php endif; ?>
+        <form method="post" class="mt-3">
+          <?php csrf_field(); ?>
+          <textarea name="student_login_content" class="admin-input" rows="4"><?= htmlspecialchars($student_login_content) ?></textarea>
+          <button type="submit" name="save_settings" class="admin-btn admin-btn-primary mt-2"><i class="bi bi-save"></i> Save</button>
+        </form>
+      </details>
     </div>
   </div>
 
   <?php include 'footer.php'; ?>
 
   <script src="assets/js/bootstrap.bundle.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="assets/vendor/chartjs/chart.umd.min.js"></script>
   <script>
-  document.addEventListener('DOMContentLoaded', function() {
-    const isDark = document.body.classList.contains('dark-mode');
-    const txtColor = isDark ? '#e2e8f0' : '#64748b';
-    const gridColor = isDark ? '#334155' : '#e2e8f0';
-
-    // ── Weekly Activity Line Chart ──
-    const weeklyData = <?= json_encode($weekly_activity) ?>;
-    if (weeklyData.length > 0 && document.getElementById('weeklyChart')) {
-      const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-      const labels = weeklyData.map(function(d) {
-        const dt = new Date(d.day + 'T00:00:00');
-        return days[dt.getDay()] + ' ' + dt.getDate();
-      });
-      new Chart(document.getElementById('weeklyChart'), {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: 'Submissions',
-            data: weeklyData.map(function(d) { return parseInt(d.total); }),
-            borderColor: '#198754',
-            backgroundColor: 'rgba(25, 135, 84, 0.08)',
-            borderWidth: 2.5,
-            fill: true,
-            tension: 0.4,
-            pointRadius: 4,
-            pointBackgroundColor: '#198754',
-            pointBorderColor: '#fff',
-            pointBorderWidth: 2
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { grid: { color: gridColor }, ticks: { color: txtColor, font: { size: 11 } } },
-            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: txtColor, font: { size: 11 }, stepSize: 1 } }
+    (function () {
+      var days = <?= json_encode(array_map(fn($d, $v) => ['d' => $d, 'obj' => $v['obj'], 'mark' => $v['mark']], array_keys($days), $days)) ?>;
+      var c = document.getElementById('dbChart');
+      if (c && window.Chart) {
+        var dark = document.body.classList.contains('dark-mode');
+        var tick = dark ? '#9fb0a8' : '#6b7a73', grid = dark ? 'rgba(255,255,255,.06)' : '#eef2ef';
+        new Chart(c, {
+          type: 'bar',
+          data: {
+            labels: days.map(function (x) { var d = new Date(x.d + 'T00:00:00'); return d.getDate() + ' ' + d.toLocaleString('en', { month: 'short' }); }),
+            datasets: [
+              { label: 'Objective submissions', data: days.map(function (x) { return x.obj; }), backgroundColor: '#2f5bd3', borderRadius: 3, stack: 's' },
+              { label: 'Students scored', data: days.map(function (x) { return x.mark; }), backgroundColor: '#2e9a68', borderRadius: 3, stack: 's' }
+            ]
+          },
+          options: {
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { stacked: true, grid: { display: false }, ticks: { color: tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } },
+              y: { stacked: true, beginAtZero: true, grid: { color: grid }, ticks: { color: tick, precision: 0 } }
+            }
           }
-        }
-      });
-    }
-
-    // ── Exam Distribution Doughnut ──
-    const pCount = <?= $practical_exams ?>;
-    const oCount = <?= $objective_exams ?>;
-    const vCount = <?= $viva_exams ?>;
-    if (document.getElementById('examChart')) {
-      new Chart(document.getElementById('examChart'), {
-        type: 'doughnut',
-        data: {
-          labels: ['Practical (' + pCount + ')', 'Objective (' + oCount + ')', 'Viva (' + vCount + ')'],
-          datasets: [{
-            data: [pCount, oCount, vCount],
-            backgroundColor: ['#198754', '#0ea5e9', '#f59e0b'],
-            borderWidth: 0
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          cutout: '70%',
-          plugins: {
-            legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12, font: { size: 11 }, color: txtColor } }
-          }
-        }
-      });
-    }
-
-    // ── Monthly Trends Bar Chart ──
-    const monthlyData = <?= json_encode($monthly_trends) ?>;
-    if (monthlyData.length > 0 && document.getElementById('monthlyChart')) {
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      const labels = monthlyData.map(function(d) {
-        const parts = d.month.split('-');
-        return months[parseInt(parts[1]) - 1] + ' ' + parts[0];
-      });
-      new Chart(document.getElementById('monthlyChart'), {
-        type: 'bar',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: 'Assessments',
-            data: monthlyData.map(function(d) { return parseInt(d.total); }),
-            backgroundColor: 'rgba(25, 135, 84, 0.7)',
-            borderColor: '#198754',
-            borderWidth: 1,
-            borderRadius: 4
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { grid: { display: false }, ticks: { color: txtColor, font: { size: 11 } } },
-            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: txtColor, font: { size: 11 } } }
-          }
-        }
-      });
-    }
-  });
+        });
+      }
+      var clock = document.querySelector('[data-clock]');
+      if (clock) setInterval(function () { clock.textContent = new Date().toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' }); }, 30000);
+    })();
   </script>
-  <script src="assets/js/admin-common.js"></script>
-  <script src="assets/js/admin-swal.js"></script>
 </body>
+
 </html>

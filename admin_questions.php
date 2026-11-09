@@ -30,6 +30,7 @@ if ($selected_exam && isset($_GET['export'])) {
 
 // Handle add, edit, delete (only if exam selected)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $exam_id) {
+  cs_guard_exam($db, (int) $exam_id, 'admin_questions?exam_id=' . (int) $exam_id);
   if (isset($_POST['add'])) {
     $stmt = $db->prepare("INSERT INTO questions(exam_id, text, score_values) VALUES (?, ?, ?)");
     $stmt->execute([$exam_id, $_POST['text'], $_POST['score_values']]);
@@ -77,7 +78,7 @@ $back_url = 'admin_dashboard';
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="assets/favicon.ico">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
 </head>
 

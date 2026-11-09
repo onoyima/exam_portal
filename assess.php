@@ -23,7 +23,8 @@ try {
       SELECT DISTINCT e.* 
       FROM exams e 
       LEFT JOIN exam_examiners ee ON e.id = ee.exam_id AND ee.examiner_id = ?
-      WHERE ee.examiner_id IS NOT NULL 
+      LEFT JOIN examiners xg ON xg.id = ee.examiner_id
+      WHERE ee.examiner_id IS NOT NULL AND (xg.group_id IS NULL OR e.group_id = xg.group_id) 
       AND e.is_active = 1 AND e.deleted_at IS NULL 
       ORDER BY e.type = 'viva' DESC, e.created_at DESC
     ");
@@ -223,7 +224,7 @@ if ($stu && $selected_exam) {
     $qs_sum = $db->prepare("SELECT q.* FROM exam_questions eq JOIN questions q ON eq.question_id=q.id WHERE eq.exam_id=?");
     $qs_sum->execute([$selected_exam]);
     while ($q = $qs_sum->fetch()) {
-        if ($current_exam_type === 'viva') {
+        if (in_array($current_exam_type, ['viva', 'research'], true)) {
             $max_score += intval($current_exam_total_mark);
         } else {
             $vals = array_map('trim', explode(',', $q['score_values']));
@@ -245,7 +246,7 @@ $score_pct = $max_score > 0 ? round(($total_score / $max_score) * 100, 1) : 0;
   <title>Assessment - Examiner Portal</title>
   <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
   
   <style>
@@ -572,16 +573,10 @@ $score_pct = $max_score > 0 ? round(($total_score / $max_score) * 100, 1) : 0;
                         $qs = $db->prepare("SELECT q.* FROM exam_questions eq JOIN questions q ON eq.question_id=q.id WHERE eq.exam_id=?");
                         $qs->execute([$selected_exam]);
                         while ($q = $qs->fetch()):
-                          if ($current_exam_type === 'viva') {
-                            $v_max = intval($current_exam_total_mark);
-                            $values = [];
-                            if ($v_max > 0) {
-                                for ($i = 1; $i <= $v_max; $i++) {
-                                    $values[] = $i;
-                                }
-                            } else {
-                                $values = [0];
-                            }
+                          $is_oral = in_array($current_exam_type, ['viva', 'research'], true);
+                          if ($is_oral) {
+                            $v_max = max(0, intval($current_exam_total_mark));
+                            $values = range(0, $v_max);
                           } else {
                             $values = array_map('trim', explode(',', $q['score_values']));
                           }
@@ -591,10 +586,22 @@ $score_pct = $max_score > 0 ? round(($total_score / $max_score) * 100, 1) : 0;
                             <td class="text-center fw-bold text-muted"><?= $sn++ ?></td>
                             <td class="question-cell fw-medium"><?= htmlspecialchars($q['text']) ?></td>
                             <td class="score-cell score-cell-relative">
+                              <?php if ($is_oral): ?>
+                                <div class="d-flex align-items-center gap-2">
+                                  <select name="q[<?= $q['id'] ?>]" class="admin-input admin-select oral-score" style="max-width:160px;font-size:1.1rem;font-weight:700;"
+                                          data-question-id="<?= $q['id'] ?>" required aria-label="Score">
+                                    <option value="" <?= $current_val === null ? 'selected' : '' ?> disabled>Select…</option>
+                                    <?php foreach ($values as $v): ?>
+                                      <option value="<?= $v ?>" <?= ($current_val !== null && abs($current_val - $v) < 0.001) ? 'selected' : '' ?>><?= $v ?></option>
+                                    <?php endforeach; ?>
+                                  </select>
+                                  <span class="text-muted">out of <strong><?= $v_max ?></strong></span>
+                                </div>
+                              <?php else: ?>
                               <div class="assessment-radio-group">
                                 <?php foreach ($values as $col_score):
                                   $input_id = "q{$q['id']}_" . str_replace('.', '_', $col_score);
-                                  $label_display = ($current_exam_type === 'viva') ? $col_score : decimalToFractionLabel($col_score);
+                                  $label_display = decimalToFractionLabel($col_score);
                                   $checked = ($current_val !== null && abs($current_val - $col_score) < 0.001) ? 'checked' : '';
                                 ?>
                                   <div class="form-check">
@@ -605,6 +612,7 @@ $score_pct = $max_score > 0 ? round(($total_score / $max_score) * 100, 1) : 0;
                                   </div>
                                 <?php endforeach; ?>
                               </div>
+                              <?php endif; ?>
                               <small class="save-indicator text-success fw-bold">
                                 <i class="bi bi-check-circle-fill"></i>
                               </small>
@@ -734,7 +742,7 @@ $score_pct = $max_score > 0 ? round(($total_score / $max_score) * 100, 1) : 0;
                       <div class="admin-card-body">
                         <div class="fw-bold mb-1"><?= htmlspecialchars($exam['name']) ?></div>
                         <div class="d-flex align-items-center gap-2">
-                          <span class="admin-badge <?= $exam['type'] === 'viva' ? 'admin-badge-warning' : ($exam['type'] === 'objective' ? 'admin-badge-info' : 'admin-badge-success') ?>">
+                          <span class="admin-badge <?= in_array($exam['type'], ['viva', 'research'], true) ? 'admin-badge-warning' : ($exam['type'] === 'objective' ? 'admin-badge-info' : 'admin-badge-success') ?>">
                             <?= ucfirst($exam['type'] ?? 'practical') ?>
                           </span>
                           <?php if ($exam['is_active']): ?>
@@ -755,7 +763,7 @@ $score_pct = $max_score > 0 ? round(($total_score / $max_score) * 100, 1) : 0;
 
   <?php include 'footer.php'; ?>
 
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="assets/vendor/jquery/jquery.min.js"></script>
   <script src="assets/js/bootstrap.bundle.min.js"></script>
   
   <script>
@@ -779,7 +787,7 @@ $score_pct = $max_score > 0 ? round(($total_score / $max_score) * 100, 1) : 0;
       }
 
       // -- Instant save: each radio click saves immediately via AJAX --
-      $(document).on('change', 'input[type="radio"][data-question-id]', function() {
+      $(document).on('change', 'input[type="radio"][data-question-id], select.oral-score', function() {
         const radio = $(this);
         const qid = radio.data('question-id');
         const score = radio.val();

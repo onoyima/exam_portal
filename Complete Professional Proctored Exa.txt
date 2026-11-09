@@ -1,0 +1,521 @@
+
+IMPLEMENT THESE IN MODULAR THAT CAN BE IN PHASES. 
+
+SCHOOL A CAN DECIDE THEY ONLY WANT EXAM AND THEY ONLY TURN IT ON FOR THEM, IF THEY WANT MORE IT CAN BE ADDED...
+
+NOW WE ARE FOCUSING ON VERITAS BUT STILL IT SHOULD SERVE AS A SOFTWARE AS A SERVICES WITH INSTITUTIONAL SUBSCRIPTIONS OF DIFFERENT PACKAGES AND FEATURES.. 
+
+
+
+MOST IMPORTANT FEATURE TO ADD IS TO MAKE SURE THAT THE CHEMISTRY EQUATIONS AND MATEMATICS OR PHYSICS EQUATIONS ARE PROPERLY UPLOADED THROUGH DOC, PDF OR ANY OTHER FORMAT AND IT SHOULD SHOW PROPERLY TO THE STUDENT DURING THE EXAMINATIONS
+Complete Professional Proctored Examination System Feature List
+1. Candidate Identity Verification
+2. Examination Access Control
+3. Live Video Proctoring
+4. Live Audio Proctoring
+5. Live Screen Monitoring
+6. Two-Way Proctor Communication
+7. Proctor Assignment and Availability Management
+8. AI-Assisted Face Monitoring
+9. Gaze and Head-Movement Alerts
+10. Multiple-Face Detection
+11. Candidate Absence Detection
+12. Suspicious Activity Detection
+13. Secure Examination Browser Mode
+14. Question Bank Management
+15. Randomized Examination Papers
+16. Question and Answer Option Shuffling
+17. Question Pool Management
+18. Examination Blueprint Configuration
+19. Multiple Question Types
+20. Timed Examination Controls
+21. Server-Authoritative Examination Timer
+22. Automatic Examination Submission
+23. Secure Question Delivery
+24. Automatic Answer Saving
+25. Network-Failure Recovery
+26. Automatic Reconnection
+27. Duplicate-Session Prevention
+28. Device and Session Binding
+29. Live Proctor Dashboard
+30. Real-Time Candidate Status Monitoring
+31. Candidate Camera and Microphone Status
+32. Live Incident Alerts
+33. Incident Management and Escalation
+34. Evidence Capture
+35. Video and Audio Recording
+36. Screen Recording
+37. Timestamped Incident Timeline
+38. Tamper-Evident Audit Trail
+39. Evidence Integrity Verification
+40. Human Review of AI Alerts
+41. Candidate Appeals Management
+42. Emergency Examination Pause and Resume
+43. Authorized Examination Termination
+44. Physical CBT Hall Management
+45. Remote Examination Support
+46. Candidate Attendance Management
+47. Seat and Computer Assignment
+48. Examination Scheduling
+49. Examination Approval Workflows
+50. Student Information System Integration
+51. Department, Faculty and Course Management
+52. Academic Session and Semester Management
+53. Role-Based Access Control
+54. Lecturer and Question Setter Management
+55. Invigilator and Chief Invigilator Management
+56. Candidate Eligibility Verification
+57. Examination PIN Management
+58. Late Entry and Extra-Time Management
+59. Objective Question Auto-Marking
+60. Essay Marking and Moderation
+61. Results Approval and Publication
+62. Examination Performance Analytics
+63. Examination Attendance Reports
+64. Candidate Submission Reports
+65. Malpractice and Incident Reports
+66. Question Difficulty Analysis
+67. Question Discrimination Analysis
+68. AI-Assisted Risk Scoring
+69. Suspicious Answer Pattern Analysis
+70. Browser Tab-Switch Detection
+71. Fullscreen Exit Detection
+72. Browser Focus-Loss Detection
+73. Restricted Copy-and-Paste Controls
+74. Unauthorized Navigation Detection
+75. Multiple Login Detection
+76. Network and Connectivity Monitoring
+77. Real-Time Proctor Workload Management
+78. Proctor Disconnection Alerts
+79. Proctor Reassignment
+80. Pre-Examination Equipment Checks
+81. Candidate Practice Examination
+82. Accessibility Support
+83. Approved Special Accommodations
+84. Secure Candidate Messaging
+85. Examination Instructions and Notifications
+86. Data Encryption and Privacy Protection
+87. Secure Authentication and Session Management
+88. API Security and Rate Limiting
+89. Administrator Activity Logging
+90. Recording Access Controls
+91. Evidence Retention and Secure Deletion
+92. Automated Database Backups
+93. Disaster Recovery
+94. High Availability and Failover
+95. Concurrent-User Load Testing
+96. Database Query and Performance Optimization
+97. LAN-Based Examination Delivery
+98. Offline-Tolerant Examination Operations
+99. Multi-Campus Support
+100. Secure Institutional Integration APIs
+101. System Health Monitoring
+102. Security Vulnerability Testing
+103. Automated Dependency Updates and Maintenance
+104. Configurable Proctoring Policies
+105. Configurable Incident Severity Levels
+106. Examination Rule Enforcement
+107. Audit and Compliance Reporting
+108. Candidate Technical Support
+109. Examination Disruption Management
+110. Comprehensive Examination Activity Logs
+111. Dual-Camera Live Proctoring
+112. Built-In Webcam Integration
+113. External USB Camera Integration
+114. External Camera Plugin Support
+115. Synchronized Dual-Camera Monitoring
+116. Independent Camera Status Monitoring
+117. Camera Disconnection Alerts
+118. Camera Disablement Detection
+119. Camera Obstruction Alerts
+120. Camera Tampering Alerts
+121. Camera Selection Change Detection
+122. Multi-Angle Candidate Verification
+123. Secondary Camera Workspace Monitoring
+124. Candidate Hands and Desk Monitoring
+125. Multiple Display Detection
+126. HDMI External Monitor Detection
+127. Wireless Display Detection
+128. Duplicate Screen Configuration Detection
+129. Extended Desktop Detection
+130. Display Configuration Change Alerts
+131. Display Resolution and Topology Monitoring
+132. Unauthorized Screen Projection Detection
+133. Wireless Screen Sharing Detection
+134. Remote Desktop Activity Detection
+135. Unauthorized Screen Sharing Detection
+136. Display Policy Enforcement
+137. Live Proctor Display Alerts
+138. Display Incident Evidence Logging
+139. Pre-Examination Hardware Verification
+140. Continuous Hardware Compliance Monitoring
+141. Authorized Hardware Exception Management
+142. Simultaneous Webcam and External Camera Streaming
+143. Independent Dual-Camera Recording
+144. Synchronized Camera and Screen Recordings
+145. Camera Feed Quality Monitoring
+146. Camera Bandwidth and Latency Monitoring
+147. Camera Feed Recovery After Disconnection
+148. Proctor Multi-Candidate Camera View
+149. Expandable Individual Candidate Camera View
+150. Proctor Camera Layout Customization
+151. Automatic Prioritization of High-Risk Alerts
+152. Proctor-to-Supervisor Escalation
+153. Incident Notes and Case Assignment
+154. Candidate Warning and Acknowledgment Tracking
+155. Examination Session Lock and Unlock
+156. Controlled Candidate Session Transfer
+157. Examination Integrity Verification
+158. Question Paper Version Control
+159. Examination Result Audit History
+160. Result Modification Approval Workflow
+161. Candidate Result Rechecking and Appeals
+162. Examination Centre Network Monitoring
+163. Authorized Computer and Device Whitelisting
+164. Unauthorized USB Device Detection Where Supported
+165. Virtual Machine and Virtual Display Detection Where Supported
+166. Operating-System-Level Display Monitoring Where Authorized
+167. Secure Windows Examination Client Integration
+168. Managed Secure Browser Integration
+169. Proctoring Hardware Compatibility Management
+170. System Configuration and Policy Versioning
+171. AI-Based Anomaly Detection
+172. Facial Identity Reverification During Examinations
+173. Candidate Identity Mismatch Alerts
+174. Configurable Recording and Monitoring Retention
+175. Monitoring Consent and Privacy Notices
+176. Secure Storage of Camera and Screen Recordings
+177. Encrypted Evidence Transmission
+178. Restricted Access to Candidate Recordings
+179. Recording Access and Download Audit Logs
+180. Automatic Evidence Retention and Deletion Policies
+181. Candidate Accessibility and Accommodation Profiles
+182. Low-Bandwidth Proctoring Options
+183. Real-Time Camera Connection Diagnostics
+184. Examination Server Capacity Monitoring
+185. Automated Application and Database Health Checks
+186. Failover and Recovery Testing
+187. Examination Data Consistency Verification
+188. Duplicate Answer and Submission Prevention
+189. Secure Answer Submission Verification
+190. Examination Session Recovery After Server Restart
+191. Examination Centre Power and Network Incident Logging
+192. Proctor Availability and Shift Scheduling
+193. Proctor Performance and Workload Reports
+194. Examination Incident Statistics and Trends
+195. Institution-Wide Examination Analytics
+196. Departmental and Faculty Performance Comparisons
+197. Course-Level Assessment Analytics
+198. Question Bank Import and Export
+199. Bulk Candidate Import and Registration
+200. Bulk Examination Scheduling and Assignment
+201. Automated Candidate Notifications
+202. Examination Readiness Checklist
+203. Candidate System Compatibility Testing
+204. Proctor Training and Practice Environment
+205. Examination Dry-Run and Simulation Mode
+206. Configurable Rules for Different Examination Types
+207. Configurable Rules for Different Faculties and Departments
+208. Examination Centre and Remote Proctoring Mode Selection
+209. Integration With Learning Management Systems
+210. Integration With Student Information Systems
+211. Integration With Institutional Authentication Services
+212. API-Based Integration With External Academic Systems
+213. Multi-Tenant Institution Support
+214. Separate Institutional Data and Permissions
+215. Comprehensive System Administration Dashboard
+216. Security Incident Monitoring
+217. Unauthorized API Request Detection
+218. Brute-Force Login Protection
+219. Privileged Administrator Action Auditing
+220. Regular Security and Penetration Testing
+
+
+
+
+
+
+
+
+
+
+
+
+Professional LMS + Examination System: Complete Feature List
+1. User Accounts, Roles and Permissions
+1. Student, lecturer, course coordinator, Head of Department, Dean, Registry, examination officer, invigilator, ICT administrator and super administrator accounts.
+2. Role-based access control with granular permissions.
+3. Secure login, password reset, session management and optional multi-factor authentication.
+4. University email and student identity verification.
+5. Automatic account creation and bulk student/staff imports.
+6. Student status synchronisation: active, suspended, withdrawn, graduated and deferred.
+7. Login history, device records and security audit logs.
+8. Staff account delegation and temporary permissions.
+9. Single sign-on integration with existing university systems.
+10. Automatic deactivation of accounts when authorised university records require it.
+2. Academic Structure and Course Catalogue
+11. Faculty, department, programme, academic session and semester management.
+12. Course codes, titles, credit units, prerequisites and course descriptions.
+13. Course catalogue showing courses available to each programme and level.
+14. Semester-specific course offerings and lecturer assignments.
+15. Course registration rules based on programme, level, prerequisites and student status.
+16. Maximum and minimum credit-unit validation.
+17. Compulsory, elective and carryover course classification.
+18. Course capacity limits and class allocation.
+19. Course registration opening and closing dates.
+20. Add, drop and change-course workflows with approval where required.
+21. Registration validation against the official student academic record.
+22. Automatic enrolment into the corresponding Moodle course after approved registration.
+23. Registration slip generation and downloadable course lists.
+24. Late registration, corrections and authorised overrides.
+25. Registration audit trail and departmental reports.
+3. Lecturer Course Management
+26. Lecturer dashboard showing assigned courses, enrolled students and upcoming activities.
+27. Course creation from approved course offerings or reusable templates.
+28. Course content organised by weeks, topics, modules or learning outcomes.
+29. Uploading lecture notes, PDFs, Word documents, PowerPoint slides, audio and videos.
+30. Live lecture links and recorded lecture management.
+31. Course outlines, syllabuses, reading lists and learning objectives.
+32. Learning materials scheduled for automatic release.
+33. Prerequisite activities and conditional content access.
+34. Course announcements and class notifications.
+35. Discussion forums, academic Q&A and class collaboration.
+36. Student attendance and participation tracking.
+37. Individual, group and collaborative activities.
+38. Course completion tracking and learning progress.
+39. Course duplication, templates and content reuse across semesters.
+40. Lecturer co-teaching and teaching-assistant permissions.
+41. Content versioning and change history.
+42. Course review and approval by the appropriate academic authority.
+4. Student Learning Portal
+43. Personalised student dashboard with registered courses.
+44. Current semester timetable and academic calendar.
+45. Course materials, announcements and lecturer contact information.
+46. Upcoming assignments, quizzes, tests and examinations.
+47. Submission status and assessment deadlines.
+48. Personal grades, feedback and academic progress.
+49. Course completion indicators and outstanding activities.
+50. Notifications for new materials, deadlines, grades and timetable changes.
+51. Searchable course resources and downloadable learning materials.
+52. Mobile-friendly interface and accessible learning content.
+53. Student-teacher communication and discussion forums.
+54. Academic support resources and frequently asked questions.
+55. Low-bandwidth usability and resumable uploads where supported.
+5. Assignments, Continuous Assessment and Quizzes
+56. Online assignments with document, image, video, code and text submissions.
+57. Individual and group assignments.
+58. Online quizzes, class tests, practice tests and formative assessments.
+59. Multiple-choice, multiple-select, true/false, matching, essay, numerical and short-answer questions.
+60. Central question bank organised by course, topic, difficulty and learning outcome.
+61. Random question selection and shuffled answer options.
+62. Question versioning, moderation and reuse across semesters.
+63. Assessment availability windows, time limits and due dates.
+64. Late-submission policies, extensions and authorised exemptions.
+65. Automatic marking for supported question types.
+66. Manual marking, rubrics, marking guides and annotated feedback.
+67. Anonymous marking where appropriate.
+68. Plagiarism-checking integration where licensed and available.
+69. Group assessment, peer assessment and self-assessment.
+70. Multiple attempts and configurable grading rules.
+71. Continuous assessment weighting and gradebook calculations.
+72. Grade moderation and approval before marks are released.
+73. Assessment analytics and question-performance reports.
+74. Accommodation settings for approved extra time and special assessment needs.
+Moodle already supports many of these learning, enrolment, assessment and grading capabilities through its core activities and role system; the exact configuration and integrations determine what is available in the Veritas installation. 
+MoodleDocs+2
+
+6. Central University Examination Management
+75. Central examination administration separate from ordinary lecturer-managed quizzes.
+76. Examination calendar for each semester, faculty, department and programme.
+77. Examination timetable creation, conflict detection and publication.
+78. Examination venue, laboratory, seat and capacity management.
+79. Candidate allocation to examination halls, laboratories and seats.
+80. Course-specific candidate lists generated from approved registration records.
+81. Examination eligibility checks based on registration, student status and institutional rules.
+82. Configurable eligibility conditions, including attendance requirements where university policy mandates them.
+83. Approval workflows for examination creation and publication.
+84. Examination paper submission, moderation, approval and release controls.
+85. Secure question and paper repositories with restricted access.
+86. Separate permissions for question setters, moderators, approvers and examination administrators.
+87. Exam versioning and controlled question-paper revisions.
+88. Examination session configuration: date, start time, duration, grace period and closing time.
+89. Automatic candidate allocation to sessions and available workstations.
+90. Bulk candidate import, allocation and examination slip generation.
+91. Candidate identity verification before entry.
+92. Secure examination launch using authorised candidate and session records.
+93. Automatic enforcement of examination start and end times.
+94. Late-entry, early-exit, interruption and authorised-resumption policies.
+95. Emergency suspension, extension and controlled restart of examinations.
+96. Examination attendance, check-in and check-out records.
+97. Live monitoring of candidate progress, remaining time and submission status.
+98. Automatic submission at the deadline.
+99. Examination incident reports and formal investigation workflows.
+100. Secure archiving of examination configurations, attempts and final results.
+7. Advanced Live-Proctored Examination
+101. Pre-exam identity verification using approved student credentials and, where appropriate, facial matching.
+102. Live webcam monitoring.
+103. Support for a second external camera, where the proctoring software and hardware permit it.
+104. Live screen sharing and invigilator screen monitoring.
+105. Multiple-candidate live invigilation dashboard.
+106. Live audio monitoring where authorised and appropriate.
+107. Face-absence, multiple-person and suspicious-environment alerts.
+108. Configurable alerts for tab switching, focus loss and prohibited interactions.
+109. Screen recording or session recording where supported and permitted.
+110. Proctor notes, timestamps, screenshots and incident evidence.
+111. AI-assisted suspicious-activity detection with human review.
+112. Manual invigilator intervention, warnings and escalation.
+113. Candidate identity rechecks during an examination where necessary.
+114. Connection-loss and camera-disconnection alerts.
+115. A documented procedure for false positives, appeals and accessibility exceptions.
+116. Examination evidence retention policies and restricted access to recordings.
+117. Proctor assignment, workload management and candidate-to-invigilator allocation.
+118. Live incident queue, severity levels and resolution tracking.
+8. Examination Device and Screen Security
+119. Safe Exam Browser integration for supported examination computers.
+120. Restricted browser navigation, shortcuts, clipboard operations and unauthorised applications where the configured lockdown software supports them.
+121. Full-screen examination mode and controlled exam launch.
+122. Detection of supported multi-monitor configurations.
+123. Detection or restriction of prohibited screen-sharing and remote-access software where the managed client can enforce it.
+124. Managed examination workstations with approved operating-system policies.
+125. Network access restrictions for controlled examination laboratories.
+126. External-display and wireless-display controls through compatible endpoint management or operating-system policies.
+127. Device compatibility checks before candidates begin.
+128. Camera, microphone and screen-permission checks before the examination.
+129. Exam environment readiness checks and technical support escalation.
+130. Secure session tokens, attempt ownership and duplicate-session controls.
+131. Audit logging for device, browser and session events.
+Important: Moodle alone cannot guarantee that HDMI displays, wireless displays or every external device are blocked. These controls depend on the examination client, operating system, hardware and managed-device policies. 
+MoodleDocs+1
+
+9. Examination Reliability and Performance
+132. Autosaving of answers throughout an attempt.
+133. Safe recovery after brief network disconnections.
+134. Server-side time enforcement and authoritative submission timestamps.
+135. Protection against duplicate attempts and duplicate final submissions.
+136. Idempotent answer-saving and submission processing.
+137. Capacity testing for expected concurrent candidates.
+138. Load balancing and appropriate database optimisation.
+139. Database backups and tested restoration procedures.
+140. Monitoring of CPU, memory, storage, database load and network latency.
+141. High-availability architecture where justified by the examination's criticality.
+142. Documented disaster recovery and examination-continuity plans.
+143. Monitoring of failed requests, error rates and service availability.
+144. Controlled maintenance windows and pre-examination system checks.
+145. Secure, monitored file storage for examination papers, uploads and recordings.
+10. Marking, Results and Academic Records
+146. Automatic grading and manual marking workflows.
+147. Course-level gradebooks combining quizzes, assignments and other assessments.
+148. Configurable CA, test and examination weighting.
+149. Grade moderation and approval by authorised academic officers.
+150. Marks-entry validation and protection against unauthorised changes.
+151. Results approval by the designated departmental and university authorities.
+152. Result publication controls and scheduled release.
+153. Student result views and downloadable result statements.
+154. Grade history and change audit trails.
+155. Supplementary examination and authorised resit management.
+156. Missing-result, absent-candidate and withheld-result tracking.
+157. Examination malpractice flags and investigation status.
+158. Result export to approved university academic systems.
+159. Course performance, pass-rate and failure-rate analysis.
+160. Question analysis, item difficulty and discrimination reports.
+161. Result correction workflows with documented approvals.
+162. Final result locking after formal approval.
+163. Transcript or academic-record integration where supported by university policy.
+11. Academic Governance and Administration
+164. Faculty and departmental dashboards.
+165. HOD oversight of assigned courses, lecturers, assessments and results.
+166. Dean-level monitoring and approval workflows.
+167. Registry control of student academic records and examination eligibility rules.
+168. Central examinations office control of examination schedules and sessions.
+169. ICT administration of system availability, integrations, security and backups.
+170. Configurable approval chains and separation of duties.
+171. Academic session and semester activation and closure.
+172. Automatic semester rollover and course archival.
+173. Bulk course, user and enrolment operations.
+174. Staff workload and course allocation reports.
+175. Course coverage and assessment-completion monitoring.
+176. University-wide policy settings and configurable grading scales.
+177. Delegated access with expiry dates and audit trails.
+178. Formal exception requests and approval records.
+179. Institution-wide academic activity and examination dashboards.
+12. Communication and Notifications
+180. Announcements by course, department, faculty or university.
+181. Email and in-platform notifications.
+182. Deadline reminders and examination countdown alerts.
+183. Examination timetable change notifications.
+184. Alerts for registration problems and eligibility failures.
+185. Lecturer-to-student messaging with appropriate privacy controls.
+186. Notifications for released grades and feedback.
+187. Emergency alerts during live examinations.
+188. Delivery status and notification logs.
+13. Reporting, Analytics and Audit
+189. Student engagement and course completion reports.
+190. Lecturer activity and assessment reports.
+191. Course registration and enrolment reports.
+192. Examination attendance and absentee reports.
+193. Live examination incident and proctoring reports.
+194. Candidate submission and interruption reports.
+195. Department, faculty and university-wide performance reports.
+196. Export to Excel, CSV and PDF.
+197. Filterable reports by academic session, semester, faculty, department, course and level.
+198. Immutable or tamper-evident audit records for critical examination actions.
+199. Administrative activity logs and privileged-access monitoring.
+200. Configurable dashboards with key academic and examination indicators.
+14. Security, Privacy and Compliance
+201. Encryption in transit and secure storage for sensitive data.
+202. Strong password policies and optional multi-factor authentication.
+203. Least-privilege access and separation of academic duties.
+204. Protection against common web application vulnerabilities.
+205. Regular security updates and dependency management.
+206. Secure question-paper access and download controls.
+207. Protection against unauthorised result editing.
+208. Retention and deletion policies for exam recordings and identity evidence.
+209. Appropriate consent and notices for camera, microphone and screen monitoring.
+210. Access logs for sensitive student records and proctoring evidence.
+211. Secure backup storage and tested restoration.
+212. Incident response procedures and security alerts.
+213. Privacy-aware reporting and restrictions on bulk student-data exports.
+214. Periodic access reviews and examination-security audits.
+15. Integrations and University Systems
+215. Integration with the existing Veritas student information system.
+216. Synchronisation of student records, matriculation numbers, programmes and levels.
+217. Synchronisation of approved course registrations.
+218. Integration with the university's identity provider or single sign-on.
+219. Integration with student portals and academic result systems.
+220. Integration with institutional email and notification services.
+221. Integration with attendance systems where academic policy requires it.
+222. Integration with compatible plagiarism-detection tools.
+223. Integration with supported live-proctoring services.
+224. Integration with institutional reporting and data analytics.
+225. Documented APIs and controlled data exchange.
+226. Error handling, retry mechanisms and reconciliation reports for failed synchronisations.
+16. Accessibility and User Experience
+227. Responsive interface for desktops, laptops, tablets and mobile devices.
+228. Clear student and lecturer dashboards.
+229. Accessible navigation, keyboard support and screen-reader compatibility.
+230. Low-bandwidth design for learning materials and ordinary course activities.
+231. Clear deadlines, time zones and examination instructions.
+232. Pre-examination system checks and practice examinations.
+233. Guided workflows for course registration and exam entry.
+234. Student support and technical incident reporting.
+235. Consistent university branding and accessible colour contrast.
+236. Clear explanations of examination restrictions and consequences.
+237. Alternative arrangements for approved accessibility requirements.
+17. Backup, Maintenance and Continuous Improvement
+238. Scheduled database, file and configuration backups.
+239. Separate backup storage and periodic restore testing.
+240. Version-controlled configuration and documented deployment procedures.
+241. Staging environment for testing upgrades and plugins before production.
+242. Moodle core and plugin compatibility checks before upgrades.
+243. Performance monitoring during peak examinations.
+244. Capacity planning based on real concurrent-user load tests.
+245. Automated alerts for service failures and storage capacity issues.
+246. Documented incident recovery and escalation procedures.
+247. Regular examination simulations before high-stakes examination periods.
+248. Change management and rollback procedures.
+249. Post-examination reports and lessons-learned reviews.
+250. Periodic security, accessibility and operational reviews.
+
+
+
+

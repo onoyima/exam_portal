@@ -198,7 +198,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="<?= htmlspecialchars($settings['portal_favicon'] ?? 'assets/favicon.ico') ?>" type="image/x-icon">
     <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
     <link href="style_enhanced.css" rel="stylesheet">
     <style>
         .settings-card {
@@ -442,7 +442,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         <label class="form-label fw-bold small text-muted text-uppercase">Portal Favicon (.ico / .png)</label>
                                         <div class="preview-box mb-2">
                                             <span class="preview-label">Current Favicon</span>
-                                            <img id="favicon-preview" src="<?= htmlspecialchars($settings['portal_favicon']) ?>" alt="Favicon" class="favicon-preview-img">
+                                            <img id="favicon-preview" src="<?= htmlspecialchars($settings['portal_favicon'] ?? 'assets/favicon.ico') ?>" alt="Favicon" class="favicon-preview-img">
                                         </div>
                                         <div class="btn btn-outline-success custom-upload-btn btn-sm w-100 text-center py-2">
                                             <i class="bi bi-upload me-1"></i> Choose New Favicon

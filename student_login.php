@@ -72,6 +72,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
   }
 
+    // Someone is actively writing an exam with this account on another
+    // computer: do not let a second computer take the seat. If that computer
+    // has failed, its heartbeat stops and the login is allowed after a minute.
+    if (!empty($student['current_session_id']) && $student['current_session_id'] !== session_id()) {
+      $busy = $db->prepare("SELECT 1 FROM objective_attempts WHERE student_id = ? AND finished_at IS NULL
+          AND last_active > DATE_SUB(NOW(), INTERVAL 60 SECOND) LIMIT 1");
+      $busy->execute([$student['id']]);
+      if ($busy->fetchColumn()) {
+        echo json_encode(['success' => false, 'error' => 'This account is writing an exam on another computer right now. If that computer has stopped working, wait one minute and try again, or ask the invigilator.']);
+        exit;
+      }
+    }
     session_regenerate_id(true);
     $newSessionId = session_id();
 
@@ -116,9 +128,9 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Secure student examination login portal">
   <link rel="icon" href="<?= htmlspecialchars($portal_favicon) ?>" type="image/x-icon">
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="assets/vendor/fonts/fonts.css" rel="stylesheet">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -609,6 +621,20 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
         <h1 class="card-title">Student Login</h1>
         <p class="card-subtitle">Enter your Matric Number to proceed</p>
 
+        <?php if (isset($_GET['submitted'])): ?>
+          <div class="error-box show" style="background:#e8f5ee;border-color:#9fd3b6;color:#0f5132;">
+            <i class="bi bi-check-circle-fill"></i>
+            <span>Your exam has been submitted successfully. You may leave the computer.</span>
+          </div>
+        <?php endif; ?>
+        <?php if (!empty($_SESSION['auth_error'])): ?>
+          <div class="error-box show">
+            <i class="bi bi-info-circle-fill"></i>
+            <span><?= htmlspecialchars($_SESSION['auth_error']) ?></span>
+          </div>
+          <?php unset($_SESSION['auth_error']); ?>
+        <?php endif; ?>
+
         <div class="error-box" id="errorBox">
           <i class="bi bi-exclamation-triangle-fill"></i>
           <span id="errorText">Matric number not found. Please check and try again.</span>
@@ -688,6 +714,36 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
     // ── Store pending matric for confirm step ──
     let pendingMatric = '';
     let requirePassword = false;
+    let csrfToken = '<?= generate_csrf_token() ?>';
+
+    // Posts to the login handler. If the page sat idle long enough for the
+    // session to expire, the server returns a fresh token and we retry once,
+    // so the student never has to refresh the page.
+    async function postLogin(fields, retried) {
+      const fd = new FormData();
+      Object.keys(fields).forEach(k => fd.append(k, fields[k]));
+      fd.append('csrf_token', csrfToken);
+      const res = await fetch('student_login', { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+      let data;
+      try { data = await res.json(); } catch (e) {
+        if (!retried) { await refreshToken(); return postLogin(fields, true); }
+        throw e;
+      }
+      if (data && data.csrf_expired && !retried) {
+        csrfToken = data.csrf_token;
+        return postLogin(fields, true);
+      }
+      return data;
+    }
+    async function refreshToken() {
+      try {
+        const html = await (await fetch('student_login', { credentials: 'same-origin', cache: 'no-store' })).text();
+        const m = html.match(/let csrfToken = '([a-f0-9]+)'/);
+        if (m) csrfToken = m[1];
+      } catch (e) { /* offline: the retry will report it */ }
+    }
+    // Keep the session warm while the page is open.
+    setInterval(refreshToken, 10 * 60 * 1000);
 
     // ── Lookup Matric Number ──
     async function doLookup() {
@@ -699,12 +755,7 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
       hideError();
 
       try {
-        const fd = new FormData();
-        fd.append('action', 'lookup');
-        fd.append('matric_no', matric);
-        fd.append('csrf_token', '<?= generate_csrf_token() ?>');
-        const res = await fetch('student_login', { method: 'POST', body: fd });
-        const data = await res.json();
+        const data = await postLogin({ action: 'lookup', matric_no: matric });
 
         if (data.found) {
           pendingMatric = matric;
@@ -725,7 +776,7 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
           showError('Matric number not found. Please check and try again.');
         }
       } catch (e) {
-        showError('Connection error. Please try again.');
+        showError('Cannot reach the exam server. Check the network cable or Wi-Fi, then try again.');
       } finally {
         setLoading(false);
       }
@@ -737,17 +788,13 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
       btn.disabled = true;
       btn.innerHTML = '<span style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.4);border-top-color:white;border-radius:50%;animation:spin 0.7s linear infinite;"></span> Logging in...';
 
-      const fd = new FormData();
-      fd.append('action', 'confirm_login');
-      fd.append('matric_no', pendingMatric);
-      fd.append('csrf_token', '<?= generate_csrf_token() ?>');
+      const fields = { action: 'confirm_login', matric_no: pendingMatric };
       if (requirePassword) {
-        fd.append('password', document.getElementById('confirmPassword').value);
+        fields.password = document.getElementById('confirmPassword').value;
       }
 
       try {
-        const res = await fetch('student_login', { method: 'POST', body: fd });
-        const data = await res.json();
+        const data = await postLogin(fields);
         if (data.success) {
           window.location.href = 'student_dashboard';
         } else {
@@ -758,7 +805,7 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
         }
       } catch (e) {
         hideIdentityOverlay();
-        showError('Connection error. Please try again.');
+        showError('Cannot reach the exam server. Check the network cable or Wi-Fi, then try again.');
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-check-circle-fill" style="margin-right:8px;"></i> Yes, this is me — Continue';
       }
@@ -798,10 +845,7 @@ $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure 
 
     // ── Power off ──
     async function executePowerOff() {
-      const fd = new FormData();
-      fd.append('action', 'power_off');
-      fd.append('csrf_token', '<?= generate_csrf_token() ?>');
-      await fetch('student_login', { method: 'POST', body: fd });
+      try { await postLogin({ action: 'power_off' }); } catch (e) { /* closing anyway */ }
       document.exitFullscreen?.();
       window.close();
       // Fallback if window.close() is blocked

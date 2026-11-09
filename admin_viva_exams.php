@@ -4,10 +4,19 @@ check_auth('admin');
 require 'db.php';
 $name = $_SESSION['user'] ?? 'Admin';
 
+// The same page manages Viva and Research exams; admin_research_exams.php sets ORAL_KIND.
+$kind = (defined('ORAL_KIND') && ORAL_KIND === 'research') ? 'research' : 'viva';
+$KIND = $kind === 'research' ? 'Research' : 'VIVA';
+$self_page = $kind === 'research' ? 'admin_research_exams' : 'admin_viva_exams';
+$icon = $kind === 'research' ? 'bi-journal-richtext' : 'bi-mic-fill';
+
 $success = '';
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!empty($_POST['id'])) {
+        cs_guard_exam($db, (int) $_POST['id'], $self_page);
+    }
     try {
         if (isset($_POST['create'])) {
             $name = trim($_POST['name']);
@@ -18,13 +27,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->beginTransaction();
 
             // Insert exam
-            $stmt = $db->prepare("INSERT INTO exams (name, type, session_id, total_mark, is_active) VALUES (?, 'viva', ?, ?, ?)");
-            $stmt->execute([$name, $session_id, $total_mark, $is_active]);
+            $stmt = $db->prepare("INSERT INTO exams (name, type, session_id, total_mark, is_active) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$name, $kind, $session_id, $total_mark, $is_active]);
             $exam_id = $db->lastInsertId();
 
-            // Auto-create single question for VIVA
+            // One scoring line per exam; assess.php offers 0..total_mark for it
             $stmt = $db->prepare("INSERT INTO questions (text, score_values) VALUES (?, ?)");
-            $stmt->execute(["General Viva Performance", "0"]); // score_values will be handled dynamically in assess.php
+            $stmt->execute([$kind === 'research' ? 'Research work' : 'General Viva Performance', "0"]);
             $question_id = $db->lastInsertId();
 
             // Link question to exam
@@ -32,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$exam_id, $question_id]);
 
             $db->commit();
-            header('Location: admin_viva_exams.php?success=Exam created successfully');
+            header('Location: ' . $self_page . '?success=Exam created successfully');
             exit;
         }
 
@@ -43,18 +52,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $total_mark = floatval($_POST['total_mark']);
             $is_active = isset($_POST['is_active']) ? 1 : 0;
 
-            $stmt = $db->prepare("UPDATE exams SET name=?, session_id=?, total_mark=?, is_active=? WHERE id=? AND type='viva'");
-            $stmt->execute([$name, $session_id, $total_mark, $is_active, $id]);
+            $stmt = $db->prepare("UPDATE exams SET name=?, session_id=?, total_mark=?, is_active=? WHERE id=? AND type=?");
+            $stmt->execute([$name, $session_id, $total_mark, $is_active, $id, $kind]);
             
-            header('Location: admin_viva_exams.php?success=Exam updated successfully');
+            header('Location: ' . $self_page . '?success=Exam updated successfully');
             exit;
         }
 
         if (isset($_POST['delete'])) {
             $id = intval($_POST['id']);
             // Soft delete exam (mark as deleted, keep child data for audit)
-            $db->prepare("UPDATE exams SET deleted_at=NOW() WHERE id=? AND type='viva'")->execute([$id]);
-            header('Location: admin_viva_exams.php?success=Exam deleted successfully');
+            $db->prepare("UPDATE exams SET deleted_at=NOW() WHERE id=? AND type=?")->execute([$id, $kind]);
+            header('Location: ' . $self_page . '?success=Exam deleted successfully');
             exit;
         }
     } catch (Exception $e) {
@@ -64,7 +73,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $sessions = $db->query("SELECT * FROM academic_sessions WHERE deleted_at IS NULL ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
-$exams = $db->query("SELECT e.*, s.session_name FROM exams e LEFT JOIN academic_sessions s ON e.session_id = s.id WHERE e.type='viva' AND e.deleted_at IS NULL ORDER BY e.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+$ex_stmt = $db->prepare("SELECT e.*, s.session_name FROM exams e LEFT JOIN academic_sessions s ON e.session_id = s.id WHERE e.type=? AND e.deleted_at IS NULL ORDER BY e.created_at DESC");
+$ex_stmt->execute([$kind]);
+$exams = $ex_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 if (isset($_GET['success'])) $success = $_GET['success'];
 $back_url = 'admin_dashboard';
@@ -73,11 +84,11 @@ $back_url = 'admin_dashboard';
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Manage VIVA Exams - Assessment Portal</title>
+  <title>Manage <?= $KIND ?> Exams - Assessment Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="assets/favicon.ico">
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
 </head>
 <body>
@@ -90,7 +101,7 @@ $back_url = 'admin_dashboard';
           <?php if (isset($back_url)): ?>
             <a href="<?= $back_url ?>" class="admin-back-btn"><i class="bi bi-arrow-left"></i></a>
           <?php endif; ?>
-          <h1 class="admin-navbar-title">VIVA Exam Management</h1>
+          <h1 class="admin-navbar-title"><?= $KIND ?> Exam Management</h1>
         </div>
         <div class="admin-navbar-end">
           <div class="admin-user-badge">
@@ -107,7 +118,7 @@ $back_url = 'admin_dashboard';
         <ol>
           <li><a href="admin_dashboard"><i class="bi bi-house"></i></a></li>
           <li class="sep">/</li>
-          <li class="current" aria-current="page">Viva Exams</li>
+          <li class="current" aria-current="page"><?= $KIND === 'VIVA' ? 'Viva' : 'Research' ?> Exams</li>
         </ol>
       </nav>
 
@@ -127,10 +138,10 @@ $back_url = 'admin_dashboard';
       <?php endif; ?>
 
       <div class="admin-page-header">
-        <h2 class="admin-page-title"><i class="bi bi-mic-fill"></i> VIVA Exams</h2>
+        <h2 class="admin-page-title"><i class="bi <?= $icon ?>"></i> <?= $KIND ?> Exams</h2>
         <div class="admin-page-actions">
           <button class="admin-btn admin-btn-primary" data-bs-toggle="modal" data-bs-target="#createModal">
-            <i class="bi bi-plus-circle"></i> Create VIVA Exam
+            <i class="bi bi-plus-circle"></i> Create <?= $KIND ?> Exam
           </button>
         </div>
       </div>
@@ -170,7 +181,7 @@ $back_url = 'admin_dashboard';
                         <a href="admin_exams?exam_id=<?= $exam['id'] ?>" class="btn btn-outline-secondary" title="Assign Examiners">
                           <i class="bi bi-person-badge"></i>
                         </a>
-                        <form method="post" class="d-inline" data-swal="Delete this VIVA exam? This action cannot be undone.">
+                        <form method="post" class="d-inline" data-swal="Delete this <?= $KIND ?> exam? This action cannot be undone.">
                           <input type="hidden" name="id" value="<?= $exam['id'] ?>">
                           <button type="submit" name="delete" class="btn btn-outline-danger" title="Delete">
                             <i class="bi bi-trash"></i>
@@ -187,7 +198,7 @@ $back_url = 'admin_dashboard';
                         <form method="post">
                           <input type="hidden" name="id" value="<?= $exam['id'] ?>">
                           <div class="modal-header bg-primary text-white">
-                            <h5 class="modal-title">Edit VIVA Exam</h5>
+                            <h5 class="modal-title">Edit <?= $KIND ?> Exam</h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                           </div>
                           <div class="modal-body">
@@ -226,7 +237,7 @@ $back_url = 'admin_dashboard';
                 <?php endforeach; ?>
                 <?php if (empty($exams)): ?>
                   <tr>
-                    <td colspan="6" class="text-center py-4 text-muted">No VIVA exams found. Create one to get started.</td>
+                    <td colspan="6" class="text-center py-4 text-muted">No <?= $KIND ?> exams found. Create one to get started.</td>
                   </tr>
                 <?php endif; ?>
               </tbody>
@@ -243,13 +254,13 @@ $back_url = 'admin_dashboard';
       <div class="modal-content border-0 shadow-lg">
         <form method="post">
           <div class="modal-header bg-success text-white">
-            <h5 class="modal-title">Create New VIVA Exam</h5>
+            <h5 class="modal-title">Create New <?= $KIND ?> Exam</h5>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body">
             <div class="mb-3">
               <label class="form-label fw-bold">Exam Name</label>
-              <input type="text" name="name" class="form-control" placeholder="e.g. Clinical Nursing VIVA" required>
+              <input type="text" name="name" class="form-control" placeholder="<?= $kind === 'research' ? 'e.g. Final Year Project Defence' : 'e.g. Clinical Nursing VIVA' ?>" required>
             </div>
             <div class="mb-3">
               <label class="form-label fw-bold">Academic Session</label>

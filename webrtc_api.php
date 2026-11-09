@@ -9,7 +9,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $action = $_GET['action'] ?? '';
 $attempt_id = intval($_POST['attempt_id'] ?? ($_GET['attempt_id'] ?? 0));
-$role = $_SESSION['role'] ?? (isset($_SESSION['student_id']) ? 'student' : 'unknown');
+$role = $_SESSION['role'] ?? '';
+
+// Signalling carries a live camera feed, so callers must be signed in, and a
+// student may only touch the attempt that belongs to them.
+if (!in_array($role, ['admin', 'examiner', 'student'], true)) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+    exit;
+}
+if ($role === 'student') {
+    $own = $db->prepare("SELECT 1 FROM objective_attempts WHERE id = ? AND student_id = ?");
+    $own->execute([$attempt_id, $_SESSION['student_id'] ?? 0]);
+    if (!$own->fetchColumn() || !in_array($action, ['send', 'get'], true)) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Forbidden']);
+        exit;
+    }
+}
+session_write_close();
 
 if ($action === 'send') {
     $type = $_POST['type'] ?? '';

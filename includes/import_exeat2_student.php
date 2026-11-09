@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../db_exeat2.php';
+require_once __DIR__ . '/staff_guard.php';
 require_once __DIR__ . '/../db.php';
 
 header('Content-Type: application/json');
