@@ -61,3 +61,43 @@ if (!defined('EXEAT2_DB_USER')) define('EXEAT2_DB_USER', $env_loaded ? '' : 'roo
 if (!defined('EXEAT2_DB_PASS')) define('EXEAT2_DB_PASS', '');
 if (!defined('EXEAT2_DB_CHARSET')) define('EXEAT2_DB_CHARSET', 'utf8mb4');
 
+// ============================================================
+// PERFORMANCE SETTINGS FOR HIGH CONCURRENCY (1000+ students)
+// ============================================================
+if (!defined('HEARTBEAT_INTERVAL')) define('HEARTBEAT_INTERVAL', 30000);    // 30s (was 15s)
+if (!defined('HEARTBEAT_GRACE')) define('HEARTBEAT_GRACE', 45000);         // 45s grace
+if (!defined('ANSWER_FLUSH_DELAY')) define('ANSWER_FLUSH_DELAY', 2000);    // 2s batch (was 600ms)
+if (!defined('ANSWER_MAX_BATCH')) define('ANSWER_MAX_BATCH', 50);
+if (!defined('WEBCAM_MAX_STUDENTS')) define('WEBCAM_MAX_STUDENTS', 500);   // Auto-disable webcam > 500
+
+// Session handling for high concurrency (Redis preferred)
+if (extension_loaded('redis') && !ini_get('session.save_handler')) {
+    ini_set('session.save_handler', 'redis');
+    ini_set('session.save_path', 'tcp://127.0.0.1:6379?timeout=2.5&read_timeout=2.5');
+} elseif (extension_loaded('memcached') && !ini_get('session.save_handler')) {
+    ini_set('session.save_handler', 'memcached');
+    ini_set('session.save_path', '127.0.0.1:11211');
+}
+
+// Session GC tuning for high concurrency
+ini_set('session.gc_probability', 1);
+ini_set('session.gc_divisor', 1000);
+ini_set('session.gc_maxlifetime', 7200);
+ini_set('session.cookie_httponly', 1);
+ini_set('session.cookie_secure', 1);
+ini_set('session.cookie_samesite', 'Lax');
+ini_set('session.use_strict_mode', 1);
+ini_set('session.gc_probability', 1);
+ini_set('session.gc_divisor', 1000);
+
+// OPcache verification
+if (function_exists('opcache_get_status')) {
+    $opcache = opcache_get_status(false);
+    if (empty($opcache['opcache_enabled'])) {
+        error_log('WARNING: OPcache is not enabled - performance will suffer');
+    }
+}
+
+// Persistent DB connections for high concurrency (use in db.php)
+// PDO::ATTR_PERSISTENT => true
+

@@ -17,11 +17,19 @@ try {
     $db = new PDO(
         "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET,
         DB_USER,
-        DB_PASS
+        DB_PASS,
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_EMULATE_PREPARES => false,
+            PDO::ATTR_PERSISTENT => true,           // Persistent connections for high concurrency
+            PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
+        ]
     );
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $db->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
     $db->exec("SET time_zone = '" . date('P') . "'");
+    // Optimize for high concurrency
+    $db->exec("SET SESSION innodb_lock_wait_timeout = 5");
+    $db->exec("SET SESSION net_read_timeout = 30");
+    $db->exec("SET SESSION net_write_timeout = 30");
 } catch (PDOException $e) {
     error_log("Database connection failed: " . $e->getMessage());
     http_response_code(503);

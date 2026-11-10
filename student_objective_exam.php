@@ -406,8 +406,12 @@ $config = [
     'autoSubmitStrikes' => ((int) $exam['proctor_auto_submit'] === 1) ? 3 : 0,
     'webcam' => $strict || (int) $exam['proctor_webcam'] === 1,
     'live' => $strict || (int) $exam['proctor_live_video'] === 1,
+    'webcamMaxStudents' => defined('WEBCAM_MAX_STUDENTS') ? WEBCAM_MAX_STUDENTS : 500,
   ],
   'resultUrl' => (int) $exam['student_can_view_score'] === 1 ? $self . '&view_result=1' : 'student_dashboard',
+  'heartbeatInterval' => defined('HEARTBEAT_INTERVAL') ? HEARTBEAT_INTERVAL : 30000,
+  'answerFlushDelay' => defined('ANSWER_FLUSH_DELAY') ? ANSWER_FLUSH_DELAY : 2000,
+  'totalStudents' => (int) ($db->prepare("SELECT COUNT(*) FROM exam_students WHERE exam_id = ?")->execute([$exam_id]) ? $db->query("SELECT COUNT(*) FROM exam_students WHERE exam_id = ?")->fetchColumn() : 0),
 ];
 $student_name = $_SESSION['user'] ?? ($_SESSION['student_name'] ?? 'Student');
 ?>

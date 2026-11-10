@@ -365,7 +365,8 @@
 
   function scheduleFlush(delay) {
     clearTimeout(flushTimer);
-    flushTimer = setTimeout(flush, delay == null ? 600 : delay);
+    var defaultDelay = (typeof ANSWER_FLUSH_DELAY !== 'undefined' ? ANSWER_FLUSH_DELAY : 2000);
+    flushTimer = setTimeout(flush, delay == null ? defaultDelay : delay);
   }
 
   function flush() {
@@ -547,7 +548,8 @@
 
   function beat() {
     sendPing(document.hidden ? 'blur' : 'active');
-    setTimeout(beat, 12000 + Math.random() * 6000);   // spread load across the hall
+    var interval = (typeof HEARTBEAT_INTERVAL !== 'undefined' ? HEARTBEAT_INTERVAL : 30000) + Math.random() * 6000;
+    setTimeout(beat, interval);
   }
 
   function violation(type, details) {
@@ -838,6 +840,11 @@
 
   var recorder = null;
   function initWebcam() {
+    // Skip webcam for large exams to reduce bandwidth/server load
+    if (policy.webcamMaxStudents && C.totalStudents > policy.webcamMaxStudents) {
+      window.isWebcamReady = false;
+      return;
+    }
     if (!policy.webcam || REVIEW || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
     mediaPrompt = true;
     navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(function (stream) {
