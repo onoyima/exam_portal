@@ -227,6 +227,24 @@ if (empty($all_exams)) {
   <link href="style_enhanced.css" rel="stylesheet">
   <!-- Choices.js for mobile-friendly multi-select -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/styles/choices.min.css">
+  <style>
+    /* Fix Choices.js dropdown z-index to appear above sidebar */
+    .choices__list--dropdown {
+      z-index: 9999 !important;
+    }
+    .choices__list--dropdown .choices__list {
+      z-index: 9999 !important;
+    }
+    .choices__list--dropdown .choices__item {
+      z-index: 9999 !important;
+    }
+    .choices__inner {
+      z-index: auto !important;
+    }
+    .is-open .choices__list--dropdown {
+      z-index: 9999 !important;
+    }
+  </style>
 </head>
 <body>
   <?php include 'admin_sidebar.php'; ?>
