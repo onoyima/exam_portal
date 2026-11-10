@@ -54,7 +54,7 @@ if ($level_str !== '') {
     $level_num = intval($level_str);
     if ($level_num > 0) {
         $conditions[] = "sa.level = ?";
-        $params[] = $level_num * 10;
+        $params[] = $level_num; // level values are already 1000, 2000, etc.
     }
 }
 

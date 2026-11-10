@@ -163,7 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['exeat2_import'])) {
             $level_num = intval($level_str);
             if ($level_num > 0) {
                 $where_clauses[] = "sa.level = ?";
-                $params[] = $level_num * 10;
+                $params[] = $level_num; // level values are already 1000, 2000, etc.
             }
         }
         if (intval($_POST['department_id'] ?? 0) > 0) {
