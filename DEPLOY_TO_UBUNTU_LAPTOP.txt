@@ -1,0 +1,508 @@
+================================================================================
+DEPLOYMENT GUIDE: CBT EXAM PORTAL TO UBUNTU LAPTOP (WITH MOODLE)
+================================================================================
+
+This guide explains how to deploy the CBT Exam Portal to your Ubuntu laptop
+that already runs Moodle, so both applications can run simultaneously.
+
+================================================================================
+SYSTEM REQUIREMENTS
+================================================================================
+
+Minimum:
+- Ubuntu 20.04 LTS or 22.04 LTS
+- 8 GB RAM (16 GB recommended for 1000+ concurrent students)
+- 50 GB free disk space
+- PHP 8.1+ (PHP 8.2+ recommended)
+- MariaDB 10.6+ or MySQL 8.0+
+- Apache 2.4+ or Nginx 1.18+
+
+Recommended for 1000+ concurrent students:
+- 16-32 GB RAM
+- SSD storage
+- 4+ CPU cores
+
+================================================================================
+STEP 1: PREPARE UBUNTU SYSTEM
+================================================================================
+
+# Update system
+sudo apt update && sudo apt upgrade -y
+
+# Install required packages
+sudo apt install -y \
+    apache2 \
+    mariadb-server \
+    php8.2 \
+    php8.2-{mysql,mbstring,xml,curl,gd,zip,intl,bcmath,redis,memcached} \
+    libapache2-mod-php8.2 \
+    redis-server \
+    memcached \
+    git \
+    unzip \
+    certbot \
+    python3-certbot-apache
+
+# Enable Apache modules
+sudo a2enmod rewrite ssl headers expires deflate
+
+# Enable PHP modules
+sudo phpenmod redis memcached
+
+# Restart services
+sudo systemctl restart apache2 mariadb redis-server memcached
+
+================================================================================
+STEP 2: CONFIGURE MYSQL/MARIADB
+================================================================================
+
+# Secure MariaDB installation
+sudo mysql_secure_installation
+
+# Create databases and user
+sudo mysql -u root -p <<'EOF'
+CREATE DATABASE IF NOT EXISTS cbt_portal CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS moodle_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE USER IF NOT EXISTS 'cbt_user'@'localhost' IDENTIFIED BY 'CHANGE_THIS_PASSWORD';
+CREATE USER IF NOT EXISTS 'moodle_user'@'localhost' IDENTIFIED BY 'CHANGE_THIS_PASSWORD';
+
+GRANT ALL PRIVILEGES ON cbt_portal.* TO 'cbt_user'@'localhost';
+GRANT ALL PRIVILEGES ON moodle_db.* TO 'moodle_user'@'localhost';
+
+FLUSH PRIVILEGES;
+EOF
+
+# Tune MySQL for high concurrency (add to /etc/mysql/mariadb.conf.d/50-server.cnf)
+sudo tee -a /etc/mysql/mariadb.conf.d/50-server.cnf > /dev/null <<'EOF'
+
+# CBT Portal High Concurrency Tuning
+max_connections = 1500
+innodb_buffer_pool_size = 4G
+innodb_log_file_size = 512M
+innodb_flush_log_at_trx_commit = 2
+innodb_flush_method = O_DIRECT
+innodb_file_per_table = 1
+innodb_read_io_threads = 8
+innodb_write_io_threads = 8
+query_cache_type = 0
+query_cache_size = 0
+table_open_cache = 4000
+thread_cache_size = 100
+max_connect_errors = 100000
+EOF
+
+sudo systemctl restart mariadb
+
+================================================================================
+STEP 3: INSTALL AND CONFIGURE PHP
+================================================================================
+
+# PHP-FPM tuning for 1000+ concurrent students
+sudo tee /etc/php/8.2/fpm/pool.d/www.conf > /dev/null <<'EOF'
+[www]
+user = www-data
+group = www-data
+listen = /run/php/php8.2-fpm.sock
+listen.owner = www-data
+listen.group = www-data
+pm = dynamic
+pm.max_children = 1000
+pm.start_servers = 100
+pm.min_spare_servers = 50
+pm.max_spare_servers = 200
+pm.max_requests = 500
+request_terminate_timeout = 60
+request_slowlog_timeout = 10
+slowlog = /var/log/php8.2-fpm-slow.log
+php_admin_value[memory_limit] = 256M
+php_admin_value[max_execution_time] = 60
+php_admin_value[max_input_vars] = 5000
+php_admin_value[post_max_size] = 100M
+php_admin_value[upload_max_filesize] = 100M
+EOF
+
+# OPcache configuration
+sudo tee /etc/php/8.2/fpm/conf.d/99-opcache.ini > /dev/null <<'EOF'
+opcache.enable=1
+opcache.memory_consumption=256
+opcache.interned_strings_buffer=16
+opcache.max_accelerated_files=20000
+opcache.revalidate_freq=60
+opcache.fast_shutdown=1
+opcache.enable_cli=1
+opcache.jit=1255
+opcache.jit_buffer_size=128M
+EOF
+
+# Session handling (memcached - already installed on your server)
+sudo tee /etc/php/8.2/fpm/conf.d/99-session.ini > /dev/null <<'EOF'
+session.save_handler = memcached
+session.save_path = "127.0.0.1:11211"
+session.gc_probability = 1
+session.gc_divisor = 1000
+session.gc_maxlifetime = 7200
+session.cookie_httponly = 1
+session.cookie_secure = 1
+session.cookie_samesite = Lax
+session.use_strict_mode = 1
+EOF
+
+sudo systemctl restart php8.2-fpm
+
+================================================================================
+STEP 4: DEPLOY CBT PORTAL CODE
+================================================================================
+
+# Clone repository
+cd /var/www
+sudo git clone https://github.com/onoyima/exam_portal.git cbt_portal
+cd cbt_portal
+sudo git checkout cbt-sync-2026-11-09
+
+# Set permissions
+sudo chown -R www-data:www-data /var/www/cbt_portal
+sudo find /var/www/cbt_portal -type f -exec chmod 644 {} \;
+sudo find /var/www/cbt_portal -type d -exec chmod 755 \;
+
+# Create writable directories
+sudo mkdir -p /var/www/cbt_portal/logs
+sudo mkdir -p /var/www/cbt_portal/uploads/passports/students
+sudo mkdir -p /var/www/cbt_portal/uploads/passports/examiners
+sudo mkdir -p /var/www/cbt_portal/uploads/recordings
+sudo mkdir -p /var/www/cbt_portal/scratch
+sudo chown -R www-data:www-data /var/www/cbt_portal/logs
+sudo chown -R www-data:www-data /var/www/cbt_portal/uploads
+sudo chmod -R 775 /var/www/cbt_portal/logs
+sudo chmod -R 775 /var/www/cbt_portal/uploads
+
+# Create .env file
+sudo tee /var/www/cbt_portal/.env > /dev/null <<'EOF'
+# CBT Portal Database
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=cbt_portal
+DB_USER=cbt_user
+DB_PASS=CHANGE_THIS_PASSWORD
+DB_CHARSET=utf8mb4
+
+# Application
+APP_ENV=production
+SESSION_LIFETIME=7200
+APP_TIMEZONE=Africa/Lagos
+
+# School Portal (exeat2) - UPDATE WITH YOUR CREDENTIALS
+EXEAT2_DB_HOST=localhost
+EXEAT2_DB_PORT=3306
+EXEAT2_DB_NAME=school_portal_db
+EXEAT2_DB_USER=school_user
+EXEAT2_DB_PASS=CHANGE_THIS_PASSWORD
+EXEAT2_DB_CHARSET=utf8mb4
+EOF
+
+sudo chown www-data:www-data /var/www/cbt_portal/.env
+sudo chmod 600 /var/www/cbt_portal/.env
+
+================================================================================
+STEP 5: IMPORT DATABASE SCHEMA
+================================================================================
+
+# Import main schema
+sudo mysql -u cbt_user -p cbt_portal < /var/www/cbt_portal/migrations/001_initial_schema.sql
+
+# If you have migration files, run them in order
+# sudo mysql -u cbt_user -p cbt_portal < /var/www/cbt_portal/migrations/002_xxx.sql
+
+# Verify tables
+mysql -u cbt_user -p -e "USE cbt_portal; SHOW TABLES;"
+
+================================================================================
+STEP 6: CONFIGURE APACHE (COEXISTING WITH MOODLE)
+================================================================================
+
+# Option A: Different ports (simplest)
+# CBT Portal on port 8080, Moodle on port 80/443
+sudo tee /etc/apache2/sites-available/cbt_portal.conf > /dev/null <<'EOF'
+<VirtualHost *:8080>
+    ServerName cbt.yourdomain.com
+    DocumentRoot /var/www/cbt_portal
+    
+    <Directory /var/www/cbt_portal>
+        Options -Indexes +FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    
+    # PHP-FPM
+    <FilesMatch \.php$>
+        SetHandler "proxy:unix:/run/php/php8.2-fpm.sock|fcgi://localhost"
+    </FilesMatch>
+    
+    # Security headers
+    Header always set X-Content-Type-Options nosniff
+    Header always set X-Frame-Options SAMEORIGIN
+    Header always set X-XSS-Protection "1; mode=block"
+    
+    # Logging
+    ErrorLog ${APACHE_LOG_DIR}/cbt_portal_error.log
+    CustomLog ${APACHE_LOG_DIR}/cbt_portal_access.log combined
+</VirtualHost>
+EOF
+
+sudo a2ensite cbt_portal
+sudo systemctl reload apache2
+
+# Option B: Subdomain (if you have DNS control)
+# cbt.yourdomain.com -> CBT Portal
+# moodle.yourdomain.com -> Moodle
+
+# SSL for port 8080 (self-signed for testing, use Let's Encrypt for production)
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/ssl/private/cbt_portal.key \
+    -out /etc/ssl/certs/cbt_portal.crt \
+    -subj "/CN=cbt.yourdomain.com"
+
+sudo tee /etc/apache2/sites-available/cbt_portal-ssl.conf > /dev/null <<'EOF'
+<VirtualHost *:8443>
+    ServerName cbt.yourdomain.com
+    DocumentRoot /var/www/cbt_portal
+    
+    SSLEngine on
+    SSLCertificateFile /etc/ssl/certs/cbt_portal.crt
+    SSLCertificateKeyFile /etc/ssl/private/cbt_portal.key
+    
+    <Directory /var/www/cbt_portal>
+        Options -Indexes +FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    
+    <FilesMatch \.php$>
+        SetHandler "proxy:unix:/run/php/php8.2-fpm.sock|fcgi://localhost"
+    </FilesMatch>
+    
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    
+    ErrorLog ${APACHE_LOG_DIR}/cbt_portal_ssl_error.log
+    CustomLog ${APACHE_LOG_DIR}/cbt_portal_ssl_access.log combined
+</VirtualHost>
+EOF
+
+sudo a2enmod ssl
+sudo a2ensite cbt_portal-ssl
+sudo systemctl reload apache2
+
+================================================================================
+STEP 7: CONFIGURE MOODLE COEXISTENCE
+================================================================================
+
+# Moodle should already be running. Key coexistence points:
+
+# 1. Different databases (already done above)
+#    - cbt_portal for CBT
+#    - moodle_db for Moodle
+
+# 2. Different PHP session paths (already configured in php.ini)
+#    CBT uses memcached, Moodle can use file sessions or separate memcached prefix
+
+# 3. Different document roots
+#    CBT: /var/www/cbt_portal
+#    Moodle: /var/www/moodle (or wherever it's installed)
+
+# 4. Different Apache virtual hosts (different ports or subdomains)
+
+# 5. Moodle config.php - ensure it doesn't conflict
+#    In /var/www/moodle/config.php:
+#    $CFG->session_handler_class = '\core\session\file';  # Use file sessions
+#    $CFG->session_memcached_prefix = 'moodle_';  # If using memcached
+
+# 6. Cron jobs - separate for each
+#    CBT: /var/www/cbt_portal/admin/cli/cron.php
+#    Moodle: /var/www/moodle/admin/cli/cron.php
+
+# Add cron jobs
+sudo tee /etc/cron.d/cbt_portal > /dev/null <<'EOF'
+# CBT Portal cron - every minute for heartbeat/exam timeouts
+* * * * * www-data /usr/bin/php /var/www/cbt_portal/admin/cli/cron.php > /dev/null 2>&1
+EOF
+
+sudo tee /etc/cron.d/moodle > /dev/null <<'EOF'
+# Moodle cron - every minute
+* * * * * www-data /usr/bin/php /var/www/moodle/admin/cli/cron.php > /dev/null 2>&1
+EOF
+
+================================================================================
+STEP 8: FIREWALL AND SECURITY
+================================================================================
+
+# UFW firewall
+sudo ufw allow 22/tcp       # SSH
+sudo ufw allow 80/tcp       # HTTP (Moodle)
+sudo ufw allow 443/tcp      # HTTPS (Moodle)
+sudo ufw allow 8080/tcp     # CBT Portal HTTP
+sudo ufw allow 8443/tcp     # CBT Portal HTTPS
+sudo ufw allow 3306/tcp     # MySQL (if needed remote)
+sudo ufw enable
+
+# Fail2ban for brute force protection
+sudo apt install -y fail2ban
+sudo tee /etc/fail2ban/jail.local > /dev/null <<'EOF'
+[DEFAULT]
+bantime = 3600
+findtime = 600
+maxretry = 5
+
+[apache-auth]
+enabled = true
+
+[apache-badbots]
+enabled = true
+EOF
+
+sudo systemctl restart fail2ban
+
+================================================================================
+STEP 9: PERFORMANCE TESTING
+================================================================================
+
+# Test with ab (Apache Bench) or wrk
+# Install wrk
+sudo apt install -y wrk
+
+# Test homepage
+wrk -t4 -c100 -d30s http://localhost:8080/
+
+# Test exam page (requires login - use siege or custom script)
+# Install siege
+sudo apt install -y siege
+siege -c 50 -t 60s http://localhost:8080/student_objective_exam.php?exam_id=1
+
+# Monitor resources during test
+# htop, iotop, nethogs, mysqladmin status
+
+================================================================================
+STEP 10: MONITORING AND LOGS
+================================================================================
+
+# Key log files
+# - /var/log/apache2/cbt_portal_*.log
+# - /var/www/cbt_portal/logs/php_errors.log
+# - /var/log/mysql/error.log
+# - /var/log/php8.2-fpm.log
+# - /var/log/php8.2-fpm-slow.log
+
+# Health check endpoint (add to cron)
+# curl -f http://localhost:8080/health_check.php || alert
+
+# Add health check endpoint to CBT
+cat > /var/www/cbt_portal/health_check.php <<'EOF'
+<?php
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/db.php';
+
+header('Content-Type: application/json');
+try {
+    $db->query("SELECT 1");
+    $redis = new Redis();
+    $redis->connect('127.0.0.1', 6379);
+    $redis->ping();
+    echo json_encode(['status' => 'healthy', 'time' => date('c')]);
+} catch (Exception $e) {
+    http_response_code(503);
+    echo json_encode(['status' => 'unhealthy', 'error' => $e->getMessage()]);
+}
+EOF
+
+# Test
+curl http://localhost:8080/health_check.php
+
+================================================================================
+STEP 11: BACKUP STRATEGY
+================================================================================
+
+# Database backup (daily)
+cat > /usr/local/bin/backup_cbt.sh <<'EOF'
+#!/bin/bash
+DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR="/var/backups/cbt_portal"
+mkdir -p $BACKUP_DIR
+
+mysqldump -u cbt_user -p'CHANGE_THIS_PASSWORD' \
+    --single-transaction --routines --triggers \
+    cbt_portal | gzip > $BACKUP_DIR/cbt_portal_$DATE.sql.gz
+
+# Keep last 7 days
+find $BACKUP_DIR -name "*.sql.gz" -mtime +7 -delete
+EOF
+
+chmod +x /usr/local/bin/backup_cbt.sh
+
+# Add to crontab (daily at 2 AM)
+echo "0 2 * * * root /usr/local/bin/backup_cbt.sh" | sudo tee /etc/cron.d/backup_cbt
+
+================================================================================
+STEP 12: FINAL CHECKLIST
+================================================================================
+
+[ ] Ubuntu updated and packages installed
+[ ] MariaDB configured with high concurrency settings
+[ ] PHP-FPM tuned for 1000+ concurrent users
+[ ] OPcache and memcached sessions configured
+[ ] CBT Portal code deployed to /var/www/cbt_portal
+[ ] Database created and schema imported
+[ ] .env file configured with correct credentials
+[ ] Apache virtual hosts configured (ports 8080/8443)
+[ ] SSL certificates installed
+[ ] Moodle coexistence verified (separate DB, sessions, vhosts)
+[ ] Cron jobs added for both CBT and Moodle
+[ ] Firewall configured
+[ ] Fail2ban configured
+[ ] SSL certificates valid (Let's Encrypt for production)
+[ ] Health check endpoint working
+[ ] Backup script scheduled
+[ ] Performance test passed (wrk/siege)
+[ ] Monitoring/logs accessible
+
+================================================================================
+TROUBLESHOOTING COMMON ISSUES
+================================================================================
+
+1. "Connection refused" on port 8080
+   - Check Apache is listening: `sudo netstat -tlnp | grep :8080`
+   - Check Apache error log: `tail -f /var/log/apache2/cbt_portal_error.log`
+
+2. "Database connection failed"
+   - Check credentials in .env
+   - Test: `mysql -u cbt_user -p cbt_portal`
+   - Check MariaDB is running: `systemctl status mariadb`
+
+3. "Session not working"
+   - Check memcached: `systemctl status memcached`
+   - Test: `telnet 127.0.0.1 11211`
+   - Check PHP session config: `php -i | grep session.save`
+
+4. "Permission denied" on uploads
+   - `sudo chown -R www-data:www-data /var/www/cbt_portal/uploads`
+   - `sudo chmod -R 775 /var/www/cbt_portal/uploads`
+
+5. "Exam player not loading"
+   - Check browser console for JS errors
+   - Check PHP error log: `/var/www/cbt_portal/logs/php_errors.log`
+   - Verify Choices.js CDN loads
+
+6. "500 Internal Server Error"
+   - Check PHP error log: `/var/www/cbt_portal/logs/php_errors.log`
+   - Check Apache error log: `/var/log/apache2/cbt_portal_error.log`
+
+================================================================================
+CONTACT AND SUPPORT
+================================================================================
+
+For issues:
+- Check logs first
+- Review this guide
+- Check GitHub issues: https://github.com/onoyima/exam_portal/issues
+
+================================================================================
+END OF GUIDE
+================================================================================
