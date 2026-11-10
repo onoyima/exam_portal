@@ -11,17 +11,28 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $exam_id = intval($_POST['exam_id'] ?? 0);
+
+// Original student IDs method
 $student_ids_json = $_POST['student_ids'] ?? '[]';
 $student_ids = json_decode($student_ids_json, true);
 
-if (empty($student_ids) || !$exeat2_db) {
+// NEW: Filter parameters for bulk import without explicit student IDs
+$level_filter = isset($_POST['level']) ? trim($_POST['level']) : '';           // e.g., "100", "400" -> converted to 1000, 4000
+$dept_filter = isset($_POST['department_id']) ? intval($_POST['department_id']) : 0;
+$faculty_filter = isset($_POST['faculty_id']) ? intval($_POST['faculty_id']) : 0;
+$course_study_filter = isset($_POST['course_study_id']) ? intval($_POST['course_study_id']) : 0;
+$level_str = isset($_POST['level_str']) ? trim($_POST['level_str']) : '';         // "100", "200", etc. -> 1000, 2000
+
+$use_filters = (!empty($level_filter) || !empty($level_str) || $dept_filter > 0 || $faculty_filter > 0 || $course_study_filter > 0);
+
+if ((empty($student_ids) && !$use_filters) || !$exeat2_db) {
     echo json_encode(['error' => 'Invalid request or exeat2 DB unreachable.']);
     exit;
 }
 
-$placeholders = implode(',', array_fill(0, count($student_ids), '?'));
-try {
-    $stmt = $exeat2_db->prepare("SELECT
+// Build the exeat2 query
+$base_query = "
+    SELECT
       s.id                 AS exeat2_id,
       CONCAT(s.fname, ' ', COALESCE(s.mname,''), ' ', s.lname) AS name,
       s.fname              AS firstname,
@@ -31,7 +42,13 @@ try {
       sa.matric_no,
       s.username,
       s.password,
-      s.passport
+      s.passport,
+      sa.level,
+      sa.department_id,
+      sa.faculty_id,
+      sa.course_study_id,
+      d.name AS department_name,
+      l.level AS level_name
     FROM students s
     JOIN student_academics sa ON sa.student_id = s.id
       AND sa.academic_session_id = (
@@ -39,14 +56,68 @@ try {
         FROM student_academics sa2
         WHERE sa2.student_id = s.id
       )
-    WHERE s.id IN ($placeholders) AND s.status = 1 AND sa.status = 1");
-    $stmt->execute($student_ids);
+    LEFT JOIN departments d ON d.id = sa.department_id
+    LEFT JOIN levels l ON l.id = sa.level
+    WHERE s.status = 1 AND sa.status = 1
+";
+
+$where_clauses = [];
+$params = [];
+
+if (!empty($student_ids)) {
+    $placeholders = implode(',', array_fill(0, count($student_ids), '?'));
+    $where_clauses[] = "s.id IN ($placeholders)";
+    $params = array_merge($params, $student_ids);
+} elseif ($use_filters) {
+    $where_clauses[] = "1=1";
+}
+
+if ($dept_filter > 0) {
+    $where_clauses[] = "sa.department_id = ?";
+    $params[] = $dept_filter;
+}
+if ($faculty_filter > 0) {
+    $where_clauses[] = "sa.faculty_id = ?";
+    $params[] = $faculty_filter;
+}
+if ($course_study_filter > 0) {
+    $where_clauses[] = "sa.course_study_id = ?";
+    $params[] = $course_study_filter;
+}
+if ($level_str !== '') {
+    $level_num = intval($level_str);
+    if ($level_num > 0) {
+        $level_num = $level_num * 10;
+        $where_clauses[] = "sa.level = ?";
+        $params[] = $level_num;
+    }
+} elseif ($level_filter !== '') {
+    $where_clauses[] = "sa.level = ?";
+    $params[] = intval($level_filter);
+}
+
+$where_sql = implode(' AND ', $where_clauses);
+if (!empty($where_clauses)) {
+    $sql = $base_query . ' WHERE ' . $where_sql . ' ORDER BY sa.matric_no';
+} else {
+    $sql = $base_query . ' ORDER BY sa.matric_no';
+}
+
+try {
+    $stmt = $exeat2_db->prepare($sql);
+    $stmt->execute($params);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
     echo json_encode(['error' => 'exeat2 query failed: ' . $e->getMessage()]);
     exit;
 }
 
+if (empty($rows)) {
+    echo json_encode(['error' => 'No students found matching the criteria.']);
+    exit;
+}
+
+// Import logic (same as before)
 $results = [
     'imported' => 0,
     'updated' => 0,
