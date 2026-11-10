@@ -225,6 +225,8 @@ if (empty($all_exams)) {
   <link href="assets/css/bootstrap.min.css" rel="stylesheet">
   <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
+  <!-- Choices.js for mobile-friendly multi-select -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/styles/choices.min.css">
 </head>
 <body>
   <?php include 'admin_sidebar.php'; ?>
@@ -1041,7 +1043,28 @@ if (empty($all_exams)) {
 
       new bootstrap.Modal(document.getElementById('bulkEnrollModal')).show();
     }
+
+    // Initialize Choices.js on all multi-select dropdowns
+    document.addEventListener('DOMContentLoaded', function () {
+      if (typeof Choices !== 'undefined') {
+        document.querySelectorAll('select[multiple]').forEach(function (select) {
+          if (!select.dataset.choicesInitialized) {
+            new Choices(select, {
+              removeItemButton: true,
+              searchEnabled: true,
+              placeholder: true,
+              placeholderValue: 'Select exams...',
+              searchPlaceholderValue: 'Search exams...',
+              itemSelectText: '',
+              maxItemCount: -1,
+            });
+            select.dataset.choicesInitialized = 'true';
+          }
+        });
+      }
+    });
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/scripts/choices.min.js"></script>
   <script src="assets/js/admin-common.js"></script>
   <script src="assets/js/admin-swal.js"></script>
 </body>

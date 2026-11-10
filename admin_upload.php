@@ -420,6 +420,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['questions'])) {
   <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="style_enhanced.css" rel="stylesheet">
 </head>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/styles/choices.min.css">
+</head>
 <body>
   <?php include 'admin_sidebar.php'; ?>
   <div class="main-content">
@@ -817,6 +819,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['questions'])) {
       });
     });
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/scripts/choices.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (typeof Choices !== 'undefined') {
+        document.querySelectorAll('select[multiple]').forEach(function (select) {
+          if (!select.dataset.choicesInitialized) {
+            new Choices(select, {
+              removeItemButton: true,
+              searchEnabled: true,
+              placeholder: true,
+              placeholderValue: 'Select exams...',
+              searchPlaceholderValue: 'Search exams...',
+              itemSelectText: '',
+              maxItemCount: -1,
+            });
+            select.dataset.choicesInitialized = 'true';
+          }
+        });
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/scripts/choices.min.js"></script>
   <script src="assets/js/admin-common.js"></script>
   <script src="assets/js/admin-swal.js"></script>
 </body>
