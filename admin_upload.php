@@ -613,7 +613,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['questions'])) {
                   <label class="admin-form-label">Assign to Exams <span class="text-muted small">(Optional)</span></label>
                   <div class="admin-alert admin-alert-success d-flex align-items-center gap-2 mb-2">
                     <i class="bi bi-check-circle-fill"></i>
-                    <span><strong>Auto-deduplication:</strong> Students are matched by <strong>Matric No</strong>. Existing students are updated; new ones are created. No duplicates.</span>
+                    <span><strong>Auto-deduplication:</strong> Students are matched by <strong>Matric No</strong>. Existing students are updated; new ones are created. <strong>No duplicates.</strong></span>
+                  </div>
+                  <div class="admin-alert admin-alert-warning d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-arrow-repeat"></i>
+                    <span><strong>Already enrolled?</strong> Re-importing with same exams will <strong>not</strong> create duplicates — unique constraint on (exam_id, student_id) prevents it.</span>
                   </div>
                   <select name="exam_id[]" class="admin-input admin-select" multiple size="6" id="exeat2ExamSelect">
                     <?php if (!empty($practical_exams)): ?>
@@ -634,7 +638,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['questions'])) {
                       </optgroup>
                     <?php endif; ?>
                   </select>
-                  <div class="admin-dropzone-hint mt-1">Hold <b>Ctrl (Cmd)</b> to select multiple exams. Selected students will be enrolled in all chosen exams.</div>
+                  <div class="admin-dropzone-hint mt-1">Hold <b>Ctrl (Cmd)</b> to select multiple exams. Selected students will be enrolled in all chosen exams. Re-importing same exams = no duplicates.</div>
                 </div>
 
                 <div class="admin-alert admin-alert-info">

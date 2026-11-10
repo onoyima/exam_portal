@@ -156,17 +156,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt = $db->prepare("UPDATE students SET password = '12345' WHERE id = ?");
     $stmt->execute([$_POST['id']]);
     $success = "Password reset to default (12345) successfully!";
-  } elseif (isset($_POST['enroll']) && isset($_POST['student_id'])) {
-    $sid = intval($_POST['student_id']);
+} elseif (isset($_POST['enroll']) && isset($_POST['student_id'])) {
+    $student_id_input = $_POST['student_id'];
+    $is_bulk = (str_starts_with($student_id_input, '[') && str_ends_with($student_id_input, ']'));
+    
     $eids = isset($_POST['exam_ids']) ? (array) $_POST['exam_ids'] : [];
     if (!empty($eids)) {
-      foreach ($eids as $eid) {
-        $eid = intval($eid);
-        $db->prepare("INSERT IGNORE INTO exam_students (exam_id, student_id) VALUES (?, ?)")->execute([$eid, $sid]);
-      }
-      $success = "Student enrolled in " . count($eids) . " exams successfully!";
+        $student_ids = $is_bulk ? json_decode($student_id_input, true) : [intval($student_id_input)];
+        $student_ids = array_filter(array_map('intval', $student_ids));
+        
+        $enrolled_count = 0;
+        foreach ($student_ids as $sid) {
+            foreach ($eids as $eid) {
+                $eid = intval($eid);
+                $sid = intval($sid);
+                $result = $db->prepare("INSERT IGNORE INTO exam_students (exam_id, student_id) VALUES (?, ?)")->execute([$eid, $sid]);
+                if ($result) $enrolled_count++;
+            }
+        }
+        $success = "Enrolled " . count($student_ids) . " student(s) in " . count($eids) . " exam(s) (" . $enrolled_count . " new enrollments)!";
     }
-  }
+}
 }
 
 // Paginated students list — avoid loading 3500+ rows at once
