@@ -369,13 +369,20 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
 
       <!-- Students List -->
       <div class="admin-card">
-        <div class="admin-card-header">
-          <h3 class="admin-card-title"><i class="bi bi-people"></i> Students List</h3>
-          <div class="d-flex align-items-center gap-2">
-            <span class="admin-badge admin-badge-primary"><?= $search ? count($students).' matched' : $total_students.' total' ?></span>
-            <input type="text" id="studentSearch" class="admin-filter-input admin-filter-input-wide" placeholder="Search students..." oninput="filterStudents()" value="<?= htmlspecialchars($search) ?>">
+<div class="admin-card-header">
+            <h3 class="admin-card-title"><i class="bi bi-people"></i> Students List</h3>
+            <div class="d-flex align-items-center gap-2">
+              <span class="admin-badge admin-badge-primary"><?= $search ? count($students).' matched' : $total_students.' total' ?></span>
+              <input type="text" id="studentSearch" class="admin-filter-input admin-filter-input-wide" placeholder="Search students..." oninput="filterStudents()" value="<?= htmlspecialchars($search) ?>">
+              <div class="d-flex gap-2 ms-2" id="bulkActionsBar" style="display:none;">
+                <span class="admin-badge admin-badge-primary" id="bulkSelectedCount">0 selected</span>
+                <button type="button" class="admin-btn admin-btn-primary admin-btn-sm" id="bulkEnrollBtn" onclick="openBulkEnrollModal()">
+                  <i class="bi bi-bookmark-plus"></i> Enroll Selected
+                </button>
+                <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" id="clearSelectionBtn" onclick="clearStudentSelection()">Clear</button>
+              </div>
+            </div>
           </div>
-        </div>
         <div class="admin-card-body-flush">
           <?php if (empty($students)): ?>
             <div class="admin-empty">
@@ -388,6 +395,7 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
               <table class="admin-table" id="studentsTable">
                 <thead>
                   <tr>
+                    <th width="40"><input type="checkbox" id="masterCb" class="form-check-input"></th>
                     <th>Name</th>
                     <th>Matric No</th>
                     <th>Email</th>
@@ -397,10 +405,8 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
                 <tbody>
                   <?php foreach ($students as $student): ?>
                     <tr>
-                      <td class="text-center" style="width:42px">
-                        <img src="passport_image.php?type=student&id=<?= $student['id'] ?>"
-                             class="rounded-circle" style="width:32px;height:32px;object-fit:cover"
-                             alt="" onerror="this.style.display='none'">
+                      <td class="text-center">
+                        <input type="checkbox" class="student-checkbox form-check-input" value="<?= $student['id'] ?>">
                       </td>
                       <td><a href="#" class="text-decoration-none fw-medium student-name-link" data-student-id="<?= $student['id'] ?>"><?= htmlspecialchars($student['name']) ?></a></td>
                       <td><?= htmlspecialchars($student['matric_no']) ?></td>
@@ -522,6 +528,43 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
         <form method="post">
           <div class="modal-body">
             <input type="hidden" name="student_id" id="enroll_student_id">
+            <label class="admin-form-label">Select Exams (Multi-select)</label>
+            <select name="exam_ids[]" class="admin-input admin-select" multiple size="10" required>
+              <?php foreach ($all_exams as $ex): ?>
+                <option value="<?= $ex['id'] ?>">
+                  <?= strtoupper($ex['type'] ?? 'PRACTICAL') ?>: <?= htmlspecialchars($ex['name']) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+            <div class="admin-dropzone-hint mt-2">Hold Ctrl (Cmd) to select multiple exams.</div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="admin-btn admin-btn-outline" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" name="enroll" class="admin-btn admin-btn-primary"><i class="bi bi-bookmark-check"></i> Enroll Now</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Enrollment Modal -->
+  <div class="modal fade" id="bulkEnrollModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Enroll <span id="bulkEnrollCount" class="text-primary"></span> Students in Exams</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <form method="post">
+          <div class="modal-body">
+            <input type="hidden" name="student_id" id="bulkEnrollStudentIds">
+            <div class="mb-3">
+              <label class="admin-form-label fw-bold">Selected Students (<span id="bulkEnrollCountDisplay">0</span>)</label>
+              <div class="admin-card" style="max-height: 200px; overflow-y: auto;">
+                <ul class="list-group list-group-flush" id="bulkEnrollStudentList"></ul>
+              </div>
+            </div>
+            <hr>
             <label class="admin-form-label">Select Exams (Multi-select)</label>
             <select name="exam_ids[]" class="admin-input admin-select" multiple size="10" required>
               <?php foreach ($all_exams as $ex): ?>
@@ -914,6 +957,66 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
       var d = document.createElement('div');
       d.textContent = str;
       return d.innerHTML;
+    }
+
+    // ─── Bulk Enrollment ───
+    var bulkSelected = [];
+
+    var masterCb = document.getElementById('masterCb');
+    if (masterCb) {
+      masterCb.addEventListener('change', function () {
+        document.querySelectorAll('.student-checkbox:not(:disabled)').forEach(function (cb) {
+          cb.checked = this.checked;
+        }.bind(this));
+        updateBulkSelection();
+      });
+    }
+
+    document.querySelectorAll('.student-checkbox').forEach(function (cb) {
+      cb.addEventListener('change', updateBulkSelection);
+    });
+
+    function updateBulkSelection() {
+      bulkSelected = [];
+      document.querySelectorAll('.student-checkbox:checked').forEach(function (cb) {
+        bulkSelected.push({ id: parseInt(cb.value), name: cb.closest('tr').querySelector('.student-name-link').textContent });
+      });
+      var bar = document.getElementById('bulkActionsBar');
+      var countEl = document.getElementById('bulkSelectedCount');
+      if (bulkSelected.length > 0) {
+        bar.style.display = 'flex';
+        countEl.textContent = bulkSelected.length + ' selected';
+      } else {
+        bar.style.display = 'none';
+      }
+    }
+
+    function clearStudentSelection() {
+      document.querySelectorAll('.student-checkbox').forEach(function (cb) { cb.checked = false; });
+      var master = document.getElementById('masterCb');
+      if (master) master.checked = false;
+      updateBulkSelection();
+    }
+
+    function openBulkEnrollModal() {
+      if (bulkSelected.length === 0) {
+        Swal.fire({ title: 'No Selection', text: 'Select at least one student.', icon: 'warning', confirmButtonColor: '#198754' });
+        return;
+      }
+      document.getElementById('bulkEnrollStudentIds').value = JSON.stringify(bulkSelected.map(function (s) { return s.id; }));
+      document.getElementById('bulkEnrollCount').textContent = bulkSelected.length;
+      document.getElementById('bulkEnrollCountDisplay').textContent = bulkSelected.length;
+
+      var listEl = document.getElementById('bulkEnrollStudentList');
+      listEl.innerHTML = '';
+      bulkSelected.forEach(function (s) {
+        var li = document.createElement('li');
+        li.className = 'list-group-item';
+        li.textContent = s.name;
+        listEl.appendChild(li);
+      });
+
+      new bootstrap.Modal(document.getElementById('bulkEnrollModal')).show();
     }
   </script>
   <script src="assets/js/admin-common.js"></script>
