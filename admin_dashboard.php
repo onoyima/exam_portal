@@ -87,7 +87,7 @@ $counts = $db->query("SELECT
     (SELECT COUNT(*) FROM exams WHERE deleted_at IS NULL) AS exams,
     (SELECT COUNT(*) FROM exams WHERE deleted_at IS NULL AND is_active = 1) AS active,
     (SELECT COUNT(*) FROM questions WHERE deleted_at IS NULL) + (SELECT COUNT(*) FROM objective_questions WHERE deleted_at IS NULL) AS questions,
-    (SELECT COUNT(*) FROM exam_groups WHERE deleted_at IS NULL) AS groups")->fetch(PDO::FETCH_ASSOC);
+    (SELECT COUNT(*) FROM exam_groups WHERE deleted_at IS NULL) AS `groups`)->fetch(PDO::FETCH_ASSOC);
 $by_type = $db->query("SELECT type, COUNT(*) FROM exams WHERE deleted_at IS NULL GROUP BY type")->fetchAll(PDO::FETCH_KEY_PAIR);
 
 /* ---------- last 14 days ---------- */
@@ -365,3 +365,6 @@ $result_url = fn($e) => $e['type'] === 'objective' ? 'exam_overview?exam_id=' . 
 </body>
 
 </html>
+
+
+
