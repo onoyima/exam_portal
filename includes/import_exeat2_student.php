@@ -87,9 +87,8 @@ if ($course_study_filter > 0) {
 if ($level_str !== '') {
     $level_num = intval($level_str);
     if ($level_num > 0) {
-        $level_num = $level_num * 10;
         $where_clauses[] = "sa.level = ?";
-        $params[] = $level_num;
+        $params[] = $level_num; // level values are already 1000, 2000, etc.
     }
 } elseif ($level_filter !== '') {
     $where_clauses[] = "sa.level = ?";
@@ -98,7 +97,7 @@ if ($level_str !== '') {
 
 $where_sql = implode(' AND ', $where_clauses);
 if (!empty($where_clauses)) {
-    $sql = $base_query . ' WHERE ' . $where_sql . ' ORDER BY sa.matric_no';
+    $sql = $base_query . ' AND ' . $where_sql . ' ORDER BY sa.matric_no';
 } else {
     $sql = $base_query . ' ORDER BY sa.matric_no';
 }
