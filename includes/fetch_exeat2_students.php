@@ -16,6 +16,7 @@ $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) 
 $level_id      = isset($_GET['level_id']) ? intval($_GET['level_id']) : 0;
 $course_study_id = isset($_GET['course_study_id']) ? intval($_GET['course_study_id']) : 0;
 $search        = isset($_GET['search']) ? trim($_GET['search']) : '';
+$level_str     = isset($_GET['level_str']) ? trim($_GET['level_str']) : '';
 
 $conditions = [];
 $params = [];
@@ -23,7 +24,6 @@ $params = [];
 $conditions[] = "s.status = 1";
 $conditions[] = "sa.status = 1";
 $conditions[] = "sa.matric_no IS NOT NULL AND sa.matric_no != ''";
-$conditions[] = "sa.level < 1000";
 
 if ($department_id > 0) {
     $conditions[] = "sa.department_id = ?";
@@ -48,6 +48,14 @@ if ($search !== '') {
     $params[] = $like;
     $params[] = $like;
     $params[] = $like;
+}
+
+if ($level_str !== '') {
+    $level_num = intval($level_str);
+    if ($level_num > 0) {
+        $conditions[] = "sa.level = ?";
+        $params[] = $level_num * 10;
+    }
 }
 
 $where = implode(' AND ', $conditions);
