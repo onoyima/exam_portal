@@ -62,6 +62,26 @@ try {
     <link href="assets/vendor/aos/aos.css" rel="stylesheet">
     <link href="style_enhanced.css" rel="stylesheet">
 
+    <!-- Choices.js for mobile-friendly multi-select -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/styles/choices.min.css">
+    <style>
+        /* Fix Choices.js dropdown z-index to appear above sidebar */
+        .choices__list--dropdown {
+            z-index: 9999 !important;
+        }
+        .choices__list--dropdown .choices__list {
+            z-index: 9999 !important;
+        }
+        .choices__list--dropdown .choices__item {
+            z-index: 9999 !important;
+        }
+        .choices__inner {
+            z-index: auto !important;
+        }
+        .is-open .choices__list--dropdown {
+            z-index: 9999 !important;
+        }
+    </style>
     <style>
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
@@ -139,32 +159,32 @@ try {
 
         /* ── Navbar ── */
         .landing-navbar {
-            position: fixed !important;
-            top: 20px !important;
-            left: 50% !important;
-            transform: translateX(-50%) !important;
-            width: 95% !important;
-            max-width: 1550px !important;
-            background: rgba(255, 255, 255, 0.9) !important;
-            backdrop-filter: blur(25px) saturate(180%) !important;
-            border: 1px solid rgba(255, 255, 255, 0.4) !important;
-            border-radius: 60px !important;
-            padding: 12px 30px !important;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05) !important;
-            z-index: 2000 !important;
-            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 95%;
+            max-width: 1550px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(25px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 60px;
+            padding: 12px 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+            z-index: 2000;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .landing-navbar.scrolled {
-            top: 0 !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            background: rgba(255, 255, 255, 0.98) !important;
-            border: none !important;
-            border-bottom: 1px solid rgba(0,0,0,0.06) !important;
-            border-radius: 0 !important;
-            padding: 10px 40px !important;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.06) !important;
+            top: 0;
+            width: 100%;
+            max-width: 100%;
+            background: rgba(255, 255, 255, 0.98);
+            border: none;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+            border-radius: 0;
+            padding: 10px 40px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
         }
 
         .navbar-toggler:focus { box-shadow: none; }
@@ -293,22 +313,22 @@ try {
 
         /* ── Responsive ── */
         @media (max-width: 1199.98px) {
-            .landing-navbar { padding: 10px 24px !important; }
-            .landing-navbar.scrolled { padding: 8px 30px !important; }
+            .landing-navbar { padding: 10px 24px; }
+            .landing-navbar.scrolled { padding: 8px 30px; }
         }
 
         @media (max-width: 991.98px) {
             .landing-navbar {
-                top: 12px !important;
-                width: 94% !important;
-                padding: 10px 18px !important;
-                border-radius: 20px !important;
+                top: 12px;
+                width: 94%;
+                padding: 10px 18px;
+                border-radius: 20px;
             }
             .landing-navbar.scrolled {
-                top: 0 !important;
-                width: 100% !important;
-                border-radius: 0 !important;
-                padding: 10px 16px !important;
+                top: 0;
+                width: 100%;
+                border-radius: 0;
+                padding: 10px 16px;
             }
             .landing-navbar .navbar-collapse {
                 background: rgba(255,255,255,0.98);
@@ -322,7 +342,7 @@ try {
             }
             .landing-navbar .navbar-nav { gap: 2px; }
             .landing-navbar .nav-link {
-                padding: 10px 16px !important;
+                padding: 10px 16px;
                 border-radius: 10px;
                 font-size: 0.95rem;
                 text-align: center;
@@ -332,29 +352,29 @@ try {
             .landing-navbar .btn { width: 100%; justify-content: center; }
 
             .hero-section {
-                padding-top: 120px !important;
-                padding-bottom: 70px !important;
-                min-height: auto !important;
-                display: block !important;
-                align-items: normal !important;
-                overflow: visible !important;
+                padding-top: 120px;
+                padding-bottom: 70px;
+                min-height: auto;
+                display: block;
+                align-items: normal;
+                overflow: visible;
             }
             .hero-content { text-align: center; }
-            .hero-content .lead { padding-right: 0 !important; }
+            .hero-content .lead { padding-right: 0; }
             .hero-content .d-flex { justify-content: center; }
             .hero-content .btn-lg {
                 padding: 12px 20px;
             }
             .floating-card {
-                display: none !important;
+                display: none;
             }
             .hero-badge i { display: none; }
             .hero-carousel { margin-top: 1.5rem; }
 
             .section-padding { padding: 60px 0; }
-            .container-xxl.px-5 { padding-left: 20px !important; padding-right: 20px !important; }
+            .container-xxl.px-5 { padding-left: 20px; padding-right: 20px; }
 
-            .border-md-start { border-left: none !important; }
+            .border-md-start { border-left: none; }
 
             .stat-item { padding: 12px 0; }
 
@@ -368,31 +388,31 @@ try {
             .step-card { padding: 1.25rem; }
             .spec-pill { width: 100%; text-align: center; justify-content: center; }
 
-            .landing-navbar .navbar-brand img { max-height: 36px !important; }
+            .landing-navbar .navbar-brand img { max-height: 36px; }
         }
 
         @media (max-width: 767.98px) {
             .landing-navbar {
-                top: 8px !important;
-                width: 92% !important;
-                padding: 8px 14px !important;
-                border-radius: 16px !important;
+                top: 8px;
+                width: 92%;
+                padding: 8px 14px;
+                border-radius: 16px;
             }
             .landing-navbar.scrolled {
-                padding: 8px 12px !important;
-                border-radius: 0 !important;
-                width: 100% !important;
-                top: 0 !important;
+                padding: 8px 12px;
+                border-radius: 0;
+                width: 100%;
+                top: 0;
             }
             .landing-navbar .navbar-brand span {
-                font-size: 0.95rem !important;
+                font-size: 0.95rem;
             }
             .landing-navbar .navbar-brand img {
-                max-height: 30px !important;
+                max-height: 30px;
                 width: auto;
             }
 
-            .hero-section { padding-top: 100px !important; padding-bottom: 60px !important; }
+            .hero-section { padding-top: 100px; padding-bottom: 60px; }
             .hero-title { font-size: clamp(1.6rem, 7vw, 2.4rem); }
             .hero-content .btn-lg { width: 100%; }
 
@@ -403,28 +423,28 @@ try {
             #exam-formats .display-4,
             #roi .display-4,
             #workflow .display-4 {
-                font-size: clamp(1.6rem, 5vw, 2rem) !important;
+                font-size: clamp(1.6rem, 5vw, 2rem);
             }
-            #security .card { padding: 1.25rem !important; }
+            #security .card { padding: 1.25rem; }
 
             .step-card .step-num {
                 width: 40px; height: 40px;
                 font-size: 1rem;
             }
 
-            #exam-formats .card { padding: 1.25rem !important; }
+            #exam-formats .card { padding: 1.25rem; }
 
             footer .row.g-5 > div { margin-bottom: 1.5rem; }
-            footer .text-lg-start { text-align: center !important; }
+            footer .text-lg-start { text-align: center; }
             footer h3 { font-size: 1.3rem; }
         }
 
         @media (max-width: 575.98px) {
-            .landing-navbar { padding: 6px 10px !important; }
-            .landing-navbar .navbar-brand span { font-size: 0.82rem !important; }
-            .landing-navbar .navbar-brand img { max-height: 26px !important; }
+            .landing-navbar { padding: 6px 10px; }
+            .landing-navbar .navbar-brand span { font-size: 0.82rem; }
+            .landing-navbar .navbar-brand img { max-height: 26px; }
 
-            .hero-section { padding-top: 80px !important; padding-bottom: 50px !important; }
+            .hero-section { padding-top: 80px; padding-bottom: 50px; }
             .hero-title { font-size: clamp(1.4rem, 8vw, 2rem); }
             .hero-content .btn-lg {
                 font-size: 0.85rem;
@@ -433,7 +453,7 @@ try {
 
             .section-padding { padding: 35px 0; }
 
-            .container-xxl.px-5 { padding-left: 14px !important; padding-right: 14px !important; }
+            .container-xxl.px-5 { padding-left: 14px; padding-right: 14px; }
 
             .feature-card { padding: 1.5rem 1rem; }
             .feature-icon-lg { width: 60px; height: 60px; font-size: 1.6rem; }
@@ -442,685 +462,217 @@ try {
 
             .table { font-size: 0.75rem; }
             .table th,
-            .table td { padding: 0.5rem !important; }
+            .table td { padding: 0.5rem; }
 
-            footer .row.g-5 { gap: 0 !important; }
+            footer .row.g-5 { gap: 0; }
+        }
+
+        /* ── Global responsive fixes ── */
+        @media (max-width: 991.98px) {
+            /* Table responsive */
+            .table-responsive {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .table-responsive > .table {
+                min-width: 600px;
+            }
+
+            /* ROI table responsive */
+            #roi .table-responsive {
+                overflow-x: auto;
+            }
+            #roi table {
+                min-width: 700px;
+            }
+
+            /* Hero carousel responsive */
+            .hero-carousel .carousel-item img {
+                max-height: 400px;
+                object-fit: contain;
+            }
+
+            /* Feature cards */
+            .feature-card {
+                padding: 1.5rem;
+            }
+
+            /* ROI table */
+            #roi .table td,
+            #roi .table th {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.85rem;
+            }
+        }
+
+        @media (max-width: 767.98px) {
+            /* Navbar */
+            .landing-navbar .navbar-brand span {
+                font-size: 0.85rem;
+            }
+            .landing-navbar .navbar-brand img {
+                max-height: 28px;
+            }
+
+            /* Hero section */
+            .hero-section {
+                padding-top: 90px;
+                padding-bottom: 50px;
+            }
+            .hero-title {
+                font-size: clamp(1.4rem, 8vw, 2.2rem);
+                line-height: 1.2;
+            }
+            .hero-content .lead {
+                font-size: 1rem;
+            }
+            .hero-content .btn-lg {
+                padding: 12px 16px;
+                font-size: 0.9rem;
+            }
+
+            /* Section spacing */
+            .section-padding { padding: 40px 0; }
+
+            /* Stats */
+            .stat-item {
+                padding: 10px 0;
+            }
+            .stat-item .display-6 {
+                font-size: clamp(1.5rem, 4vw, 2rem);
+            }
+
+            /* About section */
+            #about .display-5 {
+                font-size: clamp(1.5rem, 5vw, 2rem);
+            }
+            #about .row.g-5 > div { text-align: center; }
+            #about .col-md-4 {
+                margin-bottom: 1rem;
+            }
+
+            /* Security cards */
+            #security .card {
+                padding: 1rem;
+            }
+
+            /* Feature cards */
+            .feature-card {
+                padding: 1.25rem;
+            }
+            .feature-icon-lg {
+                width: 56px;
+                height: 56px;
+                font-size: 1.4rem;
+            }
+
+            /* ROI table */
+            #roi .table {
+                font-size: 0.75rem;
+            }
+            #roi .table td,
+            #roi .table th {
+                padding: 0.4rem 0.5rem;
+            }
+
+            /* Team */
+            .team-img-wrapper {
+                width: 120px;
+                height: 120px;
+            }
+
+            /* Workflow */
+            .step-card {
+                padding: 1rem;
+            }
+            .step-num {
+                width: 36px;
+                height: 36px;
+                font-size: 0.9rem;
+            }
+
+            /* Exam formats */
+            #exam-formats .card {
+                padding: 1rem;
+            }
+
+            /* Team section */
+            .team-item {
+                padding: 1rem 0.5rem;
+            }
+            .team-img-wrapper {
+                width: 110px;
+                height: 110px;
+            }
+
+            /* Footer */
+            footer .row.g-5 > div {
+                margin-bottom: 1rem;
+            }
+            footer .text-lg-start {
+                text-align: center;
+            }
+            footer h3 {
+                font-size: 1.1rem;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .landing-navbar { padding: 6px 10px; }
+            .landing-navbar .navbar-brand span { font-size: 0.75rem; }
+            .landing-navbar .navbar-brand img { max-height: 24px; }
+
+            .hero-section { padding-top: 70px; padding-bottom: 40px; }
+            .hero-title { font-size: clamp(1.2rem, 8vw, 1.8rem); }
+            .hero-content .lead { font-size: 0.9rem; }
+            .hero-content .btn-lg {
+                font-size: 0.8rem;
+                padding: 10px 12px;
+            }
+
+            .section-padding { padding: 30px 0; }
+
+            .container-xxl.px-5 { padding-left: 12px; padding-right: 12px; }
+
+            .feature-card { padding: 1rem; }
+            .feature-icon-lg { width: 50px; height: 50px; font-size: 1.3rem; }
+
+            .bg-blob { display: none; }
+
+            .table { font-size: 0.7rem; }
+            .table th,
+            .table td { padding: 0.4rem; }
+
+            footer .row.g-5 { gap: 0; }
+            footer .col-md-4 { margin-bottom: 1.5rem; }
+            footer h3 { font-size: 1rem; }
+
+            /* Hero carousel */
+            .hero-carousel .carousel-item img {
+                max-height: 250px;
+            }
+        }
+
+        /* ── Print styles ── */
+        @media print {
+            .landing-navbar,
+            .hero-section .floating-card,
+            .bg-blob,
+            .animated-bg-container,
+            footer,
+            .btn {
+                display: none !important;
+            }
+            .hero-section {
+                min-height: auto !important;
+                padding: 0 !important;
+            }
+            .section-padding { padding: 0 !important; }
+            .container-xxl { max-width: 100% !important; padding: 0 !important; }
+            .card { border: none !important; box-shadow: none !important; }
+            .bg-dark, .bg-light { background: transparent !important; color: #000 !important; }
+            a { text-decoration: none !important; color: #000 !important; }
         }
     </style>
     <link href="assets/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
 </head>
-
-<body>
-    <!-- Animated Background Blobs -->
-    <div class="animated-bg-container">
-        <div class="bg-blob blob-green"></div>
-        <div class="bg-blob blob-primary"></div>
-        <div class="bg-blob blob-purple"></div>
-    </div>
-
-    <!-- Dynamic Transparent Navbar -->
-    <nav class="navbar navbar-expand-lg landing-navbar" id="mainNav">
-        <div class="container-fluid">
-            <a class="navbar-brand d-flex align-items-center gap-3" href="#">
-                <?php if (!empty($portal_logo) && file_exists($portal_logo)): ?>
-                    <img src="<?= htmlspecialchars($portal_logo) ?>" alt="Logo" style="max-height: 45px; width: auto; border-radius: 4px;">
-                <?php else: ?>
-                    <img src="assets/favicon.ico" alt="Logo" width="45" height="45">
-                <?php endif; ?>
-                <span class="outfit fs-3 fw-bold text-success"><?= htmlspecialchars($portal_title) ?></span>
-            </a>
-            <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse"
-                data-bs-target="#navbarContent">
-                <i class="bi bi-list"></i>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarContent">
-                <ul class="navbar-nav mx-auto mb-3 mb-lg-0 text-center text-lg-start">
-                    <?php if (($settings['section_about_active'] ?? '1') === '1'): ?>
-                        <li class="nav-item"><a class="nav-link fw-bold" href="#about">About</a></li>
-                    <?php endif; ?>
-                    <?php if (($settings['section_solutions_active'] ?? '1') === '1'): ?>
-                        <li class="nav-item"><a class="nav-link fw-bold" href="#features">Services</a></li>
-                    <?php endif; ?>
-                    <?php if (($settings['section_workflow_active'] ?? '1') === '1'): ?>
-                        <li class="nav-item"><a class="nav-link fw-bold" href="#workflow">Workflow</a></li>
-                    <?php endif; ?>
-                    <?php if (($settings['section_team_active'] ?? '1') === '1'): ?>
-                        <li class="nav-item"><a class="nav-link fw-bold" href="#team">Team</a></li>
-                    <?php endif; ?>
-                </ul>
-                <div class="d-flex flex-column flex-lg-row gap-3">
-                    <a href="login" class="btn btn-outline-dark rounded-pill px-4 fw-bold">Staff Login</a>
-                    <a href="student_login" class="btn btn-success rounded-pill px-5 fw-bold shadow-lg">Portal Access</a>
-                </div>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Master Hero Section -->
-    <?php if (($settings['section_hero_active'] ?? '1') === '1'): ?>
-    <section class="hero-section bg-dots">
-        <div class="container-xxl hero-content px-5">
-            <div class="row align-items-center g-5">
-                <div class="col-lg-6" data-aos="fade-right">
-                    <span class="hero-badge"><i class="bi bi-stars me-2"></i> <?= htmlspecialchars($settings['hero_badge'] ?? 'LEADING INNOVATION') ?></span>
-                    <h1 class="hero-title mb-4">
-                        Intelligent <br>
-                        <span class="text-swap-container">
-                            <?php 
-                            $swaps = explode('|', $settings['hero_title_swaps'] ?? 'AI Proctoring|Remote Security|Live Proctored Chat|Global Integrity');
-                            foreach ($swaps as $idx => $swap): 
-                                if (empty(trim($swap))) continue;
-                            ?>
-                                <span class="swap-text <?= $idx === 0 ? 'active' : '' ?>"><?= htmlspecialchars(trim($swap)) ?></span>
-                            <?php endforeach; ?>
-                        </span>
-                    </h1>
-                    <p class="lead text-muted mb-5 pe-lg-5 fw-normal"><?= htmlspecialchars($settings['hero_lead'] ?? 'The ultimate digital environment for institutions. Seamlessly integrated monitoring and automated performance tracking with zero-compromise security.') ?></p>
-                    <div class="d-grid d-sm-flex flex-wrap gap-3">
-                        <a href="<?= htmlspecialchars($settings['hero_btn1_url'] ?? 'student_login.php') ?>"
-                            class="btn btn-success btn-lg rounded-pill px-5 py-3 fw-bold shadow-lg w-100 w-sm-auto"><?= htmlspecialchars($settings['hero_btn1_text'] ?? 'STUDENT ENTRANCE') ?></a>
-                        <a href="<?= htmlspecialchars($settings['hero_btn2_url'] ?? '#workflow') ?>"
-                            class="btn btn-outline-dark btn-lg rounded-pill px-5 py-3 fw-bold w-100 w-sm-auto"><?= htmlspecialchars($settings['hero_btn2_text'] ?? 'HOW IT WORKS') ?></a>
-                        <a href="downloads/seb/VeritasSEB-1.0.0-win.exe" class="btn btn-outline-success btn-lg rounded-pill px-5 py-3 fw-bold w-100 w-sm-auto" target="_blank"><i class="bi bi-download me-2"></i>Download SEB Browser</a>
-                    </div>
-                </div>
-
-                <div class="col-lg-6" data-aos="fade-left" data-aos-delay="200">
-                    <!-- Hero Image Interchange Slider -->
-                    <div id="heroCarousel" class="carousel slide hero-carousel carousel-fade" data-bs-ride="carousel">
-                        <div class="carousel-inner">
-                            <div class="carousel-item active" data-bs-interval="4000">
-                                <img src="<?= htmlspecialchars($settings['hero_img1'] ?? 'assets/img/hero.png') ?>" class="d-block w-100" alt="Proctoring Tech">
-                            </div>
-                            <div class="carousel-item" data-bs-interval="4000">
-                                <img src="<?= htmlspecialchars($settings['hero_img2'] ?? 'assets/img/proctoring.png') ?>" class="d-block w-100" alt="Advanced HUD">
-                            </div>
-                            <div class="carousel-item" data-bs-interval="4000">
-                                <img src="<?= htmlspecialchars($settings['about_img'] ?? 'assets/img/about.png') ?>" class="d-block w-100" alt="Collaboration">
-                            </div>
-                        </div>
-                        <!-- Float Overlay Cards for Interactivity -->
-                        <div class="floating-card shadow-lg" style="bottom: 40px; left: -20px; z-index: 10;">
-                            <div class="d-flex align-items-center gap-3">
-                                <div class="bg-primary-light p-2 rounded-circle"><i
-                                        class="bi bi-shield-fill-check text-success fs-4"></i></div>
-                                <div>
-                                    <div class="fw-bold small"><?= htmlspecialchars($settings['hero_floating_card_title'] ?? 'Identity Sync') ?></div>
-                                    <div class="text-muted smaller"><?= htmlspecialchars($settings['hero_floating_card_desc'] ?? '99.9% Match Accuracy') ?></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-    <?php endif; ?>
-
-    <!-- Quick Stats -->
-    <?php if (($settings['section_stats_active'] ?? '1') === '1'): ?>
-    <section class="py-5 border-bottom">
-        <div class="container-xxl px-5">
-            <div class="row text-center py-4 g-4 px-md-5">
-                <div class="col-md-4 stat-item">
-                    <div class="display-6 fw-bold outfit text-success"><?= $exam_count ?>+</div>
-                    <div class="text-muted fw-bold small uppercase tracking-widest mt-2"><?= htmlspecialchars($settings['stat1_label'] ?? 'ACTIVE ASSESSMENTS') ?></div>
-                </div>
-                <div class="col-md-4 stat-item border-md-start">
-                    <div class="display-6 fw-bold outfit text-dark"><?= $student_count ?>+</div>
-                    <div class="text-muted fw-bold small uppercase tracking-widest mt-2"><?= htmlspecialchars($settings['stat2_label'] ?? 'VERIFIED STUDENTS') ?></div>
-                </div>
-                <div class="col-md-4 stat-item border-md-start">
-                    <div class="display-6 fw-bold outfit text-primary"><?= htmlspecialchars($settings['stat3_val'] ?? '150ms') ?></div>
-                    <div class="text-muted fw-bold small uppercase tracking-widest mt-2"><?= htmlspecialchars($settings['stat3_label'] ?? 'LIVE STREAM LATENCY') ?></div>
-                </div>
-            </div>
-        </div>
-    </section>
-    <?php endif; ?>
-
-    <!-- About Section -->
-    <?php if (($settings['section_about_active'] ?? '1') === '1'): ?>
-    <section id="about" class="section-padding">
-        <div class="container-xxl px-5">
-            <div class="row align-items-center g-5">
-                <div class="col-lg-6 order-2 order-lg-1" data-aos="fade-right">
-                    <img src="<?= htmlspecialchars($settings['about_img'] ?? 'assets/img/about.png') ?>" class="img-fluid rounded-5 shadow-lg" alt="About NextGen">
-                </div>
-                <div class="col-lg-6 order-1 order-lg-2" data-aos="fade-left">
-                    <h2 class="display-5 fw-bold mb-4"><?= $settings['about_title'] ?? 'Our Mission: <br><span class="text-success">Integrity at Scale</span>' ?></h2>
-                    <p class="text-muted fs-5 mb-4"><?= htmlspecialchars($settings['about_lead'] ?? 'Founded on the principle that digital education requires uncompromising security, NextGen Assessment Portal bridges the gap between remote testing and physical invigilation.') ?></p>
-                    <p class="text-muted mb-5"><?= htmlspecialchars($settings['about_desc'] ?? 'We provide institutions with a robust framework to conduct high-stakes examinations anywhere in the world, backed by real-time neural monitoring and automated behavioral analysis.') ?></p>
-                    <div class="row g-4">
-                        <div class="col-md-4">
-                            <h5 class="fw-bold"><i class="bi bi-patch-check-fill text-success me-2"></i> <?= htmlspecialchars($settings['about_bullet1_title'] ?? 'Security First') ?></h5>
-                            <p class="small text-muted"><?= htmlspecialchars($settings['about_bullet1_desc'] ?? 'End-to-end encrypted session stores.') ?></p>
-                        </div>
-                        <div class="col-md-4">
-                            <h5 class="fw-bold"><i class="bi bi-lightning-fill text-warning me-2"></i> <?= htmlspecialchars($settings['about_bullet2_title'] ?? 'Rapid Results') ?></h5>
-                            <p class="small text-muted"><?= htmlspecialchars($settings['about_bullet2_desc'] ?? 'Real-time grading and instant metrics.') ?></p>
-                        </div>
-                        <div class="col-md-4">
-                            <h5 class="fw-bold"><i class="bi bi-chat-left-dots-fill text-primary me-2"></i> <?= htmlspecialchars($settings['about_bullet3_title'] ?? 'Proctored Chat') ?></h5>
-                            <p class="small text-muted"><?= htmlspecialchars($settings['about_bullet3_desc'] ?? 'Direct intervention & student support.') ?></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-    <?php endif; ?>
-
-    <!-- Security Framework Section (7-Layer Security Stack) -->
-    <?php if (($settings['section_security_active'] ?? '1') === '1'): ?>
-    <section id="security" class="section-padding bg-dark text-white position-relative">
-        <div class="animated-bg-container">
-            <div class="bg-blob blob-green" style="opacity: 0.08; width: 400px; height: 400px; top: 10%; left: 10%;"></div>
-            <div class="bg-blob blob-purple" style="opacity: 0.05; width: 500px; height: 500px; bottom: 10%; right: 10%;"></div>
-        </div>
-        
-        <div class="container-xxl px-5">
-            <div class="text-center mb-5" data-aos="fade-up">
-                <span class="badge bg-success bg-opacity-25 text-success rounded-pill px-3 py-2 uppercase small tracking-wider mb-2"><?= htmlspecialchars($settings['sec_badge'] ?? 'Military-Grade Defense') ?></span>
-                <h2 class="display-4 fw-bold outfit text-white"><?= $settings['sec_title'] ?? 'The <span class="text-success">7-Layer Security</span> Stack' ?></h2>
-                <p class="text-muted fs-5"><?= htmlspecialchars($settings['sec_lead'] ?? 'Uncompromised academic integrity backed by active hardware-to-cloud security measures.') ?></p>
-            </div>
-            
-            <div class="row g-4">
-                <div class="col-md-6 col-lg-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="card h-100 border border-secondary border-opacity-25 p-4 rounded-4 hover-shadow" style="background: rgba(255,255,255,0.02); backdrop-filter: blur(10px); color: #fff;">
-                        <div class="d-flex align-items-center gap-3 mb-3">
-                            <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width: 45px; height: 45px; font-size: 1.1rem; flex-shrink:0;">L7</div>
-                            <h4 class="fw-bold m-0 outfit text-white fs-5"><?= htmlspecialchars($settings['sec_l7_title'] ?? 'OS Kiosk (SEB)') ?></h4>
-                        </div>
-                        <p class="text-muted small mb-0"><?= htmlspecialchars($settings['sec_l7_desc'] ?? '') ?></p>
-                        <a href="downloads/seb/VeritasSEB-1.0.0-win.exe" class="btn btn-sm btn-outline-success rounded-pill mt-3 px-4" target="_blank"><i class="bi bi-download me-1"></i> Download SEB</a>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="card h-100 border border-secondary border-opacity-25 p-4 rounded-4 hover-shadow" style="background: rgba(255,255,255,0.02); backdrop-filter: blur(10px); color: #fff;">
-                        <div class="d-flex align-items-center gap-3 mb-3">
-                            <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width: 45px; height: 45px; font-size: 1.1rem; flex-shrink:0;">L6</div>
-                            <h4 class="fw-bold m-0 outfit text-white fs-5"><?= htmlspecialchars($settings['sec_l6_title'] ?? 'Browser Lockdown') ?></h4>
-                        </div>
-                        <p class="text-muted small mb-0"><?= htmlspecialchars($settings['sec_l6_desc'] ?? '') ?></p>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="card h-100 border border-secondary border-opacity-25 p-4 rounded-4 hover-shadow" style="background: rgba(255,255,255,0.02); backdrop-filter: blur(10px); color: #fff;">
-                        <div class="d-flex align-items-center gap-3 mb-3">
-                            <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width: 45px; height: 45px; font-size: 1.1rem; flex-shrink:0;">L5</div>
-                            <h4 class="fw-bold m-0 outfit text-white fs-5"><?= htmlspecialchars($settings['sec_l5_title'] ?? 'Tab Blur Counters') ?></h4>
-                        </div>
-                        <p class="text-muted small mb-0"><?= htmlspecialchars($settings['sec_l5_desc'] ?? '') ?></p>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-4" data-aos="fade-up" data-aos-delay="400">
-                    <div class="card h-100 border border-secondary border-opacity-25 p-4 rounded-4 hover-shadow" style="background: rgba(255,255,255,0.02); backdrop-filter: blur(10px); color: #fff;">
-                        <div class="d-flex align-items-center gap-3 mb-3">
-                            <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width: 45px; height: 45px; font-size: 1.1rem; flex-shrink:0;">L4</div>
-                            <h4 class="fw-bold m-0 outfit text-white fs-5"><?= htmlspecialchars($settings['sec_l4_title'] ?? 'Webcam Proctoring') ?></h4>
-                        </div>
-                        <p class="text-muted small mb-0"><?= htmlspecialchars($settings['sec_l4_desc'] ?? '') ?></p>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-4" data-aos="fade-up" data-aos-delay="500">
-                    <div class="card h-100 border border-secondary border-opacity-25 p-4 rounded-4 hover-shadow" style="background: rgba(255,255,255,0.02); backdrop-filter: blur(10px); color: #fff;">
-                        <div class="d-flex align-items-center gap-3 mb-3">
-                            <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width: 45px; height: 45px; font-size: 1.1rem; flex-shrink:0;">L3</div>
-                            <h4 class="fw-bold m-0 outfit text-white fs-5"><?= htmlspecialchars($settings['sec_l3_title'] ?? 'Device Whitelisting') ?></h4>
-                        </div>
-                        <p class="text-muted small mb-0"><?= htmlspecialchars($settings['sec_l3_desc'] ?? '') ?></p>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-4" data-aos="fade-up" data-aos-delay="600">
-                    <div class="card h-100 border border-secondary border-opacity-25 p-4 rounded-4 hover-shadow" style="background: rgba(255,255,255,0.02); backdrop-filter: blur(10px); color: #fff;">
-                        <div class="d-flex align-items-center gap-3 mb-3">
-                            <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width: 45px; height: 45px; font-size: 1.1rem; flex-shrink:0;">L2</div>
-                            <h4 class="fw-bold m-0 outfit text-white fs-5"><?= htmlspecialchars($settings['sec_l2_title'] ?? 'Session Hardening') ?></h4>
-                        </div>
-                        <p class="text-muted small mb-0"><?= htmlspecialchars($settings['sec_l2_desc'] ?? '') ?></p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-    <?php endif; ?>
-
-    <!-- Services Section -->
-    <?php if (($settings['section_solutions_active'] ?? '1') === '1'): ?>
-    <section id="features" class="section-padding bg-light">
-        <div class="container-xxl px-5">
-            <div class="text-center mb-5" data-aos="fade-up">
-                <h2 class="display-4 fw-bold outfit"><?= $settings['sol_title'] ?? 'Institutional <span class="text-success">Solutions</span>' ?></h2>
-                <p class="text-muted fs-5"><?= htmlspecialchars($settings['sol_lead'] ?? 'A comprehensive toolset engineered for digital transformation.') ?></p>
-            </div>
-            <div class="row g-4">
-                <div class="col-md-6 col-lg-3" data-aos="fade-up" data-aos-delay="100">
-                    <div class="feature-card">
-                        <div class="feature-icon-lg"><i class="bi bi-people-fill"></i></div>
-                        <h4 class="fw-bold"><?= htmlspecialchars($settings['sol1_title'] ?? 'Staff Control') ?></h4>
-                        <p class="text-muted"><?= htmlspecialchars($settings['sol1_desc'] ?? '') ?></p>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-3" data-aos="fade-up" data-aos-delay="200">
-                    <div class="feature-card">
-                        <div class="feature-icon-lg"><i class="bi bi-database-fill-check"></i></div>
-                        <h4 class="fw-bold"><?= htmlspecialchars($settings['sol2_title'] ?? 'Bulk Intake') ?></h4>
-                        <p class="text-muted"><?= htmlspecialchars($settings['sol2_desc'] ?? '') ?></p>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-3" data-aos="fade-up" data-aos-delay="300">
-                    <div class="feature-card">
-                        <div class="feature-icon-lg"><i class="bi bi-question-diamond-fill"></i></div>
-                        <h4 class="fw-bold"><?= htmlspecialchars($settings['sol3_title'] ?? 'Dynamic Pools') ?></h4>
-                        <p class="text-muted"><?= htmlspecialchars($settings['sol3_desc'] ?? '') ?></p>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-3" data-aos="fade-up" data-aos-delay="400">
-                    <div class="feature-card">
-                        <div class="feature-icon-lg"><i class="bi bi-chat-left-text-fill"></i></div>
-                        <h4 class="fw-bold"><?= htmlspecialchars($settings['sol4_title'] ?? 'Proctored Chat') ?></h4>
-                        <p class="text-muted"><?= htmlspecialchars($settings['sol4_desc'] ?? '') ?></p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-    <?php endif; ?>
-
-    <!-- AI Proctoring Packages Section -->
-    <?php if (($settings['section_ai_active'] ?? '1') === '1'): ?>
-    <section id="ai-proctoring" class="section-padding bg-light position-relative">
-        <div class="container-xxl px-5">
-            <div class="text-center mb-5" data-aos="fade-up">
-                <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2 uppercase small tracking-wider mb-2"><?= htmlspecialchars($settings['ai_badge'] ?? 'Automated Invigilation') ?></span>
-                <h2 class="display-4 fw-bold outfit text-dark"><?= $settings['ai_title'] ?? 'Client-Side <span class="text-success">AI Proctoring</span> Packages' ?></h2>
-                <p class="text-muted fs-5"><?= htmlspecialchars($settings['ai_lead'] ?? 'Scale remote remote surveillance effortlessly.') ?></p>
-            </div>
-            
-            <div class="row g-4 justify-content-center">
-                <!-- Package A -->
-                <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="100">
-                    <div class="card border-0 shadow-sm rounded-4 h-100 p-4 bg-white hover-shadow transition">
-                        <div class="p-3 bg-success bg-opacity-10 text-success rounded-3 d-inline-block mb-3" style="width: fit-content;">
-                            <i class="bi bi-cpu fs-3"></i>
-                        </div>
-                        <h4 class="fw-bold outfit"><?= htmlspecialchars($settings['ai_pkgA_title'] ?? 'Package A') ?></h4>
-                        <p class="text-muted small"><?= htmlspecialchars($settings['ai_pkgA_desc'] ?? '') ?></p>
-                        <hr class="my-3 opacity-25">
-                        <ul class="list-unstyled d-flex flex-column gap-2.5 small text-muted p-0">
-                            <?php 
-                            $bulletsA = explode(';;', $settings['ai_pkgA_bullets'] ?? '');
-                            foreach ($bulletsA as $b): 
-                                if (empty(trim($b))) continue;
-                            ?>
-                                <li><i class="bi bi-check-circle-fill text-success me-2"></i> <?= render_cms_markdown($b) ?></li>
-                            <?php endforeach; ?>
-                        </ul>
-                        <div class="mt-auto pt-4 text-center">
-                            <span class="badge bg-success text-white px-3 py-2 rounded-pill small">Active Integration</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Package B -->
-                <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="200">
-                    <div class="card border-0 shadow-lg rounded-4 h-100 p-4 bg-white border border-success border-2 position-relative hover-shadow transition">
-                        <div class="position-absolute top-0 end-0 bg-success text-white px-3 py-1 rounded-bl-4 rounded-tr-4 small fw-bold" style="border-top-right-radius: 14px; border-bottom-left-radius: 14px;">RECOMMENDED</div>
-                        <div class="p-3 bg-success bg-opacity-10 text-success rounded-3 d-inline-block mb-3" style="width: fit-content;">
-                            <i class="bi bi-eye fs-3"></i>
-                        </div>
-                        <h4 class="fw-bold outfit"><?= htmlspecialchars($settings['ai_pkgB_title'] ?? 'Package B') ?></h4>
-                        <p class="text-muted small"><?= htmlspecialchars($settings['ai_pkgB_desc'] ?? '') ?></p>
-                        <hr class="my-3 opacity-25">
-                        <ul class="list-unstyled d-flex flex-column gap-2.5 small text-muted p-0">
-                            <?php 
-                            $bulletsB = explode(';;', $settings['ai_pkgB_bullets'] ?? '');
-                            foreach ($bulletsB as $b): 
-                                if (empty(trim($b))) continue;
-                            ?>
-                                <li><i class="bi bi-check-circle-fill text-success me-2"></i> <?= render_cms_markdown($b) ?></li>
-                            <?php endforeach; ?>
-                        </ul>
-                        <div class="mt-auto pt-4 text-center">
-                            <span class="badge bg-secondary-subtle text-secondary px-3 py-2 rounded-pill small">Available on Request</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Package C -->
-                <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="300">
-                    <div class="card border-0 shadow-sm rounded-4 h-100 p-4 bg-white hover-shadow transition">
-                        <div class="p-3 bg-success bg-opacity-10 text-success rounded-3 d-inline-block mb-3" style="width: fit-content;">
-                            <i class="bi bi-server fs-3"></i>
-                        </div>
-                        <h4 class="fw-bold outfit"><?= htmlspecialchars($settings['ai_pkgC_title'] ?? 'Package C') ?></h4>
-                        <p class="text-muted small"><?= htmlspecialchars($settings['ai_pkgC_desc'] ?? '') ?></p>
-                        <hr class="my-3 opacity-25">
-                        <ul class="list-unstyled d-flex flex-column gap-2.5 small text-muted p-0">
-                            <?php 
-                            $bulletsC = explode(';;', $settings['ai_pkgC_bullets'] ?? '');
-                            foreach ($bulletsC as $b): 
-                                if (empty(trim($b))) continue;
-                            ?>
-                                <li><i class="bi bi-check-circle-fill text-success me-2"></i> <?= render_cms_markdown($b) ?></li>
-                            <?php endforeach; ?>
-                        </ul>
-                        <div class="mt-auto pt-4 text-center">
-                            <span class="badge bg-secondary-subtle text-secondary px-3 py-2 rounded-pill small">Available on Request</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-    <?php endif; ?>
-
-    <!-- Workflow Section -->
-    <?php if (($settings['section_workflow_active'] ?? '1') === '1'): ?>
-    <section id="workflow" class="section-padding">
-        <div class="container-xxl px-5">
-            <div class="row align-items-center g-5">
-                <div class="col-lg-5" data-aos="fade-right">
-                    <h2 class="display-4 fw-bold outfit mb-4"><?= $settings['flow_title'] ?? 'Operational <span class="text-success">Workflow</span>' ?></h2>
-                    <p class="text-muted fs-5 mb-5"><?= htmlspecialchars($settings['flow_lead'] ?? 'Seamless scaling for institutions.') ?></p>
-                    <div class="d-flex flex-column gap-3">
-                        <div class="spec-pill"><i class="bi bi-cpu text-primary"></i> <?= htmlspecialchars($settings['flow_spec1'] ?? 'PHP 8.1+ Core') ?></div>
-                        <div class="spec-pill"><i class="bi bi-database text-success"></i> <?= htmlspecialchars($settings['flow_spec2'] ?? 'Distributed SQL') ?></div>
-                    </div>
-                </div>
-                <div class="col-lg-7">
-                    <div class="vstack gap-4">
-                        <div class="step-card" data-aos="fade-left" data-aos-delay="100">
-                            <div class="step-num">1</div>
-                            <h5 class="fw-bold mb-2"><?= htmlspecialchars($settings['flow_step1_title'] ?? 'Institutional Setup') ?></h5>
-                            <p class="text-muted mb-0"><?= htmlspecialchars($settings['flow_step1_desc'] ?? '') ?></p>
-                        </div>
-                        <div class="step-card" data-aos="fade-left" data-aos-delay="200">
-                            <div class="step-num">2</div>
-                            <h5 class="fw-bold mb-2"><?= htmlspecialchars($settings['flow_step2_title'] ?? 'Resource Curation') ?></h5>
-                            <p class="text-muted mb-0"><?= htmlspecialchars($settings['flow_step2_desc'] ?? '') ?></p>
-                        </div>
-                        <div class="step-card" data-aos="fade-left" data-aos-delay="300">
-                            <div class="step-num">3</div>
-                            <h5 class="fw-bold mb-2"><?= htmlspecialchars($settings['flow_step3_title'] ?? 'Live Session Access') ?></h5>
-                            <p class="text-muted mb-0"><?= htmlspecialchars($settings['flow_step3_desc'] ?? '') ?></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-    <?php endif; ?>
-
-    <!-- Examination Formats Supported -->
-    <?php if (($settings['section_formats_active'] ?? '1') === '1'): ?>
-    <section id="exam-formats" class="section-padding bg-white position-relative">
-        <div class="container-xxl px-5">
-            <div class="text-center mb-5" data-aos="fade-up">
-                <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2 uppercase small tracking-wider mb-2"><?= htmlspecialchars($settings['fmt_badge'] ?? 'Unparalleled Versatility') ?></span>
-                <h2 class="display-4 fw-bold outfit text-dark"><?= $settings['fmt_title'] ?? 'Versatile <span class="text-success">Examination Formats</span>' ?></h2>
-                <p class="text-muted fs-5"><?= htmlspecialchars($settings['fmt_lead'] ?? 'A unified portal supporting traditional cognitive tests.') ?></p>
-            </div>
-            
-            <div class="row g-4">
-                <div class="col-lg-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="card border-0 bg-light rounded-4 h-100 p-4 hover-shadow transition">
-                        <div class="p-3 bg-success bg-opacity-10 text-success rounded-4 d-inline-block mb-4" style="width: fit-content;">
-                            <i class="bi bi-ui-checks-grid fs-3"></i>
-                        </div>
-                        <h4 class="fw-bold outfit"><?= htmlspecialchars($settings['fmt1_title'] ?? 'MCQ Exams') ?></h4>
-                        <p class="text-muted mb-4 small"><?= htmlspecialchars($settings['fmt1_desc'] ?? '') ?></p>
-                        <div class="vstack gap-2 small text-muted font-weight-medium">
-                            <?php 
-                            $bullets1 = explode(';;', $settings['fmt1_bullets'] ?? '');
-                            foreach ($bullets1 as $bullet): 
-                                if (empty(trim($bullet))) continue;
-                            ?>
-                                <div class="d-flex align-items-center gap-2"><i class="bi bi-check2 text-success"></i> <?= htmlspecialchars(trim($bullet)) ?></div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-lg-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="card border-0 bg-light rounded-4 h-100 p-4 hover-shadow transition">
-                        <div class="p-3 bg-success bg-opacity-10 text-success rounded-4 d-inline-block mb-4" style="width: fit-content;">
-                            <i class="bi bi-heart-pulse-fill fs-3"></i>
-                        </div>
-                        <h4 class="fw-bold outfit"><?= htmlspecialchars($settings['fmt2_title'] ?? 'OSCE Practical') ?></h4>
-                        <p class="text-muted mb-4 small"><?= htmlspecialchars($settings['fmt2_desc'] ?? '') ?></p>
-                        <div class="vstack gap-2 small text-muted font-weight-medium">
-                            <?php 
-                            $bullets2 = explode(';;', $settings['fmt2_bullets'] ?? '');
-                            foreach ($bullets2 as $bullet): 
-                                if (empty(trim($bullet))) continue;
-                            ?>
-                                <div class="d-flex align-items-center gap-2"><i class="bi bi-check2 text-success"></i> <?= htmlspecialchars(trim($bullet)) ?></div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-lg-4" data-aos="fade-up" data-aos-delay="300">
-                    <div class="card border-0 bg-light rounded-4 h-100 p-4 hover-shadow transition">
-                        <div class="p-3 bg-success bg-opacity-10 text-success rounded-4 d-inline-block mb-4" style="width: fit-content;">
-                            <i class="bi bi-mic-fill fs-3"></i>
-                        </div>
-                        <h4 class="fw-bold outfit"><?= htmlspecialchars($settings['fmt3_title'] ?? 'VIVA / Oral') ?></h4>
-                        <p class="text-muted mb-4 small"><?= htmlspecialchars($settings['fmt3_desc'] ?? '') ?></p>
-                        <div class="vstack gap-2 small text-muted font-weight-medium">
-                            <?php 
-                            $bullets3 = explode(';;', $settings['fmt3_bullets'] ?? '');
-                            foreach ($bullets3 as $bullet): 
-                                if (empty(trim($bullet))) continue;
-                            ?>
-                                <div class="d-flex align-items-center gap-2"><i class="bi bi-check2 text-success"></i> <?= htmlspecialchars(trim($bullet)) ?></div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-    <?php endif; ?>
-
-    <!-- Team Section -->
-    <?php if (($settings['section_team_active'] ?? '1') === '1'): ?>
-    <section id="team" class="section-padding bg-light">
-        <div class="container-xxl px-5">
-            <div class="text-center mb-5" data-aos="fade-up">
-                <h2 class="display-5 fw-bold outfit"><?= $settings['team_title'] ?? 'Academic <span class="text-success">Visionaries</span>' ?></h2>
-                <p class="text-muted fs-5"><?= htmlspecialchars($settings['team_lead'] ?? '') ?></p>
-            </div>
-            <div class="row g-5 justify-content-center">
-                <div class="col-md-4 col-lg-3" data-aos="fade-up">
-                    <div class="team-item">
-                        <div class="team-img-wrapper"><img src="assets/img/secure.png" alt="Team"></div>
-                        <h4 class="fw-bold mb-1"><?= htmlspecialchars($settings['team_m1_name'] ?? 'BMX Initiator') ?></h4>
-                        <p class="text-success fw-bold small mb-3"><?= htmlspecialchars($settings['team_m1_role'] ?? 'SYSTEM ARCHITECT') ?></p>
-                    </div>
-                </div>
-                <div class="col-md-4 col-lg-3" data-aos="fade-up" data-aos-delay="200">
-                    <div class="team-item">
-                        <div class="team-img-wrapper"><img src="assets/img/icon.png" alt="Team"></div>
-                        <h4 class="fw-bold mb-1"><?= htmlspecialchars($settings['team_m2_name'] ?? 'Ariel Vance') ?></h4>
-                        <p class="text-success fw-bold small mb-3"><?= htmlspecialchars($settings['team_m2_role'] ?? 'SECURITY LEAD') ?></p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-    <?php endif; ?>
-
-    <!-- Veritas Advantage & ROI Section -->
-    <?php if (($settings['section_roi_active'] ?? '1') === '1'): ?>
-    <section id="roi" class="section-padding bg-dark text-white position-relative">
-        <div class="animated-bg-container">
-            <div class="bg-blob blob-primary" style="opacity: 0.1; width: 600px; height: 600px; top: -100px; left: -100px;"></div>
-        </div>
-        <div class="container-xxl px-5">
-            <div class="text-center mb-5" data-aos="fade-up">
-                <span class="badge bg-success bg-opacity-25 text-success rounded-pill px-3 py-2 uppercase small tracking-wider mb-2"><?= htmlspecialchars($settings['roi_badge'] ?? 'Measurable Institutional Impact') ?></span>
-                <h2 class="display-4 fw-bold outfit text-white font-weight-bold"><?= $settings['roi_title'] ?? 'The Veritas Advantage & <span class="text-success">ROI Summary</span>' ?></h2>
-                <p class="text-muted fs-5"><?= htmlspecialchars($settings['roi_lead'] ?? '') ?></p>
-            </div>
-            
-            <div class="row g-5 align-items-center">
-                <div class="col-lg-6" data-aos="fade-right">
-                    <h3 class="fw-bold outfit text-white mb-4 fs-4">Annual Cost Savings Analysis</h3>
-                    <div class="table-responsive rounded-4 overflow-hidden border border-secondary border-opacity-25">
-                        <table class="table table-dark table-hover m-0 align-middle small">
-                            <thead>
-                                <tr class="bg-success text-white">
-                                    <th>Cost Category</th>
-                                    <th>Paper-Based</th>
-                                    <th>NextGen Portal</th>
-                                    <th class="text-success">Annual Savings</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php 
-                                $rows = explode("\n", $settings['roi_savings_rows'] ?? '');
-                                foreach ($rows as $row): 
-                                    $cols = explode(';;', $row);
-                                    if (count($cols) < 4) continue;
-                                ?>
-                                    <tr>
-                                        <td><?= htmlspecialchars(trim($cols[0])) ?></td>
-                                        <td><?= htmlspecialchars(trim($cols[1])) ?></td>
-                                        <td><?= htmlspecialchars(trim($cols[2])) ?></td>
-                                        <td class="text-success font-monospace fw-bold"><?= htmlspecialchars(trim($cols[3])) ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                                <tr class="table-active fw-bold border-top border-secondary">
-                                    <td><?= htmlspecialchars($settings['roi_total_label'] ?? 'TOTAL DIRECT SAVINGS') ?></td>
-                                    <td><?= htmlspecialchars($settings['roi_total_paper'] ?? '') ?></td>
-                                    <td><?= htmlspecialchars($settings['roi_total_portal'] ?? '') ?></td>
-                                    <td class="text-success font-monospace fs-5"><?= htmlspecialchars($settings['roi_total_savings'] ?? '') ?></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <div class="col-lg-6" data-aos="fade-left" data-aos-delay="200">
-                    <h3 class="fw-bold outfit text-white mb-4 fs-4"><?= htmlspecialchars($settings['roi_lms_title'] ?? 'Why NextGen Trumps Standard LMS') ?></h3>
-                    <div class="vstack gap-4">
-                        <div class="d-flex gap-3">
-                            <div class="p-3 bg-success bg-opacity-20 text-success rounded-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; flex-shrink: 0;"><i class="bi bi-graph-up-arrow fs-4"></i></div>
-                            <div>
-                                <h5 class="fw-bold text-white mb-1"><?= htmlspecialchars($settings['roi_lms1_title'] ?? '') ?></h5>
-                                <p class="text-muted small mb-0"><?= render_cms_markdown($settings['roi_lms1_desc'] ?? '') ?></p>
-                            </div>
-                        </div>
-                        <div class="d-flex gap-3">
-                            <div class="p-3 bg-success bg-opacity-20 text-success rounded-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; flex-shrink: 0;"><i class="bi bi-infinity fs-4"></i></div>
-                            <div>
-                                <h5 class="fw-bold text-white mb-1"><?= htmlspecialchars($settings['roi_lms2_title'] ?? '') ?></h5>
-                                <p class="text-muted small mb-0"><?= render_cms_markdown($settings['roi_lms2_desc'] ?? '') ?></p>
-                            </div>
-                        </div>
-                        <div class="d-flex gap-3">
-                            <div class="p-3 bg-success bg-opacity-20 text-success rounded-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; flex-shrink: 0;"><i class="bi bi-award-fill fs-4"></i></div>
-                            <div>
-                                <h5 class="fw-bold text-white mb-1"><?= htmlspecialchars($settings['roi_lms3_title'] ?? '') ?></h5>
-                                <p class="text-muted small mb-0"><?= render_cms_markdown($settings['roi_lms3_desc'] ?? '') ?></p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-    <?php endif; ?>
-
-    <!-- Footer -->
-    <footer class="py-5 bg-dark text-white border-top border-secondary border-opacity-25">
-        <div class="container-xxl px-5">
-            <div class="row g-5">
-                <div class="col-lg-4 text-center text-lg-start">
-                    <h3 class="fw-bold text-success mb-4 outfit"><?= htmlspecialchars($portal_title) ?></h3>
-                    <p class="opacity-50">Empowering education through secure technological landscapes.</p>
-                </div>
-                <div class="col-lg-8">
-                    <div class="row g-4 text-center text-lg-start">
-                        <?php if ((($settings['section_about_active'] ?? '1') === '1') || (($settings['section_solutions_active'] ?? '1') === '1')): ?>
-                        <div class="col-md-4">
-                            <h6 class="fw-bold text-uppercase small opacity-25 mb-4">Navigation</h6>
-                            <ul class="list-unstyled opacity-75 small text-white p-0">
-                                <?php if (($settings['section_about_active'] ?? '1') === '1'): ?>
-                                    <li class="mb-2"><a href="#about" class="link-light text-decoration-none">About</a></li>
-                                <?php endif; ?>
-                                <?php if (($settings['section_solutions_active'] ?? '1') === '1'): ?>
-                                    <li class="mb-2"><a href="#features" class="link-light text-decoration-none">Services</a></li>
-                                <?php endif; ?>
-                            </ul>
-                        </div>
-                        <?php endif; ?>
-                        <div class="col-md-4">
-                            <h6 class="fw-bold text-uppercase small opacity-25 mb-4">Download SEB Browser</h6>
-                            <ul class="list-unstyled opacity-75 small p-0">
-                                <li class="mb-2"><a href="downloads/seb/VeritasSEB-1.0.0-win.exe" class="link-light text-decoration-none" target="_blank"><i class="bi bi-download me-1"></i> Windows (.exe)</a></li>
-                                <li class="mb-2"><span class="text-secondary"><i class="bi bi-clock me-1"></i> macOS — Coming Soon</span></li>
-                                <li class="mb-2"><span class="text-secondary"><i class="bi bi-clock me-1"></i> Linux — Coming Soon</span></li>
-                                <li class="mt-3"><a href="seb-client/README.md" class="link-light text-decoration-none small" target="_blank"><i class="bi bi-info-circle me-1"></i> Setup Guide</a></li>
-                            </ul>
-                        </div>
-                        <div class="col-md-4">
-                            <h6 class="fw-bold text-uppercase small opacity-25 mb-4">Official Contact</h6>
-                            <p class="opacity-75 small mb-1"><?= htmlspecialchars($contact_email) ?></p>
-                            <p class="opacity-75 small mb-0"><?= htmlspecialchars($contact_address) ?></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <hr class="my-5 opacity-10">
-            <div class="text-center opacity-50 small uppercase tracking-widest">
-                <?= $footer_text ?>
-            </div>
-        </div>
-    </footer>
-
-    <script src="assets/js/bootstrap.bundle.min.js"></script>
-    <script src="assets/vendor/aos/aos.js"></script>
-    <script>
-        AOS.init({ duration: 1000, once: true });
-
-        // Transparent to Solid Navbar Transition
-        window.addEventListener('scroll', function () {
-            const nav = document.getElementById('mainNav');
-            if (window.scrollY > 80) nav.classList.add('scrolled');
-            else nav.classList.remove('scrolled');
-        });
-
-        // Text Swapper Logic
-        let currentText = 0;
-        const texts = document.querySelectorAll('.swap-text');
-        if (texts.length > 0) {
-            setInterval(() => {
-                texts[currentText].classList.remove('active');
-                currentText = (currentText + 1) % texts.length;
-                texts[currentText].classList.add('active');
-            }, 3000);
-        }
-
-        // Responsive Scroll + auto-close mobile nav
-        document.querySelectorAll('#navbarContent a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-                document.querySelector(this.getAttribute('href')).scrollIntoView({ behavior: 'smooth' });
-                const nav = document.getElementById('navbarContent');
-                if (nav.classList.contains('show')) {
-                    const toggler = document.querySelector('[data-bs-target="#navbarContent"]');
-                    if (toggler) toggler.click();
-                }
-            });
-        });
-    </script>
-  <script src="assets/js/admin-common.js"></script>
-  <script src="assets/js/admin-swal.js"></script>
-</body>
-
-</html>
