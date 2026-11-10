@@ -199,6 +199,11 @@ if ($search) {
 $total_pages = ceil($total_students / $per_page);
 // Get all exams for enrollment modal
 $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NULL ORDER BY type DESC, created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+// Fallback: if query fails or returns empty, provide at least a placeholder
+if (empty($all_exams)) {
+    $all_exams = [];
+    error_log("admin_students: No exams found in database");
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -530,11 +535,15 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
             <input type="hidden" name="student_id" id="enroll_student_id">
             <label class="admin-form-label">Select Exams (Multi-select)</label>
             <select name="exam_ids[]" class="admin-input admin-select" multiple size="10" required>
-              <?php foreach ($all_exams as $ex): ?>
-                <option value="<?= $ex['id'] ?>">
-                  <?= strtoupper($ex['type'] ?? 'PRACTICAL') ?>: <?= htmlspecialchars($ex['name']) ?>
-                </option>
-              <?php endforeach; ?>
+              <?php if (empty($all_exams)): ?>
+                <option value="" disabled>No exams available — create an exam first</option>
+              <?php else: ?>
+                <?php foreach ($all_exams as $ex): ?>
+                  <option value="<?= $ex['id'] ?>">
+                    <?= strtoupper($ex['type'] ?? 'PRACTICAL') ?>: <?= htmlspecialchars($ex['name']) ?>
+                  </option>
+                <?php endforeach; ?>
+              <?php endif; ?>
             </select>
             <div class="admin-dropzone-hint mt-2">Hold Ctrl (Cmd) to select multiple exams.</div>
           </div>
@@ -567,11 +576,15 @@ $all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NU
             <hr>
             <label class="admin-form-label">Select Exams (Multi-select)</label>
             <select name="exam_ids[]" class="admin-input admin-select" multiple size="10" required>
-              <?php foreach ($all_exams as $ex): ?>
-                <option value="<?= $ex['id'] ?>">
-                  <?= strtoupper($ex['type'] ?? 'PRACTICAL') ?>: <?= htmlspecialchars($ex['name']) ?>
-                </option>
-              <?php endforeach; ?>
+              <?php if (empty($all_exams)): ?>
+                <option value="" disabled>No exams available — create an exam first</option>
+              <?php else: ?>
+                <?php foreach ($all_exams as $ex): ?>
+                  <option value="<?= $ex['id'] ?>">
+                    <?= strtoupper($ex['type'] ?? 'PRACTICAL') ?>: <?= htmlspecialchars($ex['name']) ?>
+                  </option>
+                <?php endforeach; ?>
+              <?php endif; ?>
             </select>
             <div class="admin-dropzone-hint mt-2">Hold Ctrl (Cmd) to select multiple exams.</div>
           </div>
