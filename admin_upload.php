@@ -11,7 +11,7 @@ $import_errors = [];
 $back_url = 'admin_dashboard';
 
 // Fetch all exams for dropdowns
-$all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NULL ORDER BY type DESC, name ASC")->fetchAll(PDO::FETCH_ASSOC);
+$all_exams = $db->query("SELECT id, name, type FROM exams WHERE deleted_at IS NULL AND is_active = 1 ORDER BY type DESC, name ASC")->fetchAll(PDO::FETCH_ASSOC);
 $practical_exams = array_filter($all_exams, function ($e) {
     return ($e['type'] != 'objective');
 });
@@ -610,10 +610,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['questions'])) {
                 </div>
 
                 <div class="mb-4">
-                  <label class="admin-form-label">Assign to Exams (Optional)</label>
-                  <select name="exam_id[]" class="admin-input admin-select" multiple size="5" id="exeat2ExamSelect">
+                  <label class="admin-form-label">Assign to Exams <span class="text-muted small">(Optional)</span></label>
+                  <div class="admin-alert admin-alert-success d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-check-circle-fill"></i>
+                    <span><strong>Auto-deduplication:</strong> Students are matched by <strong>Matric No</strong>. Existing students are updated; new ones are created. No duplicates.</span>
+                  </div>
+                  <select name="exam_id[]" class="admin-input admin-select" multiple size="6" id="exeat2ExamSelect">
                     <?php if (!empty($practical_exams)): ?>
-                      <optgroup label="Practical Exams">
+                      <optgroup label="Practical Exams (<?= count($practical_exams) ?> active)">
                         <?php foreach ($practical_exams as $ex): ?>
                           <option value="<?= $ex['id'] ?>"><?= htmlspecialchars($ex['name']) ?></option>
                         <?php endforeach; ?>
@@ -623,14 +627,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['questions'])) {
                     $objective_exams = array_filter($all_exams, function($e) { return $e['type'] == 'objective'; });
                     if (!empty($objective_exams)):
                     ?>
-                      <optgroup label="Objective Exams">
+                      <optgroup label="Objective Exams (<?= count($objective_exams) ?> active)">
                         <?php foreach ($objective_exams as $ex): ?>
                           <option value="<?= $ex['id'] ?>"><?= htmlspecialchars($ex['name']) ?></option>
                         <?php endforeach; ?>
                       </optgroup>
                     <?php endif; ?>
                   </select>
-                  <div class="admin-dropzone-hint mt-1">Hold <b>Ctrl (Cmd)</b> to select multiple exams.</div>
+                  <div class="admin-dropzone-hint mt-1">Hold <b>Ctrl (Cmd)</b> to select multiple exams. Selected students will be enrolled in all chosen exams.</div>
                 </div>
 
                 <div class="admin-alert admin-alert-info">
