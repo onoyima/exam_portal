@@ -1,4 +1,9 @@
 <?php
+// Temporarily enable error display for debugging
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
+
 session_start();
 require 'db.php';
 
@@ -18,7 +23,10 @@ if (isset($_SESSION['role'])) {
 $settings = [];
 try {
     $settings = $db->query("SELECT setting_key, setting_value FROM system_settings")->fetchAll(PDO::FETCH_KEY_PAIR);
-} catch (Exception $e) {}
+    echo "<!-- Settings loaded: " . count($settings) . " items -->\n";
+} catch (Exception $e) {
+    echo "<!-- Error loading settings: " . $e->getMessage() . " -->\n";
+}
 
 // Global branding details
 $portal_title = $settings['portal_title'] ?? 'Veritas Mock Nursing Council Exam';
@@ -28,11 +36,6 @@ $contact_email = $settings['contact_email'] ?? 'support@veritas.edu.ng';
 $contact_address = $settings['contact_address'] ?? 'Innovation Lab, Abuja';
 $footer_text = $settings['footer_text'] ?? '&copy; 2026 BMXcode &bull; UNCOMPROMISED EXCELLENCE';
 
-// Helper to support simple markdown bold in bullets
-function render_cms_markdown($text) {
-    return preg_replace('/\*\*(.*?)\*\*/', '<strong>$1</strong>', htmlspecialchars($text));
-}
-
 // Fetch basic stats
 $exam_count = 0;
 $student_count = 0;
@@ -40,6 +43,19 @@ try {
     $exam_count = $db->query("SELECT COUNT(*) FROM exams WHERE is_active = 1 AND deleted_at IS NULL")->fetchColumn();
     $student_count = $db->query("SELECT COUNT(*) FROM students WHERE deleted_at IS NULL")->fetchColumn();
 } catch (Exception $e) {
+    echo "<!-- Stats error: " . $e->getMessage() . " -->\n";
+}
+
+// Helper to support simple markdown bold in bullets
+function render_cms_markdown($text) {
+    return preg_replace('/\*\*(.*?)\*\*/', '<strong>$1</strong>', htmlspecialchars($text));
+}
+$student_count = 0;
+try {
+    $exam_count = $db->query("SELECT COUNT(*) FROM exams WHERE is_active = 1 AND deleted_at IS NULL")->fetchColumn();
+    $student_count = $db->query("SELECT COUNT(*) FROM students WHERE deleted_at IS NULL")->fetchColumn();
+} catch (Exception $e) {
+    echo "<!-- Stats error: " . $e->getMessage() . " -->\n";
 }
 ?>
 <!DOCTYPE html>
