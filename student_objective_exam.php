@@ -385,6 +385,9 @@ if ($is_review_mode && (int) $exam['student_can_view_score'] === 1) {
 }
 
 $strict = (int) $exam['is_strict'] === 1;
+$total_students_stmt = $db->prepare("SELECT COUNT(*) FROM exam_students WHERE exam_id = ?");
+$total_students_stmt->execute([$exam_id]);
+$total_students = (int) $total_students_stmt->fetchColumn();
 $config = [
   'examId' => $exam_id,
   'examName' => $exam['name'],
@@ -411,7 +414,7 @@ $config = [
   'resultUrl' => (int) $exam['student_can_view_score'] === 1 ? $self . '&view_result=1' : 'student_dashboard',
   'heartbeatInterval' => defined('HEARTBEAT_INTERVAL') ? HEARTBEAT_INTERVAL : 30000,
   'answerFlushDelay' => defined('ANSWER_FLUSH_DELAY') ? ANSWER_FLUSH_DELAY : 2000,
-  'totalStudents' => (int) ($db->prepare("SELECT COUNT(*) FROM exam_students WHERE exam_id = ?")->execute([$exam_id]) ? $db->query("SELECT COUNT(*) FROM exam_students WHERE exam_id = ?")->fetchColumn() : 0),
+  'totalStudents' => $total_students,
 ];
 $student_name = $_SESSION['user'] ?? ($_SESSION['student_name'] ?? 'Student');
 ?>
