@@ -158,6 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     $target_dir = __DIR__ . "/assets/img/";
+    $web_path_base = "assets/img/";
     if (!is_dir($target_dir)) {
         mkdir($target_dir, 0777, true);
     }
@@ -176,9 +177,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (in_array($file_ext, $allowed_exts)) {
                 $new_name = $prefix . time() . "." . $file_ext;
                 $target_file = $target_dir . $new_name;
+                $web_path = $web_path_base . $new_name;
                 if (move_uploaded_file($_FILES[$file_key]['tmp_name'], $target_file)) {
                     $stmt = $db->prepare("INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?");
-                    $stmt->execute([$file_key, $target_file, $target_file]);
+                    $stmt->execute([$file_key, $web_path, $web_path]);
                 } else {
                     $error = 'Failed to move uploaded file for ' . str_replace('_', ' ', $file_key) . '. Error: ' . $_FILES[$file_key]['error'];
                 }
