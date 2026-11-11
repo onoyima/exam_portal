@@ -157,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$key, $value, $value]);
         }
     }
-    $target_dir = "assets/img/";
+    $target_dir = __DIR__ . "/assets/img/";
     if (!is_dir($target_dir)) {
         mkdir($target_dir, 0777, true);
     }
@@ -179,6 +179,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (move_uploaded_file($_FILES[$file_key]['tmp_name'], $target_file)) {
                     $stmt = $db->prepare("INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?");
                     $stmt->execute([$file_key, $target_file, $target_file]);
+                } else {
+                    $error = 'Failed to move uploaded file for ' . str_replace('_', ' ', $file_key) . '. Error: ' . $_FILES[$file_key]['error'];
                 }
             } else {
                 $error = 'Invalid file type for ' . str_replace('_', ' ', $file_key) . '. Allowed: ' . implode(', ', $allowed_exts);
