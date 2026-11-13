@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $enrolled = $db->prepare("
                 SELECT pe.id FROM promo_exams pe
                 JOIN promo_exam_staff pes ON pes.exam_id = pe.id AND pes.staff_id = ?
-                WHERE pe.is_active = 1 AND pe.deleted_at IS NULL
+                WHERE pe.is_active = 1
                   AND (pe.start_time IS NULL OR pe.start_time <= NOW())
                   AND (pe.end_time IS NULL OR pe.end_time >= NOW())
                 LIMIT 1

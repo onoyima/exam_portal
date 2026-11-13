@@ -303,15 +303,33 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
               <h3 class="admin-card-title"><i class="bi bi-cloud-download me-2"></i>Import from exeat2</h3>
             </div>
             <div class="admin-card-body">
-              <p class="small text-muted mb-3">Select staff from the exeat2 school portal database. Only @veritas.edu.ng emails are imported.</p>
-              <div class="mb-3">
-                <button type="button" class="admin-btn admin-btn-outline" id="loadExeat2Btn" onclick="loadExeat2()">
-                  <i class="bi bi-cloud-arrow-down me-1"></i> Load exeat2 staff
+              <p class="small text-muted mb-3">Search school portal staff by first name, last name, or email. Only @veritas.edu.ng emails are imported.</p>
+              <div class="row g-2 mb-3">
+                <div class="col-4">
+                  <label class="admin-form-label small">First name</label>
+                  <input type="text" id="exeat2Fname" class="form-control form-control-sm" placeholder="Fname">
+                </div>
+                <div class="col-4">
+                  <label class="admin-form-label small">Last name</label>
+                  <input type="text" id="exeat2Lname" class="form-control form-control-sm" placeholder="Lname">
+                </div>
+                <div class="col-4">
+                  <label class="admin-form-label small">Email</label>
+                  <input type="email" id="exeat2Email" class="form-control form-control-sm" placeholder="name@veritas.edu.ng">
+                </div>
+              </div>
+              <div class="mb-2">
+                <label class="form-check form-check-inline">
+                  <input type="checkbox" class="form-check-input" id="exeat2SelectAll" onchange="toggleSelectAll(this)">
+                  <span class="form-check-label">Select all</span>
+                </label>
+                <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" onclick="loadExeat2()">
+                  <i class="bi bi-search me-1"></i> Search
                 </button>
                 <span id="exeat2Status" class="admin-badge admin-badge-neutral ms-2"></span>
-                <div id="exeat2Error" class="text-danger small mt-2"></div>
               </div>
-              <div id="exeat2List" style="max-height:300px;overflow-y:auto;border:1px solid #dee2e6;border-radius:6px;padding:10px;background:#f8f9fa;display:none;margin-bottom:10px;"></div>
+              <div id="exeat2Error" class="text-danger small mt-2"></div>
+              <div id="exeat2List" style="max-height:350px;overflow-y:auto;border:1px solid #dee2e6;border-radius:6px;padding:10px;background:#f8f9fa;display:none;margin-bottom:10px;"></div>
               <div id="exeat2Actions" style="display:none;">
                 <form method="post" onsubmit="return confirm('Import selected staff from exeat2?')">
                   <?php csrf_field(); ?>
@@ -451,29 +469,82 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
   <script>
     let exeat2Selected = new Set();
 
+    function toggleSelectAll(cb) {
+      const checkboxes = document.querySelectorAll('.exeat2-checkbox:not(:disabled)');
+      if (cb.checked) {
+        checkboxes.forEach(c => { c.checked = true; exeat2Selected.add(c.value); });
+      } else {
+        checkboxes.forEach(c => { c.checked = false; exeat2Selected.delete(c.value); });
+      }
+      updateExeat2Ids();
+      updateSelectAllState();
+    }
+
+    function toggleExeat2(id, cb) {
+      if (cb.disabled) return;
+      if (cb.checked) exeat2Selected.add(id); else exeat2Selected.delete(id);
+      updateExeat2Ids();
+      updateSelectAllState();
+    }
+
+    function updateExeat2Ids() {
+      document.getElementById('exeat2Ids').value = [...exeat2Selected].join(',');
+    }
+
+    function updateSelectAllState() {
+      const allCb = document.getElementById('exeat2SelectAll');
+      const checkboxes = document.querySelectorAll('.exeat2-checkbox:not(:disabled)');
+      const checked = document.querySelectorAll('.exeat2-checkbox:not(:disabled):checked');
+      if (checkboxes.length === 0) {
+        allCb.checked = false;
+        allCb.indeterminate = false;
+      } else if (checked.length === checkboxes.length) {
+        allCb.checked = true;
+        allCb.indeterminate = false;
+      } else if (checked.length > 0) {
+        allCb.checked = false;
+        allCb.indeterminate = true;
+      } else {
+        allCb.checked = false;
+        allCb.indeterminate = false;
+      }
+    }
+
     async function loadExeat2() {
-      const btn = document.getElementById('loadExeat2Btn');
+      const fname = document.getElementById('exeat2Fname').value.trim();
+      const lname = document.getElementById('exeat2Lname').value.trim();
+      const email = document.getElementById('exeat2Email').value.trim();
+      const btn = document.querySelector('button[onclick="loadExeat2()"]');
       const status = document.getElementById('exeat2Status');
       const list = document.getElementById('exeat2List');
       const actions = document.getElementById('exeat2Actions');
       const err = document.getElementById('exeat2Error');
+      const selectAll = document.getElementById('exeat2SelectAll');
+      exeat2Selected = new Set();
+      selectAll.checked = false;
+      selectAll.indeterminate = false;
       btn.disabled = true;
-      btn.innerHTML = '<i class="bi bi-loader me-1"></i> Loading...';
+      btn.innerHTML = '<i class="bi bi-loader me-1"></i> Searching...';
       err.textContent = '';
       list.style.display = 'none';
       actions.style.display = 'none';
       try {
-        const r = await fetch('includes/fetch_exeat2_staff.php', { headers: { 'X-Requested-With': 'fetch' } });
+        const qs = new URLSearchParams();
+        if (fname) qs.set('fname', fname);
+        if (lname) qs.set('lname', lname);
+        if (email) qs.set('email', email);
+        const r = await fetch('includes/fetch_exeat2_staff.php?' + qs.toString(), { headers: { 'X-Requested-With': 'fetch' } });
         const data = await r.json();
-        if (data.error) { err.textContent = data.error; btn.disabled = false; btn.innerHTML = '<i class="bi bi-cloud-arrow-down me-1"></i> Load exeat2 staff'; return; }
+        if (data.error) { err.textContent = data.error; btn.disabled = false; btn.innerHTML = '<i class="bi bi-search me-1"></i> Search'; return; }
         exeat2Selected = new Set();
         list.innerHTML = '';
         data.forEach(s => {
+          const already = s.status === 'exists_exeat2';
           const item = document.createElement('div');
-          item.className = 'exeat2-item';
+          item.className = 'exeat2-item d-flex align-items-center p-2 border-bottom';
           item.innerHTML = `
-            <input type="checkbox" class="form-check-input exeat2-checkbox" value="${s.exeat2_staff_id}" ${s.status === 'exists_exeat2' ? 'disabled title="Already imported"' : ''} onchange="toggleExeat2(${s.exeat2_staff_id}, this)">
-            <label class="form-check-label d-block ms-2">${escapeHtml(s.name)} <span class="text-muted small d-block">${escapeHtml(s.email)}</span></label>
+            <input type="checkbox" class="form-check-input exeat2-checkbox me-2" value="${s.exeat2_staff_id}" ${already ? 'disabled title="Already imported"' : ''} onchange="toggleExeat2(${s.exeat2_staff_id}, this)">
+            <div class="flex-grow-1"><div class="fw-bold small">${escapeHtml(s.name)}</div><div class="text-muted small">${escapeHtml(s.email)}</div></div>
           `;
           list.appendChild(item);
         });
@@ -482,18 +553,12 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
         status.textContent = data.length + ' staff found';
         status.className = 'admin-badge admin-badge-info ms-2';
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-cloud-arrow-down me-1"></i> Load exeat2 staff';
+        btn.innerHTML = '<i class="bi bi-search me-1"></i> Search';
       } catch (e) {
         err.textContent = 'Could not reach exeat2 staff endpoint.';
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-cloud-arrow-down me-1"></i> Load exeat2 staff';
+        btn.innerHTML = '<i class="bi bi-search me-1"></i> Search';
       }
-    }
-
-    function toggleExeat2(id, cb) {
-      if (cb.disabled) return;
-      if (cb.checked) exeat2Selected.add(id); else exeat2Selected.delete(id);
-      document.getElementById('exeat2Ids').value = [...exeat2Selected].join(',');
     }
 
     function escapeHtml(t) { return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])); }

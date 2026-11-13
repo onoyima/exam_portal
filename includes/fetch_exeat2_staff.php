@@ -15,6 +15,9 @@ try {
 
 $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
 $search        = isset($_GET['search']) ? trim($_GET['search']) : '';
+$fname         = isset($_GET['fname']) ? trim($_GET['fname']) : '';
+$lname         = isset($_GET['lname']) ? trim($_GET['lname']) : '';
+$email         = isset($_GET['email']) ? trim($_GET['email']) : '';
 
 $conditions = ["st.status = 1"];
 $params = [];
@@ -29,6 +32,18 @@ if ($search !== '') {
     $params[] = $like;
     $params[] = $like;
     $params[] = $like;
+}
+if ($fname !== '') {
+    $conditions[] = "st.fname LIKE ?";
+    $params[] = "%{$fname}%";
+}
+if ($lname !== '') {
+    $conditions[] = "st.lname LIKE ?";
+    $params[] = "%{$lname}%";
+}
+if ($email !== '') {
+    $conditions[] = "st.email LIKE ?";
+    $params[] = "%{$email}%";
 }
 
 $where = implode(' AND ', $conditions);
