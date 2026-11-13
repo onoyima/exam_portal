@@ -215,15 +215,13 @@ $ICONS['clipboard']      = $S.'<rect x="5" y="2" width="10" height="18" rx="2"/>
               <?= $ICONS['eye'] ?><span data-label>Audit Trail</span></a></li>
             <li><a href="admin_backup" class="nav-item<?= $current_page == 'admin_backup.php' ? ' active' : '' ?>">
               <span class="text-success"><?= $ICONS['database'] ?></span><span data-label>Backup &amp; Export</span></a></li>
-            <li><a href="admin_promo_exams" class="nav-item<?= $current_page == 'admin_promo_exams.php' ? ' active' : '' ?>">
-              <span class="text-warning"><?= $ICONS['list-check'] ?></span><span data-label>Promotional Exams</span></a></li>
-            <li><a href="admin_promo_staff" class="nav-item<?= $current_page == 'admin_promo_staff.php' ? ' active' : '' ?>">
-              <span class="text-primary"><?= $ICONS['people'] ?></span><span data-label>Promo Staff</span></a></li>
             <li><a href="#" id="clearAllChatsSidebar" class="nav-item text-danger-item">
               <?= $ICONS['trash'] ?><span data-label>Clear All Chats</span></a></li>
           </ul>
         </div>
       </li>
+
+      <!-- ── Staff Promotional Exams ── -->
 
       <!-- ── Learning Management System ── -->
       <li class="nav-group">

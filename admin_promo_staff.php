@@ -4,6 +4,7 @@
  *
  * Create individual staff (email), upload staff by file (CSV), import from the
  * exeat2 school portal staff table, and enrol staff to promotional exams.
+ * Includes search on staff accounts and enrolments.
  * Isolated from the core staff/student system.
  */
 
@@ -15,6 +16,7 @@ promo_ensure_schema($db);
 
 $notice = '';
 $error = '';
+$search = trim($_GET['search'] ?? '');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     validate_csrf();
@@ -133,23 +135,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Load all promo staff with enrolment info
-$staff = $db->query("SELECT ps.*, GROUP_CONCAT(pe.name SEPARATOR ', ') AS enrolled_exams
+// Load all promo staff with enrolment info (with search)
+$where = '';
+$params = [];
+if ($search !== '') {
+    $where = "WHERE (ps.name LIKE ? OR ps.email LIKE ?)";
+    $like = "%{$search}%";
+    $params = [$like, $like];
+}
+$staff = $db->query("
+    SELECT ps.*, GROUP_CONCAT(pe.name SEPARATOR ', ') AS enrolled_exams
     FROM promo_staff ps
     LEFT JOIN promo_exam_staff pes ON pes.staff_id = ps.id
     LEFT JOIN promo_exams pe ON pe.id = pes.exam_id AND pe.is_active = 1
+    $where
     GROUP BY ps.id
-    ORDER BY ps.created_at DESC, ps.id DESC")->fetchAll(PDO::FETCH_ASSOC);
+    ORDER BY ps.created_at DESC, ps.id DESC
+", $params)->fetchAll(PDO::FETCH_ASSOC);
 
 // All active exams for enrolment dropdown
 $exams = $db->query("SELECT * FROM promo_exams WHERE is_active = 1 ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 // All staff-enrolment pairs for the enrolment table (who is enrolled where)
-$enrolments = $db->query("SELECT pes.id, ps.name AS staff_name, ps.email, pe.name AS exam_name
+$enrolWhere = '';
+$enrolParams = [];
+if ($search !== '') {
+    $enrolWhere = "WHERE (ps.name LIKE ? OR ps.email LIKE ? OR pe.name LIKE ?)";
+    $enrolLike = "%{$search}%";
+    $enrolParams = [$enrolLike, $enrolLike, $enrolLike];
+}
+$enrolments = $db->query("
+    SELECT pes.id, ps.name AS staff_name, ps.email, pe.name AS exam_name
     FROM promo_exam_staff pes
     JOIN promo_staff ps ON ps.id = pes.staff_id
     JOIN promo_exams pe ON pe.id = pes.exam_id
-    ORDER BY pe.name, ps.name")->fetchAll(PDO::FETCH_ASSOC);
+    $enrolWhere
+    ORDER BY pe.name, ps.name
+", $enrolParams)->fetchAll(PDO::FETCH_ASSOC);
 
 $admin_name = $_SESSION['user'] ?? 'Admin';
 ?>
@@ -163,7 +185,7 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
     <link href="style_enhanced.css" rel="stylesheet">
     <style>
         body { background: #f4f7f6; font-family: 'Outfit', sans-serif; color: #1e293b; }
-        .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 80px; }
+        .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 100px; }
         .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
         .page-title { font-weight: 800; font-size: 1.25rem; color: #092c19; margin: 0; display: flex; align-items: center; gap: 8px; }
         .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 16px; }
@@ -208,6 +230,9 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
         .exeat2-email { color: #64748b; font-size: 0.8rem; display: block; }
         .count-chip { font-size: 0.78rem; padding: 2px 8px; border-radius: 6px; background: #e2e8f0; color: #475569; }
         .hint { font-size: 0.8rem; color: #64748b; margin-top: 4px; }
+        .search-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 18px; }
+        .search-bar .form-control { max-width: 320px; width: auto; }
+        .d-none { display: none !important; }
         @media (max-width: 768px) { .grid-2,.grid-3 { grid-template-columns: 1fr; } .page-header { flex-direction: column; align-items: flex-start; } }
     </style>
 </head>
@@ -228,6 +253,7 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
     <div class="page-header">
         <h1 class="page-title"><i class="bi bi-people" style="color:#092c19;"></i> Promo Staff</h1>
         <a href="admin_promo_exams" class="btn btn-outline"><i class="bi bi-mortarboard me-1"></i> Manage promo exams</a>
+        <a href="admin_promo_results" class="btn btn-outline"><i class="bi bi-bar-chart me-1"></i> Results</a>
     </div>
 
     <?php if (isset($_SESSION['promo_notice'])): ?>
@@ -236,6 +262,18 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
     <?php if ($error): ?>
         <div class="flash flash-error"><i class="bi bi-exclamation-triangle me-2"></i><?= htmlspecialchars($error) ?></div>
     <?php endif; ?>
+
+    <!-- Search bar -->
+    <div class="search-bar">
+        <form method="get" style="margin:0;display:flex;gap:8px;align-items:center;flex:1;min-width:260px;">
+            <label class="form-label" style="margin:0;font-size:0.85rem;">Search staff</label>
+            <input type="text" name="search" class="form-control" placeholder="Search by name or email…" value="<?= htmlspecialchars($search) ?>">
+            <button type="submit" class="btn btn-outline btn-sm"><i class="bi bi-search me-1"></i>Search</button>
+            <?php if ($search !== ''): ?>
+                <a href="admin_promo_staff" class="btn btn-outline btn-sm"><i class="bi bi-x-circle me-1"></i>Clear</a>
+            <?php endif; ?>
+        </form>
+    </div>
 
     <!-- Tabs -->
     <div style="display:flex;gap:0;border-bottom:1px solid #e2e8f0;margin-bottom:20px;overflow:auto;">
@@ -301,9 +339,9 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
             </div>
         </div>
 
-        <h3 style="font-weight:800;color:#092c19;margin:20px 0 10px 0;font-size:1rem;">Existing staff accounts</h3>
+        <h3 style="font-weight:800;color:#092c19;margin:20px 0 10px 0;font-size:1rem;">Existing staff accounts<?= $search ? ' matching "' . htmlspecialchars($search) . '"' : '' ?></h3>
         <?php if (!$staff): ?>
-            <div class="empty"><i class="bi bi-person"></i><p style="font-weight:600;margin-bottom:6px;">No staff accounts yet</p><p class="small">Create, upload, or import staff above.</p></div>
+            <div class="empty"><i class="bi bi-person"></i><p style="font-weight:600;margin-bottom:6px;">No staff accounts found</p><p class="small">Create, upload, or import staff above.</p></div>
         <?php else: ?>
             <table class="table">
                 <thead>
@@ -359,7 +397,7 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
             </div>
         </div>
 
-        <h3 style="font-weight:800;color:#092c19;margin:20px 0 10px 0;font-size:1rem;">Current enrolments</h3>
+        <h3 style="font-weight:800;color:#092c19;margin:20px 0 10px 0;font-size:1rem;">Current enrolments<?= $search ? ' matching "' . htmlspecialchars($search) . '"' : '' ?></h3>
         <?php if (!$enrolments): ?>
             <div class="empty"><i class="bi bi-person-gear"></i><p style="font-weight:600;margin-bottom:6px;">No enrolments yet</p></div>
         <?php else: ?>
@@ -393,7 +431,10 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
 const tabs = document.querySelectorAll('.tab');
 const contents = document.querySelectorAll('.tab-content');
 function showTab(name) {
-    tabs.forEach(t => t.classList.toggle('active', (t.getAttribute('onclick') || '').includes(name)));
+    tabs.forEach(t => {
+        const active = (t.getAttribute('onclick') || '').includes(name);
+        t.classList.toggle('active', active);
+    });
     contents.forEach(c => c.classList.toggle('active', c.id === 'tab-' + name));
 }
 
@@ -421,7 +462,7 @@ async function loadExeat2() {
             item.className = 'exeat2-item';
             item.innerHTML = `
                 <input type="checkbox" class="exeat2-checkbox" value="${s.exeat2_staff_id}" ${s.status === 'exists_exeat2' ? 'disabled title="Already imported"' : ''} onchange="toggleExeat2(${s.exeat2_staff_id}, this)">
-                <div class="exeat2-meta"><div style="font-weight:700;color:#0f172a;">${htmlEscape(s.name)}</div><span class="exeat2-email">${htmlEscape(s.email)}</span></div>
+                <div class="exeat2-meta"><div style="font-weight:700;color:#0f172a;">${escapeHtml(s.name)}</div><span class="exeat2-email">${escapeHtml(s.email)}</span></div>
             `;
             list.appendChild(item);
         });
@@ -444,7 +485,7 @@ function toggleExeat2(id, cb) {
     cb.closest('.exeat2-item').classList.toggle('selected', cb.checked);
 }
 
-function htmlEscape(t) { return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])); }
+function escapeHtml(t) { return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])); }
 </script>
 </body>
 </html>

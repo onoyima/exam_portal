@@ -2,8 +2,8 @@
 /**
  * promo_dashboard.php — Staff Promotional Examination dashboard
  *
- * Shows the signed-in promo staff member their active, enrolled exam(s).
- * Isolated from the student/examiner dashboards.
+ * Imitates student_dashboard.php: shows the signed-in promo staff member their
+ * active, enrolled exam(s) with state cards. Isolated from the student dashboard.
  */
 
 require 'auth.php';
@@ -66,42 +66,53 @@ foreach ($exams as $e) {
     $end = !empty($e['end_time']) ? strtotime($e['end_time']) : null;
     $url = 'promo_exam?exam_id=' . $eid;
 
-    $card = [
-        'exam' => $e,
-        'questions' => $qcounts[$eid] ?? 0,
-        'attempts_used' => count($finished),
-        'open_attempt' => $open,
-        'submitted' => $submitted,
-        'state' => 'open',
-        'label' => 'Start exam',
-        'primary' => null,
-        'secondary' => null,
-    ];
+    $kind = $c['primary']['kind'] ?? '';
+    $btnClass = ['start' => 'btn-start', 'continue' => 'btn-continue', 'reattempt' => 'btn-reattempt'][$kind] ?? 'btn-ghost';
+    $btnIcon = ['start' => 'play-circle', 'continue' => 'arrow-clockwise', 'reattempt' => 'arrow-repeat'][$kind] ?? 'eye';
 
     if ($submitted) {
-        $card['state'] = 'submitted';
-        $card['label'] = 'Submitted';
-        $card['primary'] = ['label' => 'View submission', 'href' => $url . '&view=1', 'kind' => 'ghost'];
+        $card = [
+            'exam' => $e, 'questions' => $qcounts[$eid] ?? 0, 'attempts_used' => count($finished),
+            'open_attempt' => $open, 'submitted' => true, 'state' => 'submitted', 'label' => 'Submitted',
+            'primary' => ['label' => 'View submission', 'href' => $url . '&view=1', 'kind' => 'ghost'],
+            'btnClass' => $btnClass, 'btnIcon' => $btnIcon,
+        ];
     } elseif ($open) {
-        $card['state'] = 'progress';
-        $card['label'] = 'In progress';
-        $card['primary'] = ['label' => 'Continue exam', 'href' => $url . '&resume=1', 'kind' => 'continue'];
+        $card = [
+            'exam' => $e, 'questions' => $qcounts[$eid] ?? 0, 'attempts_used' => count($finished),
+            'open_attempt' => $open, 'submitted' => false, 'state' => 'progress', 'label' => 'In progress',
+            'primary' => ['label' => 'Continue exam', 'href' => $url . '&resume=1', 'kind' => 'continue'],
+            'btnClass' => $btnClass, 'btnIcon' => $btnIcon,
+        ];
     } elseif ($start && $now < $start) {
-        $card['state'] = 'wait';
-        $card['label'] = 'Opens ' . date('j M, g:i A', $start);
-        $card['primary'] = ['label' => 'Opens at ' . date('g:i A', $start), 'kind' => 'ghost', 'disabled' => true];
+        $card = [
+            'exam' => $e, 'questions' => $qcounts[$eid] ?? 0, 'attempts_used' => count($finished),
+            'open_attempt' => null, 'submitted' => false, 'state' => 'wait',
+            'label' => 'Opens ' . date('j M, g:i A', $start),
+            'primary' => ['label' => 'Opens at ' . date('g:i A', $start), 'kind' => 'ghost', 'disabled' => true],
+            'btnClass' => $btnClass, 'btnIcon' => $btnIcon,
+        ];
     } elseif ($end && $now > $end) {
-        $card['state'] = 'closed';
-        $card['label'] = 'Closed';
-        $card['primary'] = ['label' => 'Exam closed', 'kind' => 'ghost', 'disabled' => true];
+        $card = [
+            'exam' => $e, 'questions' => $qcounts[$eid] ?? 0, 'attempts_used' => count($finished),
+            'open_attempt' => null, 'submitted' => false, 'state' => 'closed', 'label' => 'Closed',
+            'primary' => ['label' => 'Exam closed', 'kind' => 'ghost', 'disabled' => true],
+            'btnClass' => $btnClass, 'btnIcon' => $btnIcon,
+        ];
     } elseif (count($finished) > 0 && !$open) {
-        $card['state'] = 'done';
-        $card['label'] = 'Completed';
-        $card['primary'] = ['label' => 'Re-attempt', 'href' => $url . '&start_new=1', 'kind' => 'reattempt', 'confirm' => true];
+        $card = [
+            'exam' => $e, 'questions' => $qcounts[$eid] ?? 0, 'attempts_used' => count($finished),
+            'open_attempt' => null, 'submitted' => false, 'state' => 'done', 'label' => 'Completed',
+            'primary' => ['label' => 'Re-attempt', 'href' => $url . '&start_new=1', 'kind' => 'reattempt', 'confirm' => true],
+            'btnClass' => $btnClass, 'btnIcon' => $btnIcon,
+        ];
     } else {
-        $card['state'] = 'open';
-        $card['label'] = 'Start exam';
-        $card['primary'] = ['label' => 'Start exam', 'href' => $url . '&start=1', 'kind' => 'start', 'confirm' => true];
+        $card = [
+            'exam' => $e, 'questions' => $qcounts[$eid] ?? 0, 'attempts_used' => count($finished),
+            'open_attempt' => null, 'submitted' => false, 'state' => 'open', 'label' => 'Start exam',
+            'primary' => ['label' => 'Start exam', 'href' => $url . '&start=1', 'kind' => 'start', 'confirm' => true],
+            'btnClass' => $btnClass, 'btnIcon' => $btnIcon,
+        ];
     }
     $cards[] = $card;
 }
@@ -113,12 +124,12 @@ $greeting = $hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>My Promotional Exams - <?= htmlspecialchars($portal_title ?? 'Veritas Exam Portal') ?></title>
+    <title>My Promotional Exams - Assessment Portal</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
+    <link href="assets/vendor/fonts/fonts.css" rel="stylesheet">
     <link href="assets/css/bootstrap.min.css" rel="stylesheet">
     <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="assets/vendor/fonts/fonts.css" rel="stylesheet">
     <link href="style_enhanced.css" rel="stylesheet">
     <style>
         body { background: #f4f7f6; font-family: 'Outfit', sans-serif; color: #1e293b; }
@@ -185,6 +196,11 @@ $greeting = $hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good
             <i class="bi bi-check-circle me-2"></i><?= htmlspecialchars($_SESSION['promo_notice']); unset($_SESSION['promo_notice']); ?>
         </div>
     <?php endif; ?>
+    <?php if (isset($_SESSION['promo_error'])): ?>
+        <div class="alert alert-danger" style="background:#fef2f2;color:#991b1b;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:.9rem;">
+            <i class="bi bi-exclamation-triangle me-2"></i><?= htmlspecialchars($_SESSION['promo_error']); unset($_SESSION['promo_error']); ?>
+        </div>
+    <?php endif; ?>
 
     <?php if (!$cards): ?>
         <div class="empty-state">
@@ -210,10 +226,10 @@ $greeting = $hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good
                     <div class="promo-actions">
                         <?php if ($c['primary']): ?>
                             <a href="<?= $c['primary']['disabled'] ? '#' : (($c['primary']['href'] ?? '#')) ?>"
-                               class="btn <?= $bc = ['start'=>'btn-start','continue'=>'btn-continue','reattempt'=>'btn-reattempt'][$c['primary']['kind'] ?? ''] ?? 'btn-ghost' ?><?= $c['primary']['disabled'] ? ' disabled' : '' ?>"
+                               class="btn <?= $c['btnClass'] ?><?= $c['primary']['disabled'] ? ' disabled' : '' ?>"
                                <?= $c['primary']['disabled'] ? ' disabled' : '' ?>
                                <?= $c['primary']['confirm'] ? 'onclick="return confirm(\'Start a new attempt for this exam?\');"' : '' ?>>
-                                <i class="bi bi-<?= $ic = ['start'=>'play-circle','continue'=>'arrow-clockwise','reattempt'=>'arrow-repeat'][$c['primary']['kind'] ?? ''] ?? 'eye' ?>"></i>
+                                <i class="bi bi-<?= $c['btnIcon'] ?>"></i>
                                 <?= htmlspecialchars((string) $c['primary']['label']) ?>
                             </a>
                         <?php endif; ?>
