@@ -345,8 +345,8 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
           <?php csrf_field(); ?>
           <div class="modal-body">
             <div class="mb-3">
-              <label class="form-label">CSV file</label>
-              <input type="file" name="questions_file" class="form-control" accept=".csv" required>
+              <label class="form-label">CSV or TXT file</label>
+              <input type="file" name="questions_file" class="form-control" accept=".csv,.txt,text/plain" required>
             </div>
             <div class="mb-3">
               <label class="form-label">Columns</label>

@@ -279,12 +279,12 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
               <h3 class="admin-card-title"><i class="bi bi-cloud-arrow-up me-2"></i>Upload by file</h3>
             </div>
             <div class="admin-card-body">
-              <p class="small text-muted mb-3">CSV file with two columns: name,email. First row may be a header.</p>
+              <p class="small text-muted mb-3">CSV or TXT file with two columns: name,email. First row may be a header.</p>
               <form method="post" enctype="multipart/form-data">
                 <?php csrf_field(); ?>
                 <div class="admin-form-group mb-3">
                   <label class="admin-form-label">CSV file</label>
-                  <input type="file" name="staff_file" class="admin-input" accept=".csv" required>
+                  <input type="file" name="staff_file" class="admin-input" accept=".csv,.txt,text/plain" required>
                 </div>
                 <button type="submit" name="upload_staff" class="admin-btn admin-btn-primary">Upload & import</button>
               </form>
