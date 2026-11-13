@@ -88,6 +88,13 @@ $counts = $db->query("SELECT
     (SELECT COUNT(*) FROM exams WHERE deleted_at IS NULL AND is_active = 1) AS active,
     (SELECT COUNT(*) FROM questions WHERE deleted_at IS NULL) + (SELECT COUNT(*) FROM objective_questions WHERE deleted_at IS NULL) AS questions,
     (SELECT COUNT(*) FROM exam_groups WHERE deleted_at IS NULL) AS `groups`")->fetch(PDO::FETCH_ASSOC);
+
+/* ---------- promo totals ---------- */
+$promo_counts = $db->query("SELECT
+    (SELECT COUNT(*) FROM promo_staff WHERE is_active = 1) AS staff,
+    (SELECT COUNT(*) FROM promo_exams WHERE is_active = 1) AS active_exams,
+    (SELECT COUNT(*) FROM promo_exam_attempts WHERE is_submitted = 1) AS attempts,
+    (SELECT COUNT(*) FROM promo_exam_questions) AS questions")->fetch(PDO::FETCH_ASSOC);
 $by_type = $db->query("SELECT type, COUNT(*) FROM exams WHERE deleted_at IS NULL GROUP BY type")->fetchAll(PDO::FETCH_KEY_PAIR);
 
 /* ---------- last 14 days ---------- */
@@ -248,6 +255,8 @@ $result_url = fn($e) => $e['type'] === 'objective' ? 'exam_overview?exam_id=' . 
         <a href="admin_students"><b><?= number_format((int) $counts['students']) ?></b><span>Students</span></a>
         <a href="admin_staff"><b><?= number_format((int) $counts['examiners']) ?></b><span>Examiners</span></a>
         <a href="admin_objective_exams"><b><?= (int) $counts['active'] ?><small>/<?= (int) $counts['exams'] ?></small></b><span>Exams switched on</span></a>
+        <a href="admin_promo_exams"><b><?= (int) ($promo_counts['active_exams'] ?? 0) ?></b><span>Promo exams active</span></a>
+        <a href="admin_promo_staff"><b><?= number_format((int) ($promo_counts['staff'] ?? 0)) ?></b><span>Promo staff</span></a>
         <div class="db-ledger-types">
           <?php foreach ($TYPE_LABEL as $t => $l): ?><span><i class="db-dot db-t-<?= $t ?>"></i><?= $l ?> <b><?= (int) ($by_type[$t] ?? 0) ?></b></span><?php endforeach; ?>
         </div>
@@ -312,6 +321,12 @@ $result_url = fn($e) => $e['type'] === 'objective' ? 'exam_overview?exam_id=' . 
             <a href="admin_student_scores"><i class="bi bi-list-ol"></i> Student scores</a>
             <a href="admin_session_report"><i class="bi bi-calendar-check"></i> Session reports</a>
             <a href="admin_analytics"><i class="bi bi-graph-up"></i> Analytics</a>
+          </div>
+          <div>
+            <h4>Promotional Exams</h4>
+            <a href="admin_promo_exams"><i class="bi bi-mortarboard-fill"></i> Manage promo exams</a>
+            <a href="admin_promo_staff"><i class="bi bi-people"></i> Promo staff</a>
+            <a href="admin_promo_results"><i class="bi bi-bar-chart"></i> Promo results</a>
           </div>
         </div>
       </section>
