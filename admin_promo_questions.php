@@ -26,6 +26,19 @@ if (!$exam) {
     exit;
 }
 
+// CSV template download
+if (isset($_GET['download_template']) && $_GET['download_template'] === '1') {
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="promo_questions_template.csv"');
+    header('Cache-Control: no-store');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['question', 'question_type', 'marks', 'sort_order', 'correct_answer', 'option_a', 'option_b', 'option_c', 'option_d']);
+    fputcsv($out, ['What is the capital of Nigeria?', 'objective', '1', '0', 'A', 'Abuja', 'Lagos', 'Kano', 'Ibadan']);
+    fputcsv($out, ['Describe your experience with promotional exams.', 'subjective', '2', '1', '', '', '', '', '']);
+    fclose($out);
+    exit;
+}
+
 $notice = '';
 $error = '';
 
@@ -81,6 +94,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $qid = intval($_POST['qid']);
         $db->prepare("DELETE FROM promo_exam_questions WHERE id = ? AND exam_id = ?")->execute([$qid, $exam_id]);
         $_SESSION['promo_notice'] = 'Question deleted.';
+        header('Location: admin_promo_questions?exam_id=' . $exam_id . '#questions');
+        exit;
+    }
+}
+
+// ── Bulk import questions from CSV ──
+if (isset($_POST['import_questions'])) {
+    if (empty($_FILES['questions_file']['tmp_name'])) {
+        $error = 'Please choose a CSV file.';
+    } else {
+        $row = 0; $imported = 0; $skipped = 0; $errs = [];
+        if (($handle = fopen($_FILES['questions_file']['tmp_name'], 'r')) !== false) {
+            while (($data = fgetcsv($handle, 2000, ",")) !== false) {
+                $row++;
+                if ($row === 1 && (strcasecmp(trim($data[0] ?? ''), 'question') === 0 || strcasecmp(trim($data[0] ?? ''), 'question_text') === 0)) {
+                    continue; // skip header
+                }
+                $qtext = trim($data[0] ?? '');
+                $qtype = trim($data[1] ?? 'objective');
+                $marks = floatval($data[2] ?? 1);
+                $sort = intval($data[3] ?? 0);
+                $correct = trim($data[4] ?? '');
+                $optA = trim($data[5] ?? '');
+                $optB = trim($data[6] ?? '');
+                $optC = trim($data[7] ?? '');
+                $optD = trim($data[8] ?? '');
+
+                if ($qtext === '') { $skipped++; continue; }
+                if (!in_array($qtype, ['objective', 'subjective'], true)) { $qtype = 'objective'; }
+
+                $optionsJson = null;
+                if ($qtype === 'objective') {
+                    $optionsJson = json_encode([$optA, $optB, $optC, $optD]);
+                }
+
+                $db->prepare("INSERT INTO promo_exam_questions (exam_id, question_text, question_type, options_json, correct_answer, marks, sort_order)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)")
+                    ->execute([$exam_id, $qtext, $qtype, $optionsJson, $correct, $marks, $sort]);
+                $imported++;
+            }
+            fclose($handle);
+        }
+        $_SESSION['promo_notice'] = "Question import: $imported added, $skipped skipped" . ($errs ? " — " . implode('; ', array_slice($errs, 0, 5)) : '');
         header('Location: admin_promo_questions?exam_id=' . $exam_id . '#questions');
         exit;
     }
@@ -173,8 +229,12 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
 <div class="wrap">
     <div class="page-header">
         <h1 class="page-title"><i class="bi bi-question-circle" style="color:#092c19;"></i> Questions</h1>
-        <a href="#addQuestionModal" class="btn btn-primary" onclick="openModal('addQuestionModal')"><i class="bi bi-plus me-1"></i> Add question</a>
-        <a href="admin_promo_exams" class="btn btn-outline"><i class="bi bi-mortarboard me-1"></i> Exams</a>
+        <div style="display:flex;gap:8px;">
+            <a href="#addQuestionModal" class="btn btn-primary" onclick="openModal('addQuestionModal')"><i class="bi bi-plus me-1"></i> Add question</a>
+            <a href="#importModal" class="btn btn-success" onclick="openModal('importModal')"><i class="bi bi-cloud-arrow-up me-1"></i> Import CSV</a>
+            <a href="admin_promo_questions?exam_id=<?= $exam_id ?>&download_template=1" class="btn btn-outline"><i class="bi bi-download me-1"></i> CSV Template</a>
+            <a href="admin_promo_exams" class="btn btn-outline"><i class="bi bi-mortarboard me-1"></i> Exams</a>
+        </div>
     </div>
 
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 20px;margin-bottom:16px;">
@@ -381,6 +441,41 @@ addQuestionModal.addEventListener('click', function(e) { if (e.target === addQue
 
 // Initialize type toggle on load
 toggleQuestionType();
+</script>
+
+<!-- Import questions modal -->
+<div class="modal" id="importModal">
+    <div class="modal-content relative">
+        <button class="close-modal" onclick="closeModal('importModal')">&times;</button>
+        <h2 class="modal-title">Import Questions from CSV</h2>
+        <form method="post" enctype="multipart/form-data">
+            <?php csrf_field(); ?>
+            <div class="mb-3">
+                <label class="form-label">CSV file</label>
+                <input type="file" name="questions_file" class="form-control" accept=".csv" required>
+                <div class="hint">Columns: question, question_type, marks, sort_order, correct_answer, option_a, option_b, option_c, option_d. First row may be a header.</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Example row (objective)</label>
+                <div class="form-control" style="background:#f8fafc;color:#334155;">What is the capital of Nigeria?,objective,1,0,A,Abuja,Lagos,Kano,Ibadan</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Example row (subjective)</label>
+                <div class="form-control" style="background:#f8fafc;color:#334155;">Describe your experience,subjective,2,1,,,,,</div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal('importModal')">Cancel</button>
+                <button type="submit" name="import_questions" class="btn btn-success">Import Questions</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+const importModal = document.getElementById('importModal');
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+importModal.addEventListener('click', function(e) { if (e.target === importModal) closeModal('importModal'); });
 </script>
 </body>
 </html>
