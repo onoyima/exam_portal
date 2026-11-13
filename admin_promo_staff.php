@@ -39,7 +39,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'This email is already registered.';
             } else {
                 $db->prepare("INSERT INTO promo_staff (name, email, source) VALUES (?, ?, 'manual')")->execute([$name, $emailLower]);
-                $_SESSION['promo_notice'] = 'Staff member created.';
                 header('Location: admin_promo_staff?success=created');
                 exit;
             }
@@ -51,17 +50,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($_FILES['staff_file']['tmp_name'])) {
             $error = 'Please choose a CSV file.';
         } else {
-            $row = 0; $imported = 0; $skipped = 0; $errs = [];
+            $row = 0; $imported = 0; $skipped = 0;
             if (($handle = fopen($_FILES['staff_file']['tmp_name'], 'r')) !== false) {
                 while (($data = fgetcsv($handle, 1000, ",")) !== false) {
                     $row++;
                     if ($row === 1 && (strcasecmp(trim($data[0] ?? ''), 'name') === 0 || strcasecmp(trim($data[0] ?? ''), 'email') === 0)) {
-                        continue; // skip header
+                        continue;
                     }
                     $name = trim($data[0] ?? '');
                     $email = trim($data[1] ?? '');
                     if ($name === '' || $email === '') { $skipped++; continue; }
-                    if (!filter_var($email, FILTER_VALIDATE_EMAIL) || substr($email, -15) !== '@veritas.edu.ng') { $errs[] = "Row $row: invalid email $email"; $skipped++; continue; }
+                    if (!filter_var($email, FILTER_VALIDATE_EMAIL) || substr($email, -15) !== '@veritas.edu.ng') { $skipped++; continue; }
                     $emailLower = strtolower($email);
                     $chk = $db->prepare("SELECT 1 FROM promo_staff WHERE LOWER(email) = ? LIMIT 1");
                     $chk->execute([$emailLower]);
@@ -71,8 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 fclose($handle);
             }
-            $_SESSION['promo_notice'] = "Uploaded: $imported added, $skipped skipped" . ($errs ? " — " . implode('; ', array_slice($errs, 0, 5)) : '');
-            header('Location: admin_promo_staff?success=uploaded');
+            header('Location: admin_promo_staff?success=uploaded&imported=' . $imported . '&skipped=' . $skipped);
             exit;
         }
     }
@@ -81,10 +79,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['enrol_staff'])) {
         $staffId = (int) ($_POST['staff_id'] ?? 0);
         $examId = (int) ($_POST['exam_id'] ?? 0);
-        if ($staffId <= 0 || $examId <= 0) { $error = 'Select staff and exam.'; }
-        else {
+        if ($staffId <= 0 || $examId <= 0) {
+            $error = 'Select staff and exam.';
+        } else {
             $db->prepare("INSERT IGNORE INTO promo_exam_staff (exam_id, staff_id) VALUES (?, ?)")->execute([$examId, $staffId]);
-            $_SESSION['promo_notice'] = 'Staff enrolled to exam.';
             header('Location: admin_promo_staff?success=enrolled');
             exit;
         }
@@ -116,8 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ->execute([$row['name'], $emailLower, (int) $row['exeat2_staff_id']]);
                     $imported++;
                 }
-                $_SESSION['promo_notice'] = "Imported $imported staff member(s) from exeat2.";
-                header('Location: admin_promo_staff?success=imported');
+                header('Location: admin_promo_staff?success=imported&imported=' . $imported);
                 exit;
             }
         }
@@ -128,7 +125,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int) ($_POST['id'] ?? 0);
         if ($id > 0) {
             $db->prepare("DELETE FROM promo_exam_staff WHERE id = ?")->execute([$id]);
-            $_SESSION['promo_notice'] = 'Staff unenrolled.';
             header('Location: admin_promo_staff?success=unenrolled');
             exit;
         }
@@ -156,7 +152,7 @@ $staff = $db->query("
 // All active exams for enrolment dropdown
 $exams = $db->query("SELECT * FROM promo_exams WHERE is_active = 1 ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
 
-// All staff-enrolment pairs for the enrolment table (who is enrolled where)
+// All staff-enrolment pairs for the enrolment table
 $enrolWhere = '';
 $enrolParams = [];
 if ($search !== '') {
@@ -180,312 +176,323 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
 <head>
     <title>Promo Staff - Admin</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
     <link href="assets/css/bootstrap.min.css" rel="stylesheet">
     <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
     <link href="style_enhanced.css" rel="stylesheet">
-    <style>
-        body { background: #f4f7f6; font-family: 'Outfit', sans-serif; color: #1e293b; }
-        .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 100px; }
-        .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
-        .page-title { font-weight: 800; font-size: 1.25rem; color: #092c19; margin: 0; display: flex; align-items: center; gap: 8px; }
-        .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 16px; }
-        .card-body { padding: 18px 20px; }
-        .form-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #64748b; display: block; margin-bottom: 6px; }
-        .form-control { width: 100%; box-sizing: border-box; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; background: #fff; }
-        .form-control:focus { border-color: #092c19; outline: none; box-shadow: 0 0 0 3px rgba(9,44,25,0.1); }
-        textarea.form-control { min-height: 80px; resize: vertical; }
-        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: 8px; font-weight: 700; font-size: 0.9rem; text-decoration: none; border: 1px solid transparent; cursor: pointer; transition: all .2s; }
-        .btn-primary { background: #092c19; color: #fff; border-color: #092c19; }
-        .btn-primary:hover { background: #061d10; }
-        .btn-outline { background: #fff; color: #475569; border-color: #cbd5e1; }
-        .btn-outline:hover { border-color: #092c19; color: #092c19; }
-        .btn-success { background: #22c55e; color: #060d16; border-color: #22c55e; }
-        .btn-success:hover { background: #4ade80; }
-        .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
-        .table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        .table th { text-align: left; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #64748b; padding: 10px 14px; border-bottom: 1px solid #e2e8f0; }
-        .table td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; font-size: 0.92rem; vertical-align: middle; }
-        .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
-        .badge-manual { background: #e2e8f0; color: #475569; }
-        .badge-upload { background: #dbeafe; color: #1e40af; }
-        .badge-exeat2 { background: #f0fdf4; color: #15803d; }
-        .badge-active { background: #dcfce7; color: #166534; }
-        .badge-inactive { background: #fef2f2; color: #991b1b; }
-        .empty { text-align: center; padding: 48px 20px; color: #64748b; }
-        .empty i { font-size: 3rem; color: #cbd5e1; margin-bottom: 16px; display: block; }
-        .flash { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 0.9rem; }
-        .flash-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-        .flash-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
-        .tab { display: inline-block; padding: 8px 16px; margin-bottom: 2px; border-bottom: 2px solid transparent; font-weight: 700; color: #64748b; cursor: pointer; font-size: 0.9rem; }
-        .tab.active { color: #092c19; border-bottom-color: #092c19; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
-        .exeat2-list { max-height: 320px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; background: #fafafa; margin-bottom: 10px; }
-        .exeat2-item { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 6px; margin-bottom: 6px; background: #fff; border: 1px solid #f1f5f9; }
-        .exeat2-item.selected { background: #ecfdf5; border-color: #22c55e; }
-        .exeat2-checkbox { width: 18px; height: 18px; cursor: pointer; }
-        .exeat2-meta { flex: 1; font-size: 0.88rem; color: #334155; }
-        .exeat2-email { color: #64748b; font-size: 0.8rem; display: block; }
-        .count-chip { font-size: 0.78rem; padding: 2px 8px; border-radius: 6px; background: #e2e8f0; color: #475569; }
-        .hint { font-size: 0.8rem; color: #64748b; margin-top: 4px; }
-        .search-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 18px; }
-        .search-bar .form-control { max-width: 320px; width: auto; }
-        .d-none { display: none !important; }
-        @media (max-width: 768px) { .grid-2,.grid-3 { grid-template-columns: 1fr; } .page-header { flex-direction: column; align-items: flex-start; } }
-    </style>
 </head>
 <body>
-<nav class="admin-navbar" style="background:#fff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:50;">
-    <div class="admin-navbar-inner" style="padding:0 16px;">
-        <div class="admin-navbar-start" style="display:flex;align-items:center;gap:10px;">
-            <a href="admin_dashboard" class="btn btn-outline" style="padding:8px 14px;font-size:.85rem;"><i class="bi bi-arrow-left me-1"></i>Dashboard</a>
+  <?php include 'admin_sidebar.php'; ?>
+  <div class="main-content">
+    <nav class="admin-navbar">
+      <div class="admin-navbar-inner">
+        <div class="admin-navbar-start">
+          <button class="admin-navbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar"><i class="bi bi-list"></i></button>
+          <a href="admin_dashboard" class="admin-back-btn" aria-label="Back to Dashboard">
+            <i class="bi bi-arrow-left"></i>
+          </a>
+          <h1 class="admin-navbar-title">Promo Staff</h1>
         </div>
         <div class="admin-navbar-end">
-            <span style="background:rgba(9,44,25,0.08);color:#092c19;padding:6px 12px;border-radius:8px;font-weight:700;font-size:.85rem;"><?= htmlspecialchars(strtoupper(substr($admin_name, 0, 1))) ?></span>
-            <a href="logout" class="btn btn-outline" style="padding:8px 14px;font-size:.85rem;">Sign out</a>
+          <div class="admin-user-badge">
+            <span class="admin-user-avatar"><?= htmlspecialchars(strtoupper(substr($admin_name, 0, 1))) ?></span>
+            <span class="admin-user-name"><?= htmlspecialchars($admin_name) ?></span>
+          </div>
+          <a href="logout" class="admin-logout-btn" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
         </div>
-    </div>
-</nav>
+      </div>
+    </nav>
 
-<div class="wrap">
-    <div class="page-header">
-        <h1 class="page-title"><i class="bi bi-people" style="color:#092c19;"></i> Promo Staff</h1>
-        <a href="admin_promo_exams" class="btn btn-outline"><i class="bi bi-mortarboard me-1"></i> Manage promo exams</a>
-        <a href="admin_promo_results" class="btn btn-outline"><i class="bi bi-bar-chart me-1"></i> Results</a>
-    </div>
+    <div class="admin-content">
+      <nav class="admin-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="admin_dashboard"><i class="bi bi-house"></i></a></li>
+          <li class="sep">/</li>
+          <li class="current" aria-current="page">Promo Staff</li>
+        </ol>
+      </nav>
 
-    <?php if (isset($_SESSION['promo_notice'])): ?>
-        <div class="flash flash-success"><i class="bi bi-check-circle me-2"></i><?= htmlspecialchars($_SESSION['promo_notice']); unset($_SESSION['promo_notice']); ?></div>
-    <?php endif; ?>
-    <?php if ($error): ?>
-        <div class="flash flash-error"><i class="bi bi-exclamation-triangle me-2"></i><?= htmlspecialchars($error) ?></div>
-    <?php endif; ?>
-
-    <!-- Search bar -->
-    <div class="search-bar">
-        <form method="get" style="margin:0;display:flex;gap:8px;align-items:center;flex:1;min-width:260px;">
-            <label class="form-label" style="margin:0;font-size:0.85rem;">Search staff</label>
-            <input type="text" name="search" class="form-control" placeholder="Search by name or email…" value="<?= htmlspecialchars($search) ?>">
-            <button type="submit" class="btn btn-outline btn-sm"><i class="bi bi-search me-1"></i>Search</button>
-            <?php if ($search !== ''): ?>
-                <a href="admin_promo_staff" class="btn btn-outline btn-sm"><i class="bi bi-x-circle me-1"></i>Clear</a>
-            <?php endif; ?>
-        </form>
-    </div>
-
-    <!-- Tabs -->
-    <div style="display:flex;gap:0;border-bottom:1px solid #e2e8f0;margin-bottom:20px;overflow:auto;">
-        <span class="tab active" onclick="showTab('staff')">Staff accounts</span>
-        <span class="tab" onclick="showTab('enrol')">Enrol to exams</span>
-    </div>
-
-    <!-- Tab: Staff accounts -->
-    <div id="tab-staff" class="tab-content active">
-        <div class="grid-2">
-            <div class="card">
-                <div class="card-body">
-                    <h3 style="font-weight:800;color:#092c19;margin:0 0 12px 0;font-size:1rem;">Create staff (email)</h3>
-                    <form method="post">
-                        <?php csrf_field(); ?>
-                        <div class="mb-3">
-                            <label class="form-label">Full name</label>
-                            <input type="text" name="name" class="form-control" required placeholder="John Doe">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Staff email</label>
-                            <input type="email" name="email" class="form-control" required placeholder="john.doe@veritas.edu.ng">
-                            <div class="hint">Only @veritas.edu.ng emails accepted.</div>
-                        </div>
-                        <button type="submit" name="create_staff" class="btn btn-primary">Create staff</button>
-                    </form>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-body">
-                    <h3 style="font-weight:800;color:#092c19;margin:0 0 12px 0;font-size:1rem;">Upload staff by file</h3>
-                    <p class="small" style="color:#64748b;margin-bottom:12px;">CSV file with two columns: <code>name,email</code>. First row may be a header.</p>
-                    <form method="post" enctype="multipart/form-data">
-                        <?php csrf_field(); ?>
-                        <div class="mb-3">
-                            <label class="form-label">CSV file</label>
-                            <input type="file" name="staff_file" class="form-control" accept=".csv" required>
-                        </div>
-                        <button type="submit" name="upload_staff" class="btn btn-primary">Upload & import</button>
-                    </form>
-                </div>
-            </div>
+      <?php display_auth_errors(); ?>
+      <?php if (isset($_GET['success'])): ?>
+        <div class="admin-alert admin-alert-success"><i class="bi bi-check-circle me-2"></i>
+          <?= 'created' === $_GET['success'] ? 'Staff member created.' : ('uploaded' === $_GET['success'] ? "Uploaded: {$_GET['imported']} added, {$_GET['skipped']} skipped." : ('enrolled' === $_GET['success'] ? 'Staff enrolled to exam.' : ('imported' === $_GET['success'] ? "Imported {$_GET['imported']} staff member(s) from exeat2." : 'Staff unenrolled.'))) ?>
         </div>
+      <?php endif; ?>
+      <?php if ($error): ?>
+        <div class="admin-alert admin-alert-danger"><i class="bi bi-exclamation-triangle me-2"></i><?= htmlspecialchars($error) ?></div>
+      <?php endif; ?>
 
-        <div class="card">
-            <div class="card-body">
-                <h3 style="font-weight:800;color:#092c19;margin:0 0 12px 0;font-size:1rem;">Import from school portal (exeat2)</h3>
-                <p class="small" style="color:#64748b;margin-bottom:12px;">Select staff from the exeat2 school portal database. Only <code>@veritas.edu.ng</code> emails are imported.</p>
-                <div class="mb-3">
-                    <button type="button" class="btn btn-outline" id="loadExeat2Btn" onclick="loadExeat2()"><i class="bi bi-cloud-arrow-down me-1"></i> Load exeat2 staff</button>
-                    <span id="exeat2Status" class="count-chip" style="margin-left:8px;"></span>
-                    <div id="exeat2Error" style="color:#dc2626;font-size:0.85rem;margin-top:6px;"></div>
-                </div>
-                <div id="exeat2List" class="exeat2-list" style="display:none;"></div>
-                <div id="exeat2Actions" style="margin-top:10px;display:none;">
-                    <form method="post" onsubmit="return confirm('Import selected staff from exeat2?')">
-                        <?php csrf_field(); ?>
-                        <input type="hidden" name="exeat2_ids" id="exeat2Ids">
-                        <button type="submit" name="import_exeat2" class="btn btn-success"><i class="bi bi-box-arrow-in-right me-1"></i> Import selected staff</button>
-                    </form>
-                </div>
-            </div>
+      <div class="admin-page-header">
+        <h2 class="admin-page-title">Promo Staff</h2>
+        <div class="admin-page-actions">
+          <a href="admin_promo_exams" class="admin-btn admin-btn-outline">
+            <i class="bi bi-mortarboard me-1"></i> Manage promo exams
+          </a>
+          <a href="admin_promo_results" class="admin-btn admin-btn-outline">
+            <i class="bi bi-bar-chart me-1"></i> Promo results
+          </a>
         </div>
+      </div>
 
-        <h3 style="font-weight:800;color:#092c19;margin:20px 0 10px 0;font-size:1rem;">Existing staff accounts<?= $search ? ' matching "' . htmlspecialchars($search) . '"' : '' ?></h3>
-        <?php if (!$staff): ?>
-            <div class="empty"><i class="bi bi-person"></i><p style="font-weight:600;margin-bottom:6px;">No staff accounts found</p><p class="small">Create, upload, or import staff above.</p></div>
-        <?php else: ?>
-            <table class="table">
-                <thead>
-                    <tr><th style="width:40px;">#</th><th>Name</th><th style="width:200px;">Email</th><th style="width:120px;">Source</th><th style="width:100px;">Status</th><th style="width:220px;">Enrolled exams</th></tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($staff as $s): ?>
-                    <tr>
-                        <td><?= (int) $s['id'] ?></td>
-                        <td><?= htmlspecialchars((string) $s['name']) ?></td>
-                        <td style="font-size:0.88rem;color:#334155;"><?= htmlspecialchars((string) $s['email']) ?></td>
-                        <td><span class="badge badge-<?= htmlspecialchars((string) $s['source']) ?>"><?= htmlspecialchars(ucfirst((string) $s['source'])) ?></span></td>
-                        <td><span class="badge <?= (int) $s['is_active'] ? 'badge-active' : 'badge-inactive' ?>"><?= (int) $s['is_active'] ? 'Active' : 'Inactive' ?></span></td>
-                        <td style="font-size:0.88rem;color:#64748b;"><?= htmlspecialchars((string) ($s['enrolled_exams'] ?? '—')) ?></td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+      <div class="admin-page-header">
+        <h2 class="admin-page-title">Staff Accounts</h2>
+      </div>
+
+      <!-- Search bar -->
+      <form method="get" class="admin-search-form mb-3" style="display:flex;gap:8px;max-width:360px;">
+        <input type="text" name="search" class="form-control" placeholder="Search by name or email…" value="<?= htmlspecialchars($search) ?>">
+        <button type="submit" class="admin-btn admin-btn-primary"><i class="bi bi-search"></i></button>
+        <?php if ($search !== ''): ?>
+          <a href="admin_promo_staff" class="admin-btn admin-btn-outline">Clear</a>
         <?php endif; ?>
-    </div>
+      </form>
 
-    <!-- Tab: Enrol staff to exams -->
-    <div id="tab-enrol" class="tab-content">
-        <div class="card">
-            <div class="card-body">
-                <h3 style="font-weight:800;color:#092c19;margin:0 0 12px 0;font-size:1rem;">Enrol staff to a promotional exam</h3>
-                <form method="post">
-                    <?php csrf_field(); ?>
-                    <div class="grid-2">
-                        <div>
-                            <label class="form-label">Staff member</label>
-                            <select name="staff_id" class="form-control" required>
-                                <option value="">Select staff…</option>
-                                <?php foreach ($staff as $s): ?>
-                                    <option value="<?= (int) $s['id'] ?>"><?= htmlspecialchars((string) $s['name']) ?> (<?= htmlspecialchars((string) $s['email']) ?>)</option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="form-label">Promotional exam</label>
-                            <select name="exam_id" class="form-control" required>
-                                <option value="">Select exam…</option>
-                                <?php foreach ($exams as $e): ?>
-                                    <option value="<?= (int) $e['id'] ?>"><?= htmlspecialchars((string) $e['name']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <button type="submit" name="enrol_staff" class="btn btn-primary">Enrol staff</button>
-                    </div>
+      <div class="row g-3">
+        <!-- Create staff card -->
+        <div class="col-12 col-lg-4">
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <h3 class="admin-card-title"><i class="bi bi-person-plus me-2"></i>Create staff (email)</h3>
+            </div>
+            <div class="admin-card-body">
+              <form method="post">
+                <?php csrf_field(); ?>
+                <div class="admin-form-group mb-3">
+                  <label class="admin-form-label">Full name</label>
+                  <input type="text" name="name" class="admin-input" required placeholder="John Doe">
+                </div>
+                <div class="admin-form-group mb-3">
+                  <label class="admin-form-label">Staff email</label>
+                  <input type="email" name="email" class="admin-input" required placeholder="john.doe@veritas.edu.ng">
+                  <div class="form-text text-muted">Only @veritas.edu.ng emails accepted.</div>
+                </div>
+                <button type="submit" name="create_staff" class="admin-btn admin-btn-primary">Create staff</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Upload staff card -->
+        <div class="col-12 col-lg-4">
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <h3 class="admin-card-title"><i class="bi bi-cloud-arrow-up me-2"></i>Upload by file</h3>
+            </div>
+            <div class="admin-card-body">
+              <p class="small text-muted mb-3">CSV file with two columns: name,email. First row may be a header.</p>
+              <form method="post" enctype="multipart/form-data">
+                <?php csrf_field(); ?>
+                <div class="admin-form-group mb-3">
+                  <label class="admin-form-label">CSV file</label>
+                  <input type="file" name="staff_file" class="admin-input" accept=".csv" required>
+                </div>
+                <button type="submit" name="upload_staff" class="admin-btn admin-btn-primary">Upload & import</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Import from exeat2 card -->
+        <div class="col-12 col-lg-4">
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <h3 class="admin-card-title"><i class="bi bi-cloud-download me-2"></i>Import from exeat2</h3>
+            </div>
+            <div class="admin-card-body">
+              <p class="small text-muted mb-3">Select staff from the exeat2 school portal database. Only @veritas.edu.ng emails are imported.</p>
+              <div class="mb-3">
+                <button type="button" class="admin-btn admin-btn-outline" id="loadExeat2Btn" onclick="loadExeat2()">
+                  <i class="bi bi-cloud-arrow-down me-1"></i> Load exeat2 staff
+                </button>
+                <span id="exeat2Status" class="admin-badge admin-badge-neutral ms-2"></span>
+                <div id="exeat2Error" class="text-danger small mt-2"></div>
+              </div>
+              <div id="exeat2List" style="max-height:300px;overflow-y:auto;border:1px solid #dee2e6;border-radius:6px;padding:10px;background:#f8f9fa;display:none;margin-bottom:10px;"></div>
+              <div id="exeat2Actions" style="display:none;">
+                <form method="post" onsubmit="return confirm('Import selected staff from exeat2?')">
+                  <?php csrf_field(); ?>
+                  <input type="hidden" name="exeat2_ids" id="exeat2Ids">
+                  <button type="submit" name="import_exeat2" class="admin-btn admin-btn-success">
+                    <i class="bi bi-box-arrow-in-right me-1"></i> Import selected staff
+                  </button>
                 </form>
+              </div>
             </div>
+          </div>
         </div>
+      </div>
 
-        <h3 style="font-weight:800;color:#092c19;margin:20px 0 10px 0;font-size:1rem;">Current enrolments<?= $search ? ' matching "' . htmlspecialchars($search) . '"' : '' ?></h3>
-        <?php if (!$enrolments): ?>
-            <div class="empty"><i class="bi bi-person-gear"></i><p style="font-weight:600;margin-bottom:6px;">No enrolments yet</p></div>
-        <?php else: ?>
-            <table class="table">
-                <thead>
-                    <tr><th style="width:40px;">#</th><th>Staff</th><th style="width:200px;">Email</th><th>Exam</th><th style="width:150px;">Action</th></tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($enrolments as $en): ?>
-                    <tr>
-                        <td><?= (int) $en['id'] ?></td>
-                        <td><?= htmlspecialchars((string) $en['staff_name']) ?></td>
-                        <td style="font-size:0.88rem;color:#64748b;"><?= htmlspecialchars((string) $en['email']) ?></td>
-                        <td><?= htmlspecialchars((string) $en['exam_name']) ?></td>
-                        <td>
-                            <form method="post" style="margin:0;" onsubmit="return confirm('Unenrol this staff from this exam?')">
-                                <?php csrf_field(); ?>
-                                <input type="hidden" name="id" value="<?= (int) $en['id'] ?>">
-                                <button type="submit" name="unenrol" class="btn btn-sm btn-outline"><i class="bi bi-person-dash"></i></button>
-                            </form>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php endif; ?>
+      <!-- Existing staff accounts table -->
+      <div class="admin-page-header mt-4">
+        <h2 class="admin-page-title">Existing Staff Accounts<?= $search ? ' matching "' . htmlspecialchars($search) . '"' : '' ?></h2>
+      </div>
+      <?php if (!$staff): ?>
+        <div class="admin-card">
+          <div class="admin-card-body">
+            <p class="text-muted text-center py-4"><i class="bi bi-person me-2"></i>No staff accounts found.</p>
+          </div>
+        </div>
+      <?php else: ?>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Enrolled exams</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($staff as $s): ?>
+              <tr>
+                <td><?= (int) $s['id'] ?></td>
+                <td><?= htmlspecialchars((string) $s['name']) ?></td>
+                <td class="text-truncate" style="max-width:180px;"><?= htmlspecialchars((string) $s['email']) ?></td>
+                <td><span class="admin-badge admin-badge-neutral"><?= htmlspecialchars(ucfirst((string) $s['source'])) ?></span></td>
+                <td><span class="admin-badge admin-badge-<?= (int) $s['is_active'] ? 'success' : 'danger' ?>"><?= (int) $s['is_active'] ? 'Active' : 'Inactive' ?></span></td>
+                <td class="text-muted small"><?= htmlspecialchars((string) ($s['enrolled_exams'] ?? '—')) ?></td>
+              </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      <?php endif; ?>
+
+      <!-- Enrol staff to exams section -->
+      <div class="admin-page-header mt-4">
+        <h2 class="admin-page-title">Enrol Staff to Exams</h2>
+      </div>
+      <div class="admin-card">
+        <div class="admin-card-body">
+          <form method="post">
+            <?php csrf_field(); ?>
+            <div class="row g-3 align-items-end">
+              <div class="col-12 col-lg-4">
+                <label class="admin-form-label">Staff member</label>
+                <select name="staff_id" class="admin-select" required>
+                  <option value="">Select staff…</option>
+                  <?php foreach ($staff as $s): ?>
+                    <option value="<?= (int) $s['id'] ?>"><?= htmlspecialchars((string) $s['name']) ?> (<?= htmlspecialchars((string) $s['email']) ?>)</option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="col-12 col-lg-4">
+                <label class="admin-form-label">Promotional exam</label>
+                <select name="exam_id" class="admin-select" required>
+                  <option value="">Select exam…</option>
+                  <?php foreach ($exams as $e): ?>
+                    <option value="<?= (int) $e['id'] ?>"><?= htmlspecialchars((string) $e['name']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="col-12 col-lg-4">
+                <button type="submit" name="enrol_staff" class="admin-btn admin-btn-primary w-100">Enrol staff</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Current enrolments -->
+      <div class="admin-page-header mt-4">
+        <h2 class="admin-page-title">Current Enrolments<?= $search ? ' matching "' . htmlspecialchars($search) . '"' : '' ?></h2>
+      </div>
+      <?php if (!$enrolments): ?>
+        <div class="admin-card">
+          <div class="admin-card-body">
+            <p class="text-muted text-center py-4"><i class="bi bi-person-gear me-2"></i>No enrolments yet.</p>
+          </div>
+        </div>
+      <?php else: ?>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Staff</th>
+                <th>Email</th>
+                <th>Exam</th>
+                <th class="text-end">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($enrolments as $en): ?>
+              <tr>
+                <td><?= (int) $en['id'] ?></td>
+                <td><?= htmlspecialchars((string) $en['staff_name']) ?></td>
+                <td class="text-truncate" style="max-width:180px;"><?= htmlspecialchars((string) $en['email']) ?></td>
+                <td><?= htmlspecialchars((string) $en['exam_name']) ?></td>
+                <td class="text-end">
+                  <form method="post" style="margin:0;" onsubmit="return confirm('Unenrol this staff from this exam?')">
+                    <?php csrf_field(); ?>
+                    <input type="hidden" name="id" value="<?= (int) $en['id'] ?>">
+                    <button type="submit" name="unenrol" class="admin-btn admin-btn-outline admin-btn-sm"><i class="bi bi-person-dash"></i></button>
+                  </form>
+                </td>
+              </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      <?php endif; ?>
+
     </div>
-</div>
+  </div>
 
-<script>
-const tabs = document.querySelectorAll('.tab');
-const contents = document.querySelectorAll('.tab-content');
-function showTab(name) {
-    tabs.forEach(t => {
-        const active = (t.getAttribute('onclick') || '').includes(name);
-        t.classList.toggle('active', active);
-    });
-    contents.forEach(c => c.classList.toggle('active', c.id === 'tab-' + name));
-}
+  <script src="assets/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/admin-common.js"></script>
+  <script>
+    let exeat2Selected = new Set();
 
-let exeat2Selected = new Set();
-
-async function loadExeat2() {
-    const btn = document.getElementById('loadExeat2Btn');
-    const status = document.getElementById('exeat2Status');
-    const list = document.getElementById('exeat2List');
-    const actions = document.getElementById('exeat2Actions');
-    const err = document.getElementById('exeat2Error');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-loader me-1"></i> Loading...';
-    err.textContent = '';
-    list.style.display = 'none';
-    actions.style.display = 'none';
-    try {
+    async function loadExeat2() {
+      const btn = document.getElementById('loadExeat2Btn');
+      const status = document.getElementById('exeat2Status');
+      const list = document.getElementById('exeat2List');
+      const actions = document.getElementById('exeat2Actions');
+      const err = document.getElementById('exeat2Error');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="bi bi-loader me-1"></i> Loading...';
+      err.textContent = '';
+      list.style.display = 'none';
+      actions.style.display = 'none';
+      try {
         const r = await fetch('includes/fetch_exeat2_staff.php', { headers: { 'X-Requested-With': 'fetch' } });
         const data = await r.json();
         if (data.error) { err.textContent = data.error; btn.disabled = false; btn.innerHTML = '<i class="bi bi-cloud-arrow-down me-1"></i> Load exeat2 staff'; return; }
         exeat2Selected = new Set();
         list.innerHTML = '';
         data.forEach(s => {
-            const item = document.createElement('div');
-            item.className = 'exeat2-item';
-            item.innerHTML = `
-                <input type="checkbox" class="exeat2-checkbox" value="${s.exeat2_staff_id}" ${s.status === 'exists_exeat2' ? 'disabled title="Already imported"' : ''} onchange="toggleExeat2(${s.exeat2_staff_id}, this)">
-                <div class="exeat2-meta"><div style="font-weight:700;color:#0f172a;">${escapeHtml(s.name)}</div><span class="exeat2-email">${escapeHtml(s.email)}</span></div>
-            `;
-            list.appendChild(item);
+          const item = document.createElement('div');
+          item.className = 'exeat2-item';
+          item.innerHTML = `
+            <input type="checkbox" class="form-check-input exeat2-checkbox" value="${s.exeat2_staff_id}" ${s.status === 'exists_exeat2' ? 'disabled title="Already imported"' : ''} onchange="toggleExeat2(${s.exeat2_staff_id}, this)">
+            <label class="form-check-label d-block ms-2">${escapeHtml(s.name)} <span class="text-muted small d-block">${escapeHtml(s.email)}</span></label>
+          `;
+          list.appendChild(item);
         });
         list.style.display = 'block';
         actions.style.display = data.length ? 'block' : 'none';
         status.textContent = data.length + ' staff found';
+        status.className = 'admin-badge admin-badge-info ms-2';
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-cloud-arrow-down me-1"></i> Load exeat2 staff';
-    } catch (e) {
+      } catch (e) {
         err.textContent = 'Could not reach exeat2 staff endpoint.';
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-cloud-arrow-down me-1"></i> Load exeat2 staff';
+      }
     }
-}
 
-function toggleExeat2(id, cb) {
-    if (cb.disabled) return;
-    if (cb.checked) exeat2Selected.add(id); else exeat2Selected.delete(id);
-    document.getElementById('exeat2Ids').value = [...exeat2Selected].join(',');
-    cb.closest('.exeat2-item').classList.toggle('selected', cb.checked);
-}
+    function toggleExeat2(id, cb) {
+      if (cb.disabled) return;
+      if (cb.checked) exeat2Selected.add(id); else exeat2Selected.delete(id);
+      document.getElementById('exeat2Ids').value = [...exeat2Selected].join(',');
+    }
 
-function escapeHtml(t) { return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])); }
-</script>
+    function escapeHtml(t) { return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])); }
+  </script>
 </body>
 </html>

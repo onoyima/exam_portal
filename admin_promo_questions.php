@@ -3,6 +3,7 @@
  * admin_promo_questions.php — Manage questions for a promotional exam (admin only)
  *
  * Add/edit objective (MCQ) and subjective (essay) questions for one promo exam.
+ * Bulk import from CSV. Uses the standard admin sidebar layout.
  * Isolated from the core question bank.
  */
 
@@ -26,6 +27,8 @@ if (!$exam) {
     exit;
 }
 
+$error = '';
+
 // CSV template download
 if (isset($_GET['download_template']) && $_GET['download_template'] === '1') {
     header('Content-Type: text/csv; charset=utf-8');
@@ -39,77 +42,17 @@ if (isset($_GET['download_template']) && $_GET['download_template'] === '1') {
     exit;
 }
 
-$notice = '';
-$error = '';
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    validate_csrf();
-
-    // ── Create question ──
-    if (isset($_POST['create_q'])) {
-        $qtext = trim($_POST['question_text']);
-        $qtype = in_array($_POST['question_type'] ?? '', ['objective', 'subjective'], true) ? $_POST['question_type'] : 'objective';
-        $marks = floatval($_POST['marks'] ?? 1);
-        $sort = intval($_POST['sort_order'] ?? 0);
-        $correct = trim($_POST['correct_answer'] ?? '');
-        $options = $_POST['options'] ?? [];
-
-        if ($qtext === '') {
-            $error = 'Question text is required.';
-        } else {
-            $optionsJson = $qtype === 'objective' ? json_encode($options) : null;
-            $db->prepare("INSERT INTO promo_exam_questions (exam_id, question_text, question_type, options_json, correct_answer, marks, sort_order)
-                VALUES (?, ?, ?, ?, ?, ?, ?)")
-                ->execute([$exam_id, $qtext, $qtype, $optionsJson, $correct, $marks, $sort]);
-            $_SESSION['promo_notice'] = 'Question added.';
-            header('Location: admin_promo_questions?exam_id=' . $exam_id . '#questions');
-            exit;
-        }
-    }
-
-    // ── Edit question ──
-    if (isset($_POST['edit_q']) && isset($_POST['qid'])) {
-        $qid = intval($_POST['qid']);
-        $qtext = trim($_POST['question_text']);
-        $qtype = in_array($_POST['question_type'] ?? '', ['objective', 'subjective'], true) ? $_POST['question_type'] : 'objective';
-        $marks = floatval($_POST['marks'] ?? 1);
-        $sort = intval($_POST['sort_order'] ?? 0);
-        $correct = trim($_POST['correct_answer'] ?? '');
-        $options = $_POST['options'] ?? [];
-
-        if ($qtext === '') {
-            $error = 'Question text is required.';
-        } else {
-            $optionsJson = $qtype === 'objective' ? json_encode($options) : null;
-            $db->prepare("UPDATE promo_exam_questions SET question_text=?, question_type=?, options_json=?, correct_answer=?, marks=?, sort_order=? WHERE id=? AND exam_id=?")
-                ->execute([$qtext, $qtype, $optionsJson, $correct, $marks, $sort, $qid, $exam_id]);
-            $_SESSION['promo_notice'] = 'Question updated.';
-            header('Location: admin_promo_questions?exam_id=' . $exam_id . '#questions');
-            exit;
-        }
-    }
-
-    // ── Delete question ──
-    if (isset($_POST['delete_q']) && isset($_POST['qid'])) {
-        $qid = intval($_POST['qid']);
-        $db->prepare("DELETE FROM promo_exam_questions WHERE id = ? AND exam_id = ?")->execute([$qid, $exam_id]);
-        $_SESSION['promo_notice'] = 'Question deleted.';
-        header('Location: admin_promo_questions?exam_id=' . $exam_id . '#questions');
-        exit;
-    }
-}
-
-// ── Bulk import questions from CSV ──
+// Bulk import questions from CSV
 if (isset($_POST['import_questions'])) {
     if (empty($_FILES['questions_file']['tmp_name'])) {
         $error = 'Please choose a CSV file.';
     } else {
-        $row = 0; $imported = 0; $skipped = 0; $errs = [];
+        $row = 0; $imported = 0; $skipped = 0;
         if (($handle = fopen($_FILES['questions_file']['tmp_name'], 'r')) !== false) {
             while (($data = fgetcsv($handle, 2000, ",")) !== false) {
                 $row++;
                 if ($row === 1 && (strcasecmp(trim($data[0] ?? ''), 'question') === 0 || strcasecmp(trim($data[0] ?? ''), 'question_text') === 0)) {
-                    continue; // skip header
+                    continue;
                 }
                 $qtext = trim($data[0] ?? '');
                 $qtype = trim($data[1] ?? 'objective');
@@ -136,10 +79,59 @@ if (isset($_POST['import_questions'])) {
             }
             fclose($handle);
         }
-        $_SESSION['promo_notice'] = "Question import: $imported added, $skipped skipped" . ($errs ? " — " . implode('; ', array_slice($errs, 0, 5)) : '');
+        header('Location: admin_promo_questions?exam_id=' . $exam_id . '#questions&imported=' . $imported . '&skipped=' . $skipped);
+        exit;
+    }
+}
+
+// Create question
+if (isset($_POST['create_q'])) {
+    $qtext = trim($_POST['question_text']);
+    $qtype = in_array($_POST['question_type'] ?? '', ['objective', 'subjective'], true) ? $_POST['question_type'] : 'objective';
+    $marks = floatval($_POST['marks'] ?? 1);
+    $sort = intval($_POST['sort_order'] ?? 0);
+    $correct = trim($_POST['correct_answer'] ?? '');
+    $options = $_POST['options'] ?? [];
+
+    if ($qtext === '') {
+        $error = 'Question text is required.';
+    } else {
+        $optionsJson = $qtype === 'objective' ? json_encode($options) : null;
+        $db->prepare("INSERT INTO promo_exam_questions (exam_id, question_text, question_type, options_json, correct_answer, marks, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?)")
+            ->execute([$exam_id, $qtext, $qtype, $optionsJson, $correct, $marks, $sort]);
         header('Location: admin_promo_questions?exam_id=' . $exam_id . '#questions');
         exit;
     }
+}
+
+// Edit question
+if (isset($_POST['edit_q']) && isset($_POST['qid'])) {
+    $qid = intval($_POST['qid']);
+    $qtext = trim($_POST['question_text']);
+    $qtype = in_array($_POST['question_type'] ?? '', ['objective', 'subjective'], true) ? $_POST['question_type'] : 'objective';
+    $marks = floatval($_POST['marks'] ?? 1);
+    $sort = intval($_POST['sort_order'] ?? 0);
+    $correct = trim($_POST['correct_answer'] ?? '');
+    $options = $_POST['options'] ?? [];
+
+    if ($qtext === '') {
+        $error = 'Question text is required.';
+    } else {
+        $optionsJson = $qtype === 'objective' ? json_encode($options) : null;
+        $db->prepare("UPDATE promo_exam_questions SET question_text=?, question_type=?, options_json=?, correct_answer=?, marks=?, sort_order=? WHERE id=? AND exam_id=?")
+            ->execute([$qtext, $qtype, $optionsJson, $correct, $marks, $sort, $qid, $exam_id]);
+        header('Location: admin_promo_questions?exam_id=' . $exam_id . '#questions');
+        exit;
+    }
+}
+
+// Delete question
+if (isset($_POST['delete_q']) && isset($_POST['qid'])) {
+    $qid = intval($_POST['qid']);
+    $db->prepare("DELETE FROM promo_exam_questions WHERE id = ? AND exam_id = ?")->execute([$qid, $exam_id]);
+    header('Location: admin_promo_questions?exam_id=' . $exam_id . '#questions');
+    exit;
 }
 
 // Load questions
@@ -154,328 +146,338 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
 <head>
     <title>Questions - <?= htmlspecialchars((string) $exam['name']) ?></title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
     <link href="assets/css/bootstrap.min.css" rel="stylesheet">
     <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
     <link href="style_enhanced.css" rel="stylesheet">
-    <style>
-        body { background: #f4f7f6; font-family: 'Outfit', sans-serif; color: #1e293b; }
-        .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 100px; }
-        .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
-        .page-title { font-weight: 800; font-size: 1.25rem; color: #092c19; margin: 0; display: flex; align-items: center; gap: 8px; }
-        .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 16px; }
-        .card-body { padding: 18px 20px; }
-        .form-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #64748b; display: block; margin-bottom: 6px; }
-        .form-control { width: 100%; box-sizing: border-box; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; background: #fff; }
-        .form-control:focus { border-color: #092c19; outline: none; box-shadow: 0 0 0 3px rgba(9,44,25,0.1); }
-        textarea.form-control { min-height: 100px; resize: vertical; }
-        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: 8px; font-weight: 700; font-size: 0.9rem; text-decoration: none; border: 1px solid transparent; cursor: pointer; transition: all .2s; }
-        .btn-primary { background: #092c19; color: #fff; border-color: #092c19; }
-        .btn-primary:hover { background: #061d10; }
-        .btn-outline { background: #fff; color: #475569; border-color: #cbd5e1; }
-        .btn-outline:hover { border-color: #092c19; color: #092c19; }
-        .btn-success { background: #22c55e; color: #060d16; border-color: #22c55e; }
-        .btn-success:hover { background: #4ade80; }
-        .btn-danger { background: #dc2626; color: #fff; border-color: #dc2626; }
-        .btn-danger:hover { background: #b91c1c; }
-        .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
-        .table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        .table th { text-align: left; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #64748b; padding: 10px 14px; border-bottom: 1px solid #e2e8f0; }
-        .table td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; font-size: 0.92rem; vertical-align: middle; }
-        .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
-        .badge-objective { background: #dbeafe; color: #1e40af; }
-        .badge-subjective { background: #f0fdf4; color: #15803d; }
-        .flash { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 0.9rem; }
-        .flash-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-        .flash-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
-        .modal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.4); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: #fff; border-radius: 12px; padding: 24px; width: 90%; max-width: 640px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
-        .modal-title { font-weight: 800; color: #0f172a; margin: 0 0 16px 0; font-size: 1.1rem; }
-        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
-        .close-modal { background: none; border: none; font-size: 1.5rem; color: #94a3b8; position: absolute; top: 10px; right: 14px; cursor: pointer; }
-        .close-modal:hover { color: #0f172a; }
-        .relative { position: relative; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
-        .options-list { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafa; }
-        .option-row { display: flex; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid #f1f5f9; margin-bottom: 6px; background: #fff; border-radius: 6px; }
-        .option-row:last-child { border-bottom: none; margin-bottom: 0; }
-        .option-input { flex: 1; }
-        .correct-radio { width: 18px; height: 18px; cursor: pointer; }
-        .remove-option { background: none; border: 1px solid #dc2626; color: #dc2626; border-radius: 4px; padding: 2px 8px; font-size: 0.8rem; cursor: pointer; }
-        .remove-option:hover { background: #dc2626; color: #fff; }
-        .add-option { margin-top: 8px; }
-        .type-specific { display: none; }
-        .type-specific.active { display: block; }
-        .d-none { display: none !important; }
-        .empty { text-align: center; padding: 40px 20px; color: #64748b; }
-        .empty i { font-size: 3rem; color: #cbd5e1; margin-bottom: 16px; display: block; }
-        @media (max-width: 640px) { .grid-2,.grid-3 { grid-template-columns: 1fr; } .page-header { flex-direction: column; align-items: flex-start; } }
-    </style>
 </head>
 <body>
-<nav class="admin-navbar" style="background:#fff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:50;">
-    <div class="admin-navbar-inner" style="padding:0 16px;">
-        <div class="admin-navbar-start" style="display:flex;align-items:center;gap:10px;">
-            <a href="admin_promo_exams" class="btn btn-outline" style="padding:8px 14px;font-size:.85rem;"><i class="bi bi-arrow-left me-1"></i>Back to exams</a>
+  <?php include 'admin_sidebar.php'; ?>
+  <div class="main-content">
+    <nav class="admin-navbar">
+      <div class="admin-navbar-inner">
+        <div class="admin-navbar-start">
+          <button class="admin-navbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar"><i class="bi bi-list"></i></button>
+          <a href="admin_promo_exams" class="admin-back-btn" aria-label="Back to exams">
+            <i class="bi bi-arrow-left"></i>
+          </a>
+          <h1 class="admin-navbar-title">Questions</h1>
         </div>
         <div class="admin-navbar-end">
-            <span style="background:rgba(9,44,25,0.08);color:#092c19;padding:6px 12px;border-radius:8px;font-weight:700;font-size:.85rem;"><?= htmlspecialchars(strtoupper(substr($admin_name, 0, 1))) ?></span>
-            <a href="logout" class="btn btn-outline" style="padding:8px 14px;font-size:.85rem;">Sign out</a>
+          <div class="admin-user-badge">
+            <span class="admin-user-avatar"><?= htmlspecialchars(strtoupper(substr($admin_name, 0, 1))) ?></span>
+            <span class="admin-user-name"><?= htmlspecialchars($admin_name) ?></span>
+          </div>
+          <a href="logout" class="admin-logout-btn" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
         </div>
-    </div>
-</nav>
+      </div>
+    </nav>
 
-<div class="wrap">
-    <div class="page-header">
-        <h1 class="page-title"><i class="bi bi-question-circle" style="color:#092c19;"></i> Questions</h1>
-        <div style="display:flex;gap:8px;">
-            <a href="#addQuestionModal" class="btn btn-primary" onclick="openModal('addQuestionModal')"><i class="bi bi-plus me-1"></i> Add question</a>
-            <a href="#importModal" class="btn btn-success" onclick="openModal('importModal')"><i class="bi bi-cloud-arrow-up me-1"></i> Import CSV</a>
-            <a href="admin_promo_questions?exam_id=<?= $exam_id ?>&download_template=1" class="btn btn-outline"><i class="bi bi-download me-1"></i> CSV Template</a>
-            <a href="admin_promo_exams" class="btn btn-outline"><i class="bi bi-mortarboard me-1"></i> Exams</a>
+    <div class="admin-content">
+      <nav class="admin-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="admin_dashboard"><i class="bi bi-house"></i></a></li>
+          <li class="sep">/</li>
+          <li><a href="admin_promo_exams">Promo Exams</a></li>
+          <li class="sep">/</li>
+          <li class="current" aria-current="page">Questions</li>
+        </ol>
+      </nav>
+
+      <?php display_auth_errors(); ?>
+      <?php if (isset($_GET['imported'])): ?>
+        <div class="admin-alert admin-alert-success"><i class="bi bi-check-circle me-2"></i>
+          Question import: <?= (int) $_GET['imported'] ?> added, <?= (int) ($_GET['skipped'] ?? 0) ?> skipped.
         </div>
-    </div>
+      <?php endif; ?>
+      <?php if ($error): ?>
+        <div class="admin-alert admin-alert-danger"><i class="bi bi-exclamation-triangle me-2"></i><?= htmlspecialchars($error) ?></div>
+      <?php endif; ?>
 
-    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 20px;margin-bottom:16px;">
-        <h2 style="font-weight:800;color:#092c19;margin:0 0 4px 0;font-size:1.1rem;"><?= htmlspecialchars((string) $exam['name']) ?></h2>
-        <p style="color:#64748b;margin:0;font-size:0.9rem;">
-            Type: <strong><?= htmlspecialchars(ucfirst((string) $exam['type'])) ?></strong> •
-            Duration: <?= (int) $exam['duration_minutes'] ?> min •
-            Total questions: <?= count($questions) ?>
+      <div class="admin-page-header">
+        <h2 class="admin-page-title">Questions</h2>
+        <div class="admin-page-actions">
+          <a href="admin_promo_questions?exam_id=<?= $exam_id ?>&download_template=1" class="admin-btn admin-btn-outline">
+            <i class="bi bi-download me-1"></i> CSV Template
+          </a>
+          <button class="admin-btn admin-btn-primary" data-bs-toggle="modal" data-bs-target="#importModal">
+            <i class="bi bi-cloud-arrow-up me-1"></i> Import CSV
+          </button>
+          <button class="admin-btn admin-btn-primary" data-bs-toggle="modal" data-bs-target="#addQuestionModal">
+            <i class="bi bi-plus me-1"></i> Add question
+          </button>
+        </div>
+      </div>
+
+      <div class="admin-page-header mb-3">
+        <h2 class="admin-page-title"><?= htmlspecialchars((string) $exam['name']) ?></h2>
+        <p class="text-muted small">
+          Type: <strong><?= htmlspecialchars(ucfirst((string) $exam['type'])) ?></strong> •
+          Duration: <?= (int) $exam['duration_minutes'] ?> min •
+          Total questions: <?= count($questions) ?>
         </p>
-    </div>
+      </div>
 
-    <?php if (isset($_SESSION['promo_notice'])): ?>
-        <div class="flash flash-success"><i class="bi bi-check-circle me-2"></i><?= htmlspecialchars($_SESSION['promo_notice']); unset($_SESSION['promo_notice']); ?></div>
-    <?php endif; ?>
-    <?php if ($error): ?>
-        <div class="flash flash-error"><i class="bi bi-exclamation-triangle me-2"></i><?= htmlspecialchars($error) ?></div>
-    <?php endif; ?>
-
-    <h3 id="questions" style="font-weight:700;color:#0f172a;margin:20px 0 10px 0;font-size:1rem;">Question list</h3>
-    <?php if (!$questions): ?>
-        <div class="empty"><i class="bi bi-file-earmark-text"></i><p style="font-weight:600;margin-bottom:6px;">No questions yet</p><p class="small">Add objective (MCQ) or subjective (essay) questions to this exam.</p></div>
-    <?php else: ?>
-        <table class="table">
+      <h3 class="admin-section-title" id="questions">Question list</h3>
+      <?php if (!$questions): ?>
+        <div class="admin-card">
+          <div class="admin-card-body">
+            <p class="text-muted text-center py-4"><i class="bi bi-file-earmark-text me-2"></i>No questions yet. Add objective (MCQ) or subjective (essay) questions to this exam.</p>
+          </div>
+        </div>
+      <?php else: ?>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
             <thead>
-                <tr>
-                    <th style="width:40px;">#</th>
-                    <th>Question</th>
-                    <th style="width:110px;">Type</th>
-                    <th style="width:90px;">Marks</th>
-                    <th style="width:120px;">Order</th>
-                    <th style="width:150px;">Actions</th>
-                </tr>
+              <tr>
+                <th>#</th>
+                <th>Question</th>
+                <th>Type</th>
+                <th>Marks</th>
+                <th>Order</th>
+                <th class="text-end">Actions</th>
+              </tr>
             </thead>
             <tbody>
-                <?php foreach ($questions as $idx => $q): ?>
-                <tr>
-                    <td><?= ($idx + 1) ?></td>
-                    <td style="font-size:0.9rem;color:#334155;max-width:360px;"><?= nl2br(htmlspecialchars((string) $q['question_text'])) ?></td>
-                    <td><span class="badge <?= $q['question_type'] === 'objective' ? 'badge-objective' : 'badge-subjective' ?>"><?= htmlspecialchars(ucfirst((string) $q['question_type'])) ?></span></td>
-                    <td><?= number_format((float) $q['marks'], 2) ?></td>
-                    <td><?= (int) $q['sort_order'] ?></td>
-                    <td>
-                        <div style="display:flex;gap:4px;">
-                            <button class="btn btn-sm btn-outline" onclick="editQuestion(<?= htmlspecialchars(json_encode($q), ENT_QUOTES) ?>)"><i class="bi bi-pencil me-1"></i></button>
-                            <form method="post" style="margin:0;" onsubmit="return confirm('Delete this question?')">
-                                <?php csrf_field(); ?>
-                                <input type="hidden" name="qid" value="<?= (int) $q['id'] ?>">
-                                <button type="submit" name="delete_q" class="btn btn-sm btn-danger"><i class="bi bi-trash me-1"></i></button>
-                            </form>
-                        </div>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
+              <?php foreach ($questions as $idx => $q): ?>
+              <tr>
+                <td><?= ($idx + 1) ?></td>
+                <td style="font-size:0.9rem;color:#334155;max-width:360px;"><?= nl2br(htmlspecialchars((string) $q['question_text'])) ?></td>
+                <td>
+                  <span class="admin-badge admin-badge-<?= $q['question_type'] === 'objective' ? 'info' : 'success' ?>">
+                    <?= htmlspecialchars(ucfirst((string) $q['question_type'])) ?>
+                  </span>
+                </td>
+                <td><?= number_format((float) $q['marks'], 2) ?></td>
+                <td><?= (int) $q['sort_order'] ?></td>
+                <td class="text-end">
+                  <button class="admin-btn admin-btn-outline admin-btn-sm" onclick="editQuestion(<?= htmlspecialchars(json_encode($q)) ?>)">
+                    <i class="bi bi-pencil me-1"></i>Edit
+                  </button>
+                  <form method="post" style="display:inline;" onsubmit="return confirm('Delete this question?')">
+                    <?php csrf_field(); ?>
+                    <input type="hidden" name="qid" value="<?= (int) $q['id'] ?>">
+                    <button type="submit" name="delete_q" class="admin-btn admin-btn-danger admin-btn-sm"><i class="bi bi-trash me-1"></i></button>
+                  </form>
+                </td>
+              </tr>
+              <?php endforeach; ?>
             </tbody>
-        </table>
-    <?php endif; ?>
-</div>
+          </table>
+        </div>
+      <?php endif; ?>
 
-<!-- Add / Edit question modal -->
-<div class="modal" id="addQuestionModal">
-    <div class="modal-content relative">
-        <button class="close-modal" onclick="closeModal('addQuestionModal')">&times;</button>
-        <h2 class="modal-title" id="qModalTitle">Add question</h2>
+    </div>
+  </div>
+
+  <!-- Add / Edit question modal -->
+  <div class="modal fade" id="addQuestionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="qModalTitle">Add question</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
         <form method="post" id="qForm">
-            <?php csrf_field(); ?>
-            <input type="hidden" name="qid" id="qModalQid">
-            <input type="hidden" name="edit_q" value="0">
+          <?php csrf_field(); ?>
+          <input type="hidden" name="qid" id="qModalQid">
+          <input type="hidden" name="edit_q" value="0">
+          <div class="modal-body">
             <div class="mb-3">
-                <label class="form-label">Question text</label>
-                <textarea name="question_text" id="qModalText" class="form-control" required placeholder="Enter the question..."></textarea>
+              <label class="form-label">Question text</label>
+              <textarea name="question_text" id="qModalText" class="form-control" required placeholder="Enter the question..."></textarea>
             </div>
-            <div class="grid-2">
-                <div>
-                    <label class="form-label">Type</label>
-                    <select name="question_type" id="qModalType" class="form-control" onchange="toggleQuestionType()">
-                        <option value="objective">Objective (MCQ)</option>
-                        <option value="subjective">Subjective (Essay)</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label">Marks</label>
-                    <input type="number" name="marks" id="qModalMarks" class="form-control" value="1" step="0.01" min="0">
-                </div>
+            <div class="row g-3">
+              <div class="col-6">
+                <label class="form-label">Type</label>
+                <select name="question_type" id="qModalType" class="form-select" onchange="toggleQuestionType()">
+                  <option value="objective">Objective (MCQ)</option>
+                  <option value="subjective">Subjective (Essay)</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label">Marks</label>
+                <input type="number" name="marks" id="qModalMarks" class="form-control" value="1" step="0.01" min="0">
+              </div>
             </div>
             <div class="mb-3">
-                <label class="form-label">Sort order</label>
-                <input type="number" name="sort_order" id="qModalSort" class="form-control" value="0" min="0">
+              <label class="form-label">Sort order</label>
+              <input type="number" name="sort_order" id="qModalSort" class="form-control" value="0" min="0">
             </div>
 
             <!-- Objective options -->
-            <div id="qObjectiveOptions" class="type-specific">
-                <div class="mb-3">
-                    <label class="form-label">Options</label>
-                    <div id="optionsContainer" class="options-list"></div>
-                    <button type="button" class="btn btn-outline add-option" onclick="addOptionRow()"><i class="bi bi-plus me-1"></i> Add option</button>
+            <div id="qObjectiveOptions" class="card mb-3" style="display:none;">
+              <div class="card-body">
+                <label class="form-label">Options</label>
+                <div id="optionsContainer"></div>
+                <button type="button" class="admin-btn admin-btn-outline admin-btn-sm mt-2" onclick="addOptionRow()"><i class="bi bi-plus me-1"></i> Add option</button>
+                <div class="mt-3">
+                  <label class="form-label">Correct answer</label>
+                  <div id="correctAnswerContainer"></div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Correct answer</label>
-                    <div id="correctAnswerContainer"></div>
-                </div>
+              </div>
             </div>
 
             <!-- Subjective hint -->
-            <div id="qSubjectiveHint" class="type-specific" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:12px;">
-                <p style="margin:0;color:#64748b;font-size:0.85rem;"><i class="bi bi-info-circle me-1"></i> Subjective questions are essay-style. Staff type their answer in a text box during the exam.</p>
+            <div id="qSubjectiveHint" class="alert alert-info" style="display:none;">
+              <i class="bi bi-info-circle me-1"></i> Subjective questions are essay-style. Staff type their answer in a text box during the exam.
             </div>
-
-            <div class="modal-actions">
-                <button type="button" class="btn btn-outline" onclick="closeModal('addQuestionModal')">Cancel</button>
-                <button type="submit" name="create_q" class="btn btn-primary" id="qCreateBtn">Add question</button>
-                <button type="submit" name="edit_q" class="btn btn-primary d-none" id="qEditBtn">Save changes</button>
-            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="admin-btn admin-btn-outline" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" name="create_q" class="admin-btn admin-btn-primary" id="qCreateBtn">Add question</button>
+            <button type="submit" name="edit_q" class="admin-btn admin-btn-primary d-none" id="qEditBtn">Save changes</button>
+          </div>
         </form>
+      </div>
     </div>
-</div>
+  </div>
 
-<script>
-const addQuestionModal = document.getElementById('addQuestionModal');
-function openModal(id) { document.getElementById(id).classList.add('show'); }
-function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+  <!-- Import questions modal -->
+  <div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Import Questions from CSV</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <form method="post" enctype="multipart/form-data">
+          <?php csrf_field(); ?>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">CSV file</label>
+              <input type="file" name="questions_file" class="form-control" accept=".csv" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Columns</label>
+              <div class="form-control" style="background:#f8f9ca;">question, question_type, marks, sort_order, correct_answer, option_a, option_b, option_c, option_d</div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Example row (objective)</label>
+              <div class="form-control" style="background:#f8f9ca;">What is the capital of Nigeria?,objective,1,0,A,Abuja,Lagos,Kano,Ibadan</div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Example row (subjective)</label>
+              <div class="form-control" style="background:#f8f9ca;">Describe your experience,subjective,2,1,,,,,</div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="admin-btn admin-btn-outline" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" name="import_questions" class="admin-btn admin-btn-primary">Import Questions</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
-let optionCounter = 0;
+  <script src="assets/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/admin-common.js"></script>
+  <script>
+    const addQuestionModal = document.getElementById('addQuestionModal');
+    const importModal = document.getElementById('importModal');
+    const qModalTitle = document.getElementById('qModalTitle');
+    const qCreateBtn = document.getElementById('qCreateBtn');
+    const qEditBtn = document.getElementById('qEditBtn');
+    let optionCounter = 0;
 
-function toggleQuestionType() {
-    const type = document.getElementById('qModalType').value;
-    document.getElementById('qObjectiveOptions').classList.toggle('active', type === 'objective');
-    document.getElementById('qSubjectiveHint').classList.toggle('active', type === 'subjective');
-    renderCorrectAnswer();
-}
+    function openModal(id) { new bootstrap.Modal(document.getElementById(id)).show(); }
 
-function addOptionRow(text = '', isCorrect = false) {
-    const id = 'opt_' + optionCounter++;
-    const container = document.getElementById('optionsContainer');
-    const row = document.createElement('div');
-    row.className = 'option-row';
-    row.id = id;
-    row.innerHTML = `
-        <input type="text" class="option-input" placeholder="Option text" value="${escapeHtml(text)}" required>
-        <input type="radio" name="correct_option" value="${id}" class="correct-radio" ${isCorrect ? 'checked' : ''}>
-        <button type="button" class="remove-option" onclick="removeOptionRow('${id}')">&times;</button>
-    `;
-    container.appendChild(row);
-    renderCorrectAnswer();
-}
-
-function removeOptionRow(id) {
-    document.getElementById(id).remove();
-    renderCorrectAnswer();
-}
-
-function renderCorrectAnswer() {
-    const container = document.getElementById('correctAnswerContainer');
-    container.innerHTML = '';
-    document.querySelectorAll('.option-row').forEach((row, idx) => {
-        const input = row.querySelector('.option-input');
-        const radio = row.querySelector('.correct-radio');
-        const rowId = row.id;
-        const label = input ? input.value : 'Option ' + (idx + 1);
-        const labelEl = document.createElement('label');
-        labelEl.style = 'margin-left:4px;cursor:pointer;font-size:0.9rem;color:#334155;';
-        labelEl.textContent = label;
-        container.appendChild(radio.cloneNode(true));
-        container.appendChild(labelEl);
-        container.appendChild(document.createElement('br'));
-    });
-}
-
-function escapeHtml(t) {
-    return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]));
-}
-
-function editQuestion(q) {
-    document.getElementById('qModalTitle').textContent = 'Edit question';
-    document.getElementById('qModalQid').value = q.id;
-    document.getElementById('qModalText').value = q.question_text;
-    document.getElementById('qModalType').value = q.question_type;
-    document.getElementById('qModalMarks').value = q.marks;
-    document.getElementById('qModalSort').value = q.sort_order;
-    toggleQuestionType();
-
-    const optionsContainer = document.getElementById('optionsContainer');
-    optionsContainer.innerHTML = '';
-    optionCounter = 0;
-
-    if (q.options_json) {
-        try {
-            const opts = JSON.parse(q.options_json);
-            opts.forEach((opt, i) => {
-                addOptionRow(opt, (q.correct_answer === opt));
-            });
-        } catch (e) {
-            addOptionRow('', false);
-        }
-    } else {
-        addOptionRow('', false);
+    function toggleQuestionType() {
+      const type = document.getElementById('qModalType').value;
+      document.getElementById('qObjectiveOptions').style.display = type === 'objective' ? 'block' : 'none';
+      document.getElementById('qSubjectiveHint').style.display = type === 'subjective' ? 'block' : 'none';
+      renderCorrectAnswer();
     }
 
-    document.getElementById('qCreateBtn').classList.add('d-none');
-    document.getElementById('qEditBtn').classList.remove('d-none');
-    openModal('addQuestionModal');
-}
+    function addOptionRow(text = '', isCorrect = false) {
+      const id = 'opt_' + optionCounter++;
+      const container = document.getElementById('optionsContainer');
+      const row = document.createElement('div');
+      row.className = 'input-group mb-2';
+      row.id = id;
+      row.innerHTML = `
+        <input type="text" class="form-control option-input" placeholder="Option text" value="${escapeHtml(text)}" required>
+        <span class="input-group-text bg-white border">
+          <input type="radio" name="correct_option" value="${id}" class="form-check-input" ${isCorrect ? 'checked' : ''}>
+        </span>
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeOptionRow('${id}')">&times;</button>
+      `;
+      container.appendChild(row);
+      renderCorrectAnswer();
+    }
 
-addQuestionModal.addEventListener('click', function(e) { if (e.target === addQuestionModal) closeModal('addQuestionModal'); });
+    function removeOptionRow(id) {
+      document.getElementById(id).remove();
+      renderCorrectAnswer();
+    }
 
-// Initialize type toggle on load
-toggleQuestionType();
-</script>
+    function renderCorrectAnswer() {
+      const container = document.getElementById('correctAnswerContainer');
+      container.innerHTML = '';
+      document.querySelectorAll('#optionsContainer .input-group').forEach((row, idx) => {
+        const input = row.querySelector('.option-input');
+        const radio = row.querySelector('input[type="radio"]');
+        const label = document.createElement('label');
+        label.className = 'form-check-label ms-2';
+        label.textContent = input ? input.value : 'Option ' + (idx + 1);
+        container.appendChild(radio);
+        container.appendChild(label);
+        container.appendChild(document.createElement('br'));
+      });
+    }
 
-<!-- Import questions modal -->
-<div class="modal" id="importModal">
-    <div class="modal-content relative">
-        <button class="close-modal" onclick="closeModal('importModal')">&times;</button>
-        <h2 class="modal-title">Import Questions from CSV</h2>
-        <form method="post" enctype="multipart/form-data">
-            <?php csrf_field(); ?>
-            <div class="mb-3">
-                <label class="form-label">CSV file</label>
-                <input type="file" name="questions_file" class="form-control" accept=".csv" required>
-                <div class="hint">Columns: question, question_type, marks, sort_order, correct_answer, option_a, option_b, option_c, option_d. First row may be a header.</div>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Example row (objective)</label>
-                <div class="form-control" style="background:#f8fafc;color:#334155;">What is the capital of Nigeria?,objective,1,0,A,Abuja,Lagos,Kano,Ibadan</div>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Example row (subjective)</label>
-                <div class="form-control" style="background:#f8fafc;color:#334155;">Describe your experience,subjective,2,1,,,,,</div>
-            </div>
-            <div class="modal-actions">
-                <button type="button" class="btn btn-outline" onclick="closeModal('importModal')">Cancel</button>
-                <button type="submit" name="import_questions" class="btn btn-success">Import Questions</button>
-            </div>
-        </form>
-    </div>
-</div>
+    function escapeHtml(t) { return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])); }
 
-<script>
-const importModal = document.getElementById('importModal');
-function openModal(id) { document.getElementById(id).classList.add('show'); }
-function closeModal(id) { document.getElementById(id).classList.remove('show'); }
-importModal.addEventListener('click', function(e) { if (e.target === importModal) closeModal('importModal'); });
-</script>
+    function editQuestion(q) {
+      qModalTitle.textContent = 'Edit question';
+      document.getElementById('qModalQid').value = q.id;
+      document.getElementById('qModalText').value = q.question_text;
+      document.getElementById('qModalType').value = q.question_type;
+      document.getElementById('qModalMarks').value = q.marks;
+      document.getElementById('qModalSort').value = q.sort_order;
+      toggleQuestionType();
+
+      const optionsContainer = document.getElementById('optionsContainer');
+      optionsContainer.innerHTML = '';
+      optionCounter = 0;
+
+      if (q.options_json) {
+        try {
+          const opts = JSON.parse(q.options_json);
+          opts.forEach((opt, i) => {
+            addOptionRow(opt, (q.correct_answer === opt));
+          });
+        } catch (e) {
+          addOptionRow('', false);
+        }
+      } else {
+        addOptionRow('', false);
+      }
+
+      qCreateBtn.classList.add('d-none');
+      qEditBtn.classList.remove('d-none');
+      openModal('addQuestionModal');
+    }
+
+    addQuestionModal.addEventListener('hidden.bs.modal', function () {
+      qModalTitle.textContent = 'Add question';
+      document.getElementById('qModalQid').value = '';
+      document.getElementById('qModalText').value = '';
+      document.getElementById('qModalType').value = 'objective';
+      document.getElementById('qModalMarks').value = '1';
+      document.getElementById('qModalSort').value = '0';
+      document.getElementById('optionsContainer').innerHTML = '';
+      optionCounter = 0;
+      toggleQuestionType();
+      qCreateBtn.classList.remove('d-none');
+      qEditBtn.classList.add('d-none');
+    });
+
+    importModal.addEventListener('hidden.bs.modal', function () {
+      document.getElementById('importModal').querySelector('form').reset();
+    });
+
+    toggleQuestionType();
+  </script>
 </body>
 </html>

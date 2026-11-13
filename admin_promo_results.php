@@ -12,10 +12,6 @@ require 'db.php';
 require_once __DIR__ . '/includes/promo_schema.php';
 promo_ensure_schema($db);
 
-$notice = '';
-$error = '';
-
-// Filter by exam
 $filterExam = isset($_GET['exam_id']) ? (int) $_GET['exam_id'] : 0;
 
 // CSV export
@@ -107,134 +103,149 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
 <head>
     <title>Promo Exam Results - Admin</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
     <link href="assets/css/bootstrap.min.css" rel="stylesheet">
     <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
     <link href="style_enhanced.css" rel="stylesheet">
-    <style>
-        body { background: #f4f7f6; font-family: 'Outfit', sans-serif; color: #1e293b; }
-        .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 80px; }
-        .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
-        .page-title { font-weight: 800; font-size: 1.25rem; color: #092c19; margin: 0; display: flex; align-items: center; gap: 8px; }
-        .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 16px; }
-        .card-body { padding: 18px 20px; }
-        .form-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #64748b; display: block; margin-bottom: 6px; }
-        .form-control { width: 100%; box-sizing: border-box; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; background: #fff; }
-        .form-control:focus { border-color: #092c19; outline: none; box-shadow: 0 0 0 3px rgba(9,44,25,0.1); }
-        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: 8px; font-weight: 700; font-size: 0.9rem; text-decoration: none; border: 1px solid transparent; cursor: pointer; transition: all .2s; }
-        .btn-primary { background: #092c19; color: #fff; border-color: #092c19; }
-        .btn-primary:hover { background: #061d10; }
-        .btn-outline { background: #fff; color: #475569; border-color: #cbd5e1; }
-        .btn-outline:hover { border-color: #092c19; color: #092c19; }
-        .btn-success { background: #22c55e; color: #060d16; border-color: #22c55e; }
-        .btn-success:hover { background: #4ade80; }
-        .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
-        .table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        .table th { text-align: left; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #64748b; padding: 10px 14px; border-bottom: 1px solid #e2e8f0; }
-        .table td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; font-size: 0.92rem; vertical-align: middle; }
-        .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
-        .badge-active { background: #dcfce7; color: #166534; }
-        .badge-inactive { background: #f1f5f9; color: #64748b; }
-        .flash { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 0.9rem; }
-        .flash-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-        .stat-row { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
-        .stat { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; flex: 1; min-width: 140px; }
-        .stat-value { font-size: 1.5rem; font-weight: 800; color: #092c19; }
-        .stat-label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: .05em; }
-        .filter-bar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 16px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; }
-        .score-good { color: #166534; font-weight: 700; }
-        .score-bad { color: #991b1b; font-weight: 700; }
-        .d-none { display: none !important; }
-        @media (max-width: 640px) { .stat-row { flex-direction: column; } .filter-bar { flex-direction: column; align-items: stretch; } }
-    </style>
 </head>
 <body>
-<nav class="admin-navbar" style="background:#fff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:50;">
-    <div class="admin-navbar-inner" style="padding:0 16px;">
-        <div class="admin-navbar-start" style="display:flex;align-items:center;gap:10px;">
-            <a href="admin_promo_exams" class="btn btn-outline" style="padding:8px 14px;font-size:.85rem;"><i class="bi bi-arrow-left me-1"></i>Back to exams</a>
+  <?php include 'admin_sidebar.php'; ?>
+  <div class="main-content">
+    <nav class="admin-navbar">
+      <div class="admin-navbar-inner">
+        <div class="admin-navbar-start">
+          <button class="admin-navbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar"><i class="bi bi-list"></i></button>
+          <a href="admin_promo_exams" class="admin-back-btn" aria-label="Back to exams">
+            <i class="bi bi-arrow-left"></i>
+          </a>
+          <h1 class="admin-navbar-title">Promo Results</h1>
         </div>
         <div class="admin-navbar-end">
-            <span style="background:rgba(9,44,25,0.08);color:#092c19;padding:6px 12px;border-radius:8px;font-weight:700;font-size:.85rem;"><?= htmlspecialchars(strtoupper(substr($admin_name, 0, 1))) ?></span>
-            <a href="logout" class="btn btn-outline" style="padding:8px 14px;font-size:.85rem;">Sign out</a>
+          <div class="admin-user-badge">
+            <span class="admin-user-avatar"><?= htmlspecialchars(strtoupper(substr($admin_name, 0, 1))) ?></span>
+            <span class="admin-user-name"><?= htmlspecialchars($admin_name) ?></span>
+          </div>
+          <a href="logout" class="admin-logout-btn" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
         </div>
-    </div>
-</nav>
+      </div>
+    </nav>
 
-<div class="wrap">
-    <div class="page-header">
-        <h1 class="page-title"><i class="bi bi-bar-chart" style="color:#092c19;"></i> Promo Exam Results</h1>
-        <a href="admin_promo_results?export=csv<?= $filterExam ? '&exam_id=' . $filterExam : '' ?>" class="btn btn-success"><i class="bi bi-download me-1"></i> Download CSV</a>
-        <a href="admin_promo_exams" class="btn btn-outline"><i class="bi bi-mortarboard me-1"></i> Exams</a>
-    </div>
+    <div class="admin-content">
+      <nav class="admin-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="admin_dashboard"><i class="bi bi-house"></i></a></li>
+          <li class="sep">/</li>
+          <li><a href="admin_promo_exams">Promo Exams</a></li>
+          <li class="sep">/</li>
+          <li class="current" aria-current="page">Results</li>
+        </ol>
+      </nav>
 
-    <?php if (isset($_SESSION['promo_notice'])): ?>
-        <div class="flash flash-success"><i class="bi bi-check-circle me-2"></i><?= htmlspecialchars($_SESSION['promo_notice']); unset($_SESSION['promo_notice']); ?></div>
-    <?php endif; ?>
+      <?php display_auth_errors(); ?>
 
-    <div class="stat-row">
-        <div class="stat">
-            <div class="stat-value"><?= count($attempts) ?></div>
-            <div class="stat-label">Total attempts</div>
+      <div class="admin-page-header">
+        <h2 class="admin-page-title">Promo Exam Results</h2>
+        <div class="admin-page-actions">
+          <a href="admin_promo_results?export=csv<?= $filterExam ? '&exam_id=' . $filterExam : '' ?>" class="admin-btn admin-btn-success">
+            <i class="bi bi-download me-1"></i> Download CSV
+          </a>
+          <a href="admin_promo_exams" class="admin-btn admin-btn-outline">
+            <i class="bi bi-mortarboard me-1"></i> Exams
+          </a>
         </div>
-        <div class="stat">
-            <div class="stat-value"><?= array_sum(array_map(fn($a) => (int) $a['is_submitted'], $attempts)) ?></div>
-            <div class="stat-label">Submitted</div>
+      </div>
+
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value"><?= count($attempts) ?></div>
+            <div class="admin-stat-label">Total Attempts</div>
+          </div>
         </div>
-        <div class="stat">
-            <div class="stat-value">
-                <?= count($attempts) > 0 ? number_format(array_sum(array_map(fn($a) => (float) $a['score'], $attempts)) / count($attempts), 2) : '0.00' ?>
+        <div class="col-6 col-lg-3">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value"><?= array_sum(array_map(fn($a) => (int) $a['is_submitted'], $attempts)) ?></div>
+            <div class="admin-stat-label">Submitted</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-3">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value">
+              <?= count($attempts) > 0 ? number_format(array_sum(array_map(fn($a) => (float) $a['score'], $attempts)) / count($attempts), 2) : '0.00' ?>
             </div>
-            <div class="stat-label">Avg score</div>
+            <div class="admin-stat-label">Avg Score</div>
+          </div>
         </div>
-    </div>
+        <div class="col-6 col-lg-3">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value">
+              <?= count($attempts) > 0 ? number_format(max(array_map(fn($a) => (float) $a['score'], $attempts)), 2) : '0.00' ?>
+            </div>
+            <div class="admin-stat-label">Best Score</div>
+          </div>
+        </div>
+      </div>
 
-    <div class="filter-bar">
-        <form method="get" style="margin:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <label class="form-label" style="margin:0;font-size:0.85rem;">Filter by exam</label>
-            <select name="exam_id" class="form-control" style="width:auto;min-width:220px;max-width:320px;" onchange="this.form.submit()">
-                <option value="">All exams</option>
-                <?php foreach ($exams as $e): ?>
-                    <option value="<?= (int) $e['id'] ?>" <?= $filterExam === (int) $e['id'] ? 'selected' : '' ?>><?= htmlspecialchars((string) $e['name']) ?></option>
-                <?php endforeach; ?>
-            </select>
-            <a href="admin_promo_results" class="btn btn-outline btn-sm"><i class="bi bi-arrow-clockwise me-1"></i>Reset</a>
-        </form>
-    </div>
+      <form method="get" class="admin-search-form mb-3" style="display:flex;gap:8px;max-width:360px;">
+        <label class="form-label d-flex align-items-center" style="margin:0;">Filter by exam</label>
+        <select name="exam_id" class="form-select" style="width:auto;min-width:240px;" onchange="this.form.submit()">
+          <option value="">All exams</option>
+          <?php foreach ($exams as $e): ?>
+            <option value="<?= (int) $e['id'] ?>" <?= $filterExam === (int) $e['id'] ? 'selected' : '' ?>><?= htmlspecialchars((string) $e['name']) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <?php if ($filterExam): ?>
+          <a href="admin_promo_results" class="admin-btn admin-btn-outline">Clear</a>
+        <?php endif; ?>
+      </form>
 
-    <?php if (!$attempts): ?>
-        <div class="empty"><i class="bi bi-clipboard"></i><p style="font-weight:600;margin-bottom:6px;">No attempts yet</p><p class="small">Staff results will appear here once they take promotional exams.</p></div>
-    <?php else: ?>
-        <table class="table">
+      <?php if (!$attempts): ?>
+        <div class="admin-card">
+          <div class="admin-card-body">
+            <p class="text-muted text-center py-4"><i class="bi bi-clipboard me-2"></i>No attempts yet. Staff results will appear here once they take promotional exams.</p>
+          </div>
+        </div>
+      <?php else: ?>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
             <thead>
-                <tr>
-                    <th style="width:40px;">#</th>
-                    <th>Exam</th>
-                    <th style="width:170px;">Staff</th>
-                    <th style="width:180px;">Email</th>
-                    <th style="width:90px;">Attempt</th>
-                    <th style="width:130px;">Started</th>
-                    <th style="width:130px;">Finished</th>
-                    <th style="width:90px;">Status</th>
-                    <th style="width:100px;">Score</th>
-                </tr>
+              <tr>
+                <th>#</th>
+                <th>Exam</th>
+                <th>Staff</th>
+                <th>Email</th>
+                <th>Attempt</th>
+                <th>Started</th>
+                <th>Finished</th>
+                <th>Status</th>
+                <th>Score</th>
+              </tr>
             </thead>
             <tbody>
-                <?php foreach ($attempts as $idx => $a): ?>
-                <tr>
-                    <td><?= ($idx + 1) ?></td>
-                    <td style="font-size:0.9rem;color:#334155;"><?= htmlspecialchars((string) $a['exam_name']) ?></td>
-                    <td style="font-weight:600;color:#0f172a;"><?= htmlspecialchars((string) $a['staff_name']) ?></td>
-                    <td style="font-size:0.88rem;color:#64748b;"><?= htmlspecialchars((string) $a['email']) ?></td>
-                    <td>#<?= (int) $a['attempt_no'] ?></td>
-                    <td style="font-size:0.88rem;color:#64748b;"><?= date('M j, g:i A', strtotime((string) $a['started_at'])) ?></td>
-                    <td style="font-size:0.88rem;color:#64748b;"><?= $a['finished_at'] ? date('M j, g:i A', strtotime((string) $a['finished_at'])) : '—' ?></td>
-                    <td><span class="badge <?= (int) $a['is_submitted'] ? 'badge-active' : 'badge-inactive' ?>"><?= (int) $a['is_submitted'] ? 'Submitted' : 'Draft' ?></span></td>
-                    <td class="<?= (float) $a['score'] > 0 ? 'score-good' : 'score-bad' ?>"><?= number_format((float) $a['score'], 2) ?></td>
-                </tr>
-                <?php endforeach; ?>
+              <?php foreach ($attempts as $idx => $a): ?>
+              <tr>
+                <td><?= ($idx + 1) ?></td>
+                <td style="font-size:0.9rem;color:#334155;"><?= htmlspecialchars((string) $a['exam_name']) ?></td>
+                <td style="font-weight:600;color:#0f172a;"><?= htmlspecialchars((string) $a['staff_name']) ?></td>
+                <td class="text-truncate" style="max-width:160px;"><?= htmlspecialchars((string) $a['email']) ?></td>
+                <td>#<?= (int) $a['attempt_no'] ?></td>
+                <td style="font-size:0.88rem;color:#64748b;"><?= date('M j, g:i A', strtotime((string) $a['started_at'])) ?></td>
+                <td style="font-size:0.88rem;color:#64748b;"><?= $a['finished_at'] ? date('M j, g:i A', strtotime((string) $a['finished_at'])) : '—' ?></td>
+                <td><span class="admin-badge admin-badge-<?= (int) $a['is_submitted'] ? 'success' : 'neutral' ?>"><?= (int) $a['is_submitted'] ? 'Submitted' : 'Draft' ?></span></td>
+                <td class="text-muted">
+                  <strong><?= number_format((float) $a['score'], 2) ?></strong>
+                </td>
+              </tr>
+              <?php endforeach; ?>
             </tbody>
-        </table>
-    <?php endif; ?>
-</div>
+          </table>
+        </div>
+      <?php endif; ?>
+
+    </div>
+  </div>
+
+  <script src="assets/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/admin-common.js"></script>
 </body>
 </html>
