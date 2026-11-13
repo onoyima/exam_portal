@@ -1,4 +1,6 @@
 <?php
+// Load config before the session so the mounted session path is used.
+require_once __DIR__ . '/config.php';
 session_start();
 require 'db.php';
 
@@ -11,6 +13,8 @@ if (isset($_SESSION['role'])) {
         header("Location: examiner_dashboard");
     elseif ($r === 'student')
         header("Location: student_dashboard");
+    elseif ($r === 'promo_staff')
+        header("Location: promo_dashboard");
     exit;
 }
 
@@ -74,6 +78,11 @@ try {
         h1, h2, h3, h4, .outfit {
             font-family: 'Outfit', sans-serif;
         }
+
+        /* Keep every grid/flex child inside its column, even with long CMS text */
+        .row > * { min-width: 0; }
+        .d-flex > div { min-width: 0; }
+        h1, h2, h3, h4, h5, h6, p, li, td, th { overflow-wrap: break-word; }
 
         .animated-bg-container {
             position: absolute;
@@ -176,11 +185,17 @@ try {
             border: 1px solid rgba(0,0,0,0.04);
             border-radius: 1.25rem;
             padding: 1.5rem;
-            display: flex;
-            align-items: flex-start;
-            gap: 1rem;
+            /* number in its own column, title + copy stacked beside it */
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            align-items: start;
+            column-gap: 1rem;
+            row-gap: 0.35rem;
             transition: all 0.3s ease;
         }
+        .step-card .step-num { grid-row: 1 / span 2; }
+        .step-card h5,
+        .step-card p { grid-column: 2; }
         .step-card:hover {
             box-shadow: 0 8px 30px rgba(0,0,0,0.06);
             border-color: var(--primary-color);
@@ -215,9 +230,52 @@ try {
             background: #f0fdf4;
         }
 
+        .landing-navbar .navbar-brand {
+            min-width: 0;
+            flex: 0 1 auto;
+            overflow: hidden;
+            gap: 10px !important;
+        }
+
+        .landing-navbar .navbar-brand img { flex-shrink: 0; }
+
         .landing-navbar .navbar-brand span {
-            font-size: clamp(1rem, 2vw, 1.6rem);
+            font-size: clamp(0.95rem, 1.35vw, 1.5rem);
             white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+        }
+
+        .landing-navbar .navbar-nav .nav-link {
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+        }
+
+        /* The admin sidebar reuses .nav-item globally; keep it out of the landing navbar. */
+        .landing-navbar .nav-item {
+            display: block;
+            padding: 0;
+            margin: 0;
+            background: transparent;
+            border-radius: 0;
+            font-size: inherit;
+            font-weight: inherit;
+        }
+        .landing-navbar .nav-item:hover { background: transparent; color: inherit; }
+        .landing-navbar .nav-item::before { display: none; }
+
+        .landing-navbar .navbar-collapse { min-width: 0; }
+
+        /* The menu only becomes a full desktop row when there is room for every item. */
+        @media (min-width: 1300px) {
+            .landing-navbar .navbar-collapse {
+                display: flex !important;
+                flex-basis: auto;
+                flex-direction: row;
+            }
+            .landing-navbar .navbar-toggler { display: none; }
+            .landing-navbar .navbar-nav { flex-direction: row; }
         }
 
         /* ΓöÇΓöÇ Hero ΓöÇΓöÇ */
@@ -258,6 +316,12 @@ try {
         .hero-carousel .carousel-item img {
             border-radius: 2rem;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+            width: auto !important;
+            max-width: 100%;
+            max-height: min(620px, calc(100vh - 200px));
+            height: auto;
+            margin-left: auto;
+            margin-right: auto;
         }
 
         .floating-card {
@@ -291,25 +355,15 @@ try {
             font-size: clamp(0.85rem, 1.5vw, 1rem);
         }
 
-        /* ΓöÇΓöÇ Responsive ΓöÇΓöÇ */
-        @media (max-width: 1199.98px) {
-            .landing-navbar { padding: 10px 24px !important; }
-            .landing-navbar.scrolled { padding: 8px 30px !important; }
+        /* Bootstrap has no w-sm-auto utility; restore the intended inline buttons. */
+        @media (min-width: 576px) {
+            .hero-content .w-sm-auto { width: auto !important; }
         }
 
-        @media (max-width: 991.98px) {
-            .landing-navbar {
-                top: 12px !important;
-                width: 94% !important;
-                padding: 10px 18px !important;
-                border-radius: 20px !important;
-            }
-            .landing-navbar.scrolled {
-                top: 0 !important;
-                width: 100% !important;
-                border-radius: 0 !important;
-                padding: 10px 16px !important;
-            }
+        /* ΓöÇΓöÇ Responsive ΓöÇΓöÇ */
+        @media (max-width: 1299.98px) {
+            .landing-navbar { padding: 10px 20px !important; }
+            .landing-navbar.scrolled { padding: 8px 24px !important; }
             .landing-navbar .navbar-collapse {
                 background: rgba(255,255,255,0.98);
                 backdrop-filter: blur(20px);
@@ -330,6 +384,34 @@ try {
             .landing-navbar .nav-link:hover { background: #f0fdf4; }
             .landing-navbar .d-flex.gap-3 { margin-top: 8px; }
             .landing-navbar .btn { width: 100%; justify-content: center; }
+            .landing-navbar .navbar-brand {
+                margin-right: 8px !important;
+                max-width: calc(100% - 48px);
+            }
+            .landing-navbar .navbar-toggler {
+                flex-shrink: 0;
+                padding: 0.2rem 0.4rem;
+            }
+        }
+
+        /* Short laptop screens: keep the hero inside the first viewport. */
+        @media (min-width: 992px) and (max-height: 820px) {
+            .hero-section { padding-top: 110px; padding-bottom: 50px; }
+        }
+
+        @media (max-width: 991.98px) {
+            .landing-navbar {
+                top: 12px !important;
+                width: 94% !important;
+                padding: 10px 18px !important;
+                border-radius: 20px !important;
+            }
+            .landing-navbar.scrolled {
+                top: 0 !important;
+                width: 100% !important;
+                border-radius: 0 !important;
+                padding: 10px 16px !important;
+            }
 
             .hero-section {
                 padding-top: 120px !important;
@@ -341,7 +423,8 @@ try {
             }
             .hero-content { text-align: center; }
             .hero-content .lead { padding-right: 0 !important; }
-            .hero-content .d-flex { justify-content: center; }
+            .hero-content .d-flex,
+            .hero-content .d-sm-flex { justify-content: center; }
             .hero-content .btn-lg {
                 padding: 12px 20px;
             }
@@ -349,7 +432,12 @@ try {
                 display: none !important;
             }
             .hero-badge i { display: none; }
-            .hero-carousel { margin-top: 1.5rem; }
+            .hero-carousel {
+                margin-top: 1.5rem;
+                margin-left: auto;
+                margin-right: auto;
+                max-width: 520px;
+            }
 
             .section-padding { padding: 60px 0; }
             .container-xxl.px-5 { padding-left: 20px !important; padding-right: 20px !important; }
@@ -397,6 +485,9 @@ try {
             .hero-content .btn-lg { width: 100%; }
 
             .section-padding { padding: 45px 0; }
+
+            .display-4 { font-size: clamp(1.6rem, 7vw, 2rem); line-height: 1.15; }
+            .display-5 { font-size: clamp(1.5rem, 6.5vw, 1.9rem); line-height: 1.15; }
 
             #security .display-4,
             #features .display-4,
@@ -446,6 +537,13 @@ try {
 
             footer .row.g-5 { gap: 0 !important; }
         }
+
+        @media (max-width: 359.98px) {
+            .landing-navbar { padding: 6px 8px !important; }
+            .landing-navbar .navbar-brand { gap: 6px !important; }
+            .landing-navbar .navbar-brand span { font-size: 0.72rem !important; }
+            .landing-navbar .navbar-brand img { max-height: 24px !important; }
+        }
     </style>
     <link href="assets/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
 </head>
@@ -459,7 +557,7 @@ try {
     </div>
 
     <!-- Dynamic Transparent Navbar -->
-    <nav class="navbar navbar-expand-lg landing-navbar" id="mainNav">
+    <nav class="navbar landing-navbar" id="mainNav">
         <div class="container-fluid">
             <a class="navbar-brand d-flex align-items-center gap-3" href="#">
                 <?php if (!empty($portal_logo) && file_exists($portal_logo)): ?>
@@ -467,7 +565,7 @@ try {
                 <?php else: ?>
                     <img src="assets/favicon.ico" alt="Logo" width="45" height="45">
                 <?php endif; ?>
-                <span class="outfit fs-3 fw-bold text-success"><?= htmlspecialchars($portal_title) ?></span>
+                <span class="outfit fw-bold text-success"><?= htmlspecialchars($portal_title) ?></span>
             </a>
             <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse"
                 data-bs-target="#navbarContent">
@@ -518,10 +616,10 @@ try {
                     <p class="lead text-muted mb-5 pe-lg-5 fw-normal"><?= htmlspecialchars($settings['hero_lead'] ?? 'The ultimate digital environment for institutions. Seamlessly integrated monitoring and automated performance tracking with zero-compromise security.') ?></p>
                     <div class="d-grid d-sm-flex flex-wrap gap-3">
                         <a href="<?= htmlspecialchars($settings['hero_btn1_url'] ?? 'student_login.php') ?>"
-                            class="btn btn-success btn-lg rounded-pill px-5 py-3 fw-bold shadow-lg w-100 w-sm-auto"><?= htmlspecialchars($settings['hero_btn1_text'] ?? 'STUDENT ENTRANCE') ?></a>
+                            class="btn btn-success btn-lg rounded-pill py-3 fw-bold shadow-lg w-100 w-sm-auto"><?= htmlspecialchars($settings['hero_btn1_text'] ?? 'STUDENT ENTRANCE') ?></a>
                         <a href="<?= htmlspecialchars($settings['hero_btn2_url'] ?? '#workflow') ?>"
-                            class="btn btn-outline-dark btn-lg rounded-pill px-5 py-3 fw-bold w-100 w-sm-auto"><?= htmlspecialchars($settings['hero_btn2_text'] ?? 'HOW IT WORKS') ?></a>
-                        <a href="downloads/seb/VeritasSEB-1.0.0-win.exe" class="btn btn-outline-success btn-lg rounded-pill px-5 py-3 fw-bold w-100 w-sm-auto" target="_blank"><i class="bi bi-download me-2"></i>Download SEB Browser</a>
+                            class="btn btn-outline-dark btn-lg rounded-pill py-3 fw-bold w-100 w-sm-auto"><?= htmlspecialchars($settings['hero_btn2_text'] ?? 'HOW IT WORKS') ?></a>
+                        <a href="downloads/seb/VeritasSEB-1.0.0-win.exe" class="btn btn-outline-success btn-lg rounded-pill py-3 fw-bold w-100 w-sm-auto" target="_blank"><i class="bi bi-download me-2"></i>Download SEB Browser</a>
                     </div>
                 </div>
 

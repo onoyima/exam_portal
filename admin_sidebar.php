@@ -47,6 +47,7 @@ $ICONS['shield']         = $S.'<path d="M10 2 3 5.5v5.5c0 5 3.5 8.5 7 10 3.5-1.5
 $ICONS['chat']           = $S.'<path d="M17 8a6 6 0 0 0-6-6H7a6 6 0 0 0-6 6v4a6 6 0 0 0 6 6h2l4 3v-3h2a6 6 0 0 0 6-6V8Z"/>'.$E;
 $ICONS['palette']        = $S.'<circle cx="10" cy="10" r="7.5"/><circle cx="6.5" cy="8" r="1.3" opacity=".8"/><circle cx="12" cy="6.5" r="1.3" opacity=".8"/><circle cx="15" cy="11" r="1.3" opacity=".8"/><circle cx="11.5" cy="14.5" r="1.3" opacity=".8"/><path d="M8.5 10.5a2.5 2.5 0 0 0 5 0"/>'.$E;
 $ICONS['eye']            = $S.'<path d="M10 4C4.5 4 1 10 1 10s3.5 6 9 6 9-6 9-6-3.5-6-9-6Z"/><circle cx="10" cy="10" r="3"/>'.$E;
+$ICONS['database']       = $S.'<ellipse cx="10" cy="5" rx="7" ry="2.6"/><path d="M3 5v5c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6V5"/><path d="M3 10v5c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6v-5"/>'.$E;
 $ICONS['trash']          = $S.'<path d="M3 5.5h14"/><path d="M5.5 5.5v10a2 2 0 0 0 2 2h5a2 2 0 0 0 2-2v-10"/><path d="M8 5.5v-2a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2"/><path d="M9.5 9v5"/><path d="M12.5 9v1.5"/>'.$E;
 $ICONS['chevron-left']   = $S.'<path d="m12 5-5 5 5 5"/>'.$E;
 $ICONS['chevron-right']  = $S.'<path d="m8 5 5 5-5 5"/>'.$E;
@@ -212,6 +213,12 @@ $ICONS['clipboard']      = $S.'<rect x="5" y="2" width="10" height="18" rx="2"/>
               <span class="text-info"><?= $ICONS['palette'] ?></span><span data-label>Portal Customization</span></a></li>
             <li><a href="admin_audit_trail" class="nav-item<?= $current_page == 'admin_audit_trail.php' ? ' active' : '' ?>">
               <?= $ICONS['eye'] ?><span data-label>Audit Trail</span></a></li>
+            <li><a href="admin_backup" class="nav-item<?= $current_page == 'admin_backup.php' ? ' active' : '' ?>">
+              <span class="text-success"><?= $ICONS['database'] ?></span><span data-label>Backup &amp; Export</span></a></li>
+            <li><a href="admin_promo_exams" class="nav-item<?= $current_page == 'admin_promo_exams.php' ? ' active' : '' ?>">
+              <span class="text-warning"><?= $ICONS['list-check'] ?></span><span data-label>Promotional Exams</span></a></li>
+            <li><a href="admin_promo_staff" class="nav-item<?= $current_page == 'admin_promo_staff.php' ? ' active' : '' ?>">
+              <span class="text-primary"><?= $ICONS['people'] ?></span><span data-label>Promo Staff</span></a></li>
             <li><a href="#" id="clearAllChatsSidebar" class="nav-item text-danger-item">
               <?= $ICONS['trash'] ?><span data-label>Clear All Chats</span></a></li>
           </ul>

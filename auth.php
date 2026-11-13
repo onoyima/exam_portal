@@ -1,4 +1,9 @@
 <?php
+// Load config first so its session.save_path setting (the mounted, persistent
+// directory) is applied BEFORE the session starts. Without this, PHP uses the
+// container's /tmp and every restart/recreate signs everyone out.
+require_once __DIR__ . '/config.php';
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -8,7 +13,10 @@ if (isset($_SESSION['role'])) {
     if (!defined('SESSION_LIFETIME')) {
         require_once __DIR__ . '/config.php';
     }
-    $lifetime = defined('SESSION_LIFETIME') ? (int)SESSION_LIFETIME : 1800;
+    // Never let a stale .env value sign a student out mid-exam.
+    $lifetime = function_exists('veritas_session_lifetime')
+        ? veritas_session_lifetime()
+        : max(14400, defined('SESSION_LIFETIME') ? (int) SESSION_LIFETIME : 14400);
 
     if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > $lifetime)) {
         $role = $_SESSION['role'];
@@ -18,6 +26,19 @@ if (isset($_SESSION['role'])) {
             session_start();
         }
         $_SESSION['auth_error'] = "Your session has expired due to inactivity.";
+        // AJAX callers (heartbeat, answer save, submit) must get JSON, never an
+        // HTML login page, or the client cannot tell what happened.
+        if (is_ajax_request()) {
+            http_response_code(401);
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => false,
+                'auth' => false,
+                'expired' => true,
+                'error' => 'Your session has expired. Please log in again.',
+            ]);
+            exit;
+        }
         if ($role === 'student') {
             header("Location: student_login");
         } else {
@@ -50,11 +71,34 @@ function check_device_auth() {
         );
         $db_dev->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-        // Upsert: register device if new, update last_seen if known
-        $db_dev->prepare("INSERT INTO approved_devices (ip_address, device_info, status, last_seen)
-            VALUES (?, ?, 'pending', NOW())
-            ON DUPLICATE KEY UPDATE device_info = ?, last_seen = NOW()")
-            ->execute([$ip, $ua, $ua]);
+        // Paused (open) mode is the default: any device is accepted. An admin
+        // can turn approval back on from Admin → Device Authorization.
+        $paused = true;
+        try {
+            $setting = $db_dev->query("SELECT setting_value FROM system_settings
+                WHERE setting_key = 'device_approval_paused' LIMIT 1")->fetchColumn();
+            if ($setting !== false && $setting !== null && $setting !== '') {
+                $paused = in_array(strtolower((string) $setting), ['1', 'true', 'yes', 'on'], true);
+            }
+        } catch (Exception $e) {
+            // Missing settings table/row: keep the safe-for-exam default (open).
+        }
+
+        if ($paused) {
+            // Register new devices as approved so they stay approved when the
+            // admin later turns approval back on. Never lift an explicit block.
+            $db_dev->prepare("INSERT INTO approved_devices (ip_address, device_info, status, last_seen)
+                VALUES (?, ?, 'approved', NOW())
+                ON DUPLICATE KEY UPDATE device_info = ?, last_seen = NOW(),
+                    status = IF(status = 'rejected', 'rejected', 'approved')")
+                ->execute([$ip, $ua, $ua]);
+        } else {
+            // Upsert: register device if new, update last_seen if known
+            $db_dev->prepare("INSERT INTO approved_devices (ip_address, device_info, status, last_seen)
+                VALUES (?, ?, 'pending', NOW())
+                ON DUPLICATE KEY UPDATE device_info = ?, last_seen = NOW()")
+                ->execute([$ip, $ua, $ua]);
+        }
 
         // Fetch current status
         $stmt = $db_dev->prepare("SELECT status FROM approved_devices WHERE ip_address = ?");
@@ -80,7 +124,7 @@ function check_device_auth() {
             </body></html>');
         }
 
-        if ($device && $device['status'] === 'pending') {
+        if (!$paused && $device && $device['status'] === 'pending') {
             http_response_code(403);
             die('<!DOCTYPE html><html><head><title>Awaiting Approval</title>
             <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -141,8 +185,21 @@ function check_auth($allowed_roles)
  */
 function redirect_to_login($target_roles)
 {
+    if (is_ajax_request()) {
+        http_response_code(401);
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => false,
+            'auth' => false,
+            'expired' => true,
+            'error' => 'Your session has expired. Please log in again.',
+        ]);
+        exit;
+    }
     if (in_array('student', $target_roles) && count($target_roles) === 1) {
         header("Location: student_login");
+    } elseif (in_array('promo_staff', $target_roles) && count($target_roles) === 1) {
+        header("Location: promo_login");
     } else {
         header("Location: login");
     }
