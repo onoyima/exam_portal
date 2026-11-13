@@ -228,7 +228,7 @@ $greeting = $hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good
                             <a href="<?= $c['primary']['disabled'] ? '#' : (($c['primary']['href'] ?? '#')) ?>"
                                class="btn <?= $c['btnClass'] ?><?= $c['primary']['disabled'] ? ' disabled' : '' ?>"
                                <?= $c['primary']['disabled'] ? ' disabled' : '' ?>
-                               <?= $c['primary']['confirm'] ? 'onclick="return confirm(\'Start a new attempt for this exam?\');"' : '' ?>>
+                               <?= $c['primary']['confirm'] ? 'data-bs-toggle="modal" data-bs-target="#startExamModal" onclick="setStartExamUrl(\'' . htmlspecialchars($c['primary']['href'] ?? '#') . '\', \'' . htmlspecialchars((string) $c['primary']['label']) . '\');"' : '' ?>>
                                 <i class="bi bi-<?= $c['btnIcon'] ?>"></i>
                                 <?= htmlspecialchars((string) $c['primary']['label']) ?>
                             </a>
@@ -239,6 +239,37 @@ $greeting = $hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good
         </div>
     <?php endif; ?>
 </div>
+
+<!-- Start Exam Confirmation Modal -->
+<div class="modal fade" id="startExamModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="startExamModalTitle">Start Exam</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p id="startExamModalMessage">Are you sure you want to start this exam?</p>
+        <p class="small text-muted" id="startExamModalDetail"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
+        <a id="startExamConfirmBtn" href="#" class="btn btn-primary">Yes, Start Exam</a>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="assets/js/bootstrap.bundle.min.js"></script>
+<script>
+  let startExamUrl = '#';
+  function setStartExamUrl(url, label) {
+    startExamUrl = url;
+    document.getElementById('startExamModalTitle').textContent = 'Start Exam — ' + label;
+    document.getElementById('startExamModalMessage').textContent = 'Are you sure you want to start ' + label + '?';
+    document.getElementById('startExamModalDetail').textContent = 'Your answers will be recorded and timed once you begin.';
+    document.getElementById('startExamConfirmBtn').href = startExamUrl;
+  }
+</script>
 </body>
 </html>

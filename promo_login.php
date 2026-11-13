@@ -101,36 +101,228 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
     <link href="assets/vendor/fonts/fonts.css" rel="stylesheet">
     <style>
-        :root { --primary: #092c19; --accent: #22c55e; --dark: #060d16; }
-        html, body { height: 100%; margin: 0; font-family: 'Outfit', sans-serif; background: var(--dark); color: #fff; overflow: hidden; }
-        .login-wrap { display: flex; height: 100vh; width: 100%; }
-        .login-info { flex: 1.2; position: relative; background: url('<?= !empty($portal_image) ? htmlspecialchars($portal_image) : 'assets/favicon.ico' ?>') no-repeat center center; background-size: cover; display: flex; align-items: flex-end; padding: 60px; overflow: hidden; display: none; }
+        :root {
+            --primary: #092c19;
+            --primary-dark: #061d10;
+            --accent: #22c55e;
+            --bg: #0b1510;
+            --surface: #14241c;
+            --text: #ffffff;
+            --text-muted: #a8b8ae;
+        }
+        html, body {
+            height: 100%;
+            margin: 0;
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+        .login-wrap {
+            display: flex;
+            height: 100vh;
+            width: 100%;
+            position: relative;
+        }
+        /* Left panel — branding */
+        .login-info {
+            flex: 1.3;
+            position: relative;
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+            overflow: hidden;
+            display: none;
+        }
         @media (min-width: 992px) { .login-info { display: flex; } }
-        .login-info::before { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(6,13,22,0.9) 0%, rgba(6,13,22,0.4) 50%, transparent 100%); }
-        .info-content { position: relative; z-index: 10; max-width: 600px; }
-        .info-content h1 { font-size: 3rem; font-weight: 800; color: #fff; margin-bottom: 16px; text-transform: uppercase; letter-spacing: -1px; line-height: 1; }
-        .info-content p { font-size: 1.1rem; color: rgba(255,255,255,0.7); line-height: 1.6; border-left: 4px solid var(--accent); padding-left: 20px; }
-        .login-form-area { flex: 1; background: var(--dark); display: flex; align-items: center; justify-content: center; padding: 40px; }
-        .form-container { width: 100%; max-width: 400px; }
-        .brand-logo { margin-bottom: 32px; display: flex; align-items: center; gap: 10px; }
-        .brand-logo img { width: 40px; height: 40px; }
-        .brand-logo span { font-weight: 700; font-size: 1.1rem; color: #fff; letter-spacing: 1px; }
-        .card-login { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 36px; backdrop-filter: blur(20px); }
-        .form-label { color: rgba(255,255,255,0.5); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 6px; }
-        .form-control { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; border-radius: 10px; padding: 12px 16px; width: 100%; box-sizing: border-box; }
-        .form-control:focus { background: rgba(255,255,255,0.08); border-color: var(--accent); outline: none; }
-        .btn-login { background: var(--accent); border: none; border-radius: 10px; padding: 14px; width: 100%; font-weight: 700; color: var(--dark); cursor: pointer; margin-top: 16px; }
-        .btn-login:hover { background: #4ade80; }
-        .footer-links { margin-top: 24px; text-align: center; font-size: 0.85rem; color: rgba(255,255,255,0.4); }
-        .footer-links a { color: var(--accent); text-decoration: none; font-weight: 600; }
-        .alert-danger { background: rgba(220,53,69,0.12); border: 1px solid rgba(220,53,69,0.3); color: #f8a7ae; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 0.85rem; }
-        .hint { font-size: 0.8rem; color: rgba(255,255,255,0.45); margin-top: 8px; }
+        .login-info::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: url('<?= !empty($portal_image) ? htmlspecialchars($portal_image) : 'assets/favicon.ico' ?>');
+            background-size: cover;
+            background-position: center;
+            opacity: 0.15;
+        }
+        .login-info::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(6,29,16,0.8) 0%, rgba(6,44,25,0.9) 100%);
+        }
+        .info-content {
+            position: relative;
+            z-index: 2;
+            color: #ffffff;
+            max-width: 560px;
+            text-align: center;
+        }
+        .info-content .brand-icon {
+            width: 56px;
+            height: 56px;
+            background: var(--accent);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 1.8rem;
+            color: var(--primary-dark);
+            box-shadow: 0 8px 24px rgba(34,197,94,0.3);
+        }
+        .info-content h1 {
+            font-size: 2.25rem;
+            font-weight: 800;
+            color: #ffffff;
+            margin: 0 0 12px 0;
+            text-transform: uppercase;
+            letter-spacing: -0.5px;
+            line-height: 1.2;
+        }
+        .info-content p {
+            font-size: 1.05rem;
+            color: #d8e8dc;
+            line-height: 1.6;
+            margin: 0;
+        }
+        /* Right panel — login form */
+        .login-form-area {
+            flex: 1;
+            background: var(--surface);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+        .form-container {
+            width: 100%;
+            max-width: 400px;
+        }
+        .brand-logo {
+            margin-bottom: 28px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .brand-logo img {
+            width: 40px;
+            height: 40px;
+        }
+        .brand-logo span {
+            font-weight: 800;
+            font-size: 1.15rem;
+            color: #ffffff;
+            letter-spacing: 1px;
+        }
+        .card-login {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 20px;
+            padding: 36px;
+        }
+        .card-login h3 {
+            font-weight: 800;
+            color: #ffffff;
+            margin: 0 0 8px 0;
+            font-size: 1.35rem;
+        }
+        .card-login p.text-muted {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 24px;
+        }
+        .form-label {
+            color: var(--text-muted);
+            font-weight: 700;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: block;
+            margin-bottom: 8px;
+        }
+        .form-control {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.18);
+            color: #ffffff;
+            border-radius: 12px;
+            padding: 14px 18px;
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+        .form-control::placeholder {
+            color: rgba(255,255,255,0.45);
+        }
+        .form-control:focus {
+            background: rgba(255,255,255,0.1);
+            border-color: var(--accent);
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(34,197,94,0.15);
+            color: #ffffff;
+        }
+        .btn-login {
+            background: var(--accent);
+            border: none;
+            border-radius: 12px;
+            padding: 14px;
+            width: 100%;
+            font-weight: 800;
+            color: var(--primary-dark);
+            cursor: pointer;
+            margin-top: 20px;
+            font-size: 1rem;
+        }
+        .btn-login:hover {
+            background: #4ade80;
+            transform: translateY(-1px);
+        }
+        .btn-login:active {
+            transform: translateY(0);
+        }
+        .footer-links {
+            margin-top: 24px;
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+        .footer-links a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .footer-links a:hover {
+            text-decoration: underline;
+        }
+        .alert-danger {
+            background: rgba(220,53,69,0.15);
+            border: 1px solid rgba(220,53,69,0.35);
+            color: #fca5a5;
+            padding: 12px 16px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+        .alert-danger i {
+            color: #f87171;
+        }
+        .hint {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+        /* Mobile: stack panels */
+        @media (max-width: 991.98px) {
+            .login-info { display: none; }
+            .login-form-area { flex: 1; }
+        }
     </style>
 </head>
 <body>
 <div class="login-wrap">
     <div class="login-info">
         <div class="info-content">
+            <div class="brand-icon"><i class="bi bi-mortarboard-fill"></i></div>
             <h1><?= htmlspecialchars($portal_title) ?></h1>
             <p>Staff Promotional Examination Portal — sign in with your staff email only.</p>
         </div>
@@ -144,8 +336,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
             <div class="card-login">
-                <h3 class="fw-bold text-white mb-2">Welcome Back</h3>
-                <p class="text-muted small mb-4">Enter your staff email to open your promotional exam.</p>
+                <h3>Welcome Back</h3>
+                <p class="text-muted">Enter your staff email to open your promotional exam.</p>
 
                 <?php if ($error): ?>
                     <div class="alert-danger"><i class="bi bi-exclamation-circle me-2"></i><?= htmlspecialchars($error) ?></div>
