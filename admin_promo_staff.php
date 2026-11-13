@@ -139,7 +139,7 @@ if ($search !== '') {
     $like = "%{$search}%";
     $params = [$like, $like];
 }
-$staff = $db->query("
+$staffStmt = $db->prepare("
     SELECT ps.*, GROUP_CONCAT(pe.name SEPARATOR ', ') AS enrolled_exams
     FROM promo_staff ps
     LEFT JOIN promo_exam_staff pes ON pes.staff_id = ps.id
@@ -147,7 +147,9 @@ $staff = $db->query("
     $where
     GROUP BY ps.id
     ORDER BY ps.created_at DESC, ps.id DESC
-", $params)->fetchAll(PDO::FETCH_ASSOC);
+");
+$staffStmt->execute($params);
+$staff = $staffStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // All active exams for enrolment dropdown
 $exams = $db->query("SELECT * FROM promo_exams WHERE is_active = 1 ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
@@ -160,14 +162,16 @@ if ($search !== '') {
     $enrolLike = "%{$search}%";
     $enrolParams = [$enrolLike, $enrolLike, $enrolLike];
 }
-$enrolments = $db->query("
+$enrolStmt = $db->prepare("
     SELECT pes.id, ps.name AS staff_name, ps.email, pe.name AS exam_name
     FROM promo_exam_staff pes
     JOIN promo_staff ps ON ps.id = pes.staff_id
     JOIN promo_exams pe ON pe.id = pes.exam_id
     $enrolWhere
     ORDER BY pe.name, ps.name
-", $enrolParams)->fetchAll(PDO::FETCH_ASSOC);
+");
+$enrolStmt->execute($enrolParams);
+$enrolments = $enrolStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $admin_name = $_SESSION['user'] ?? 'Admin';
 ?>
