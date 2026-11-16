@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../includes/cli_only.php';
 /**
  * database/clean_dump.php — Clean an existing mysqldump for portability
  *

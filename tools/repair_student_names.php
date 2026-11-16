@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../includes/cli_only.php';
 /**
  * Repair incomplete student names using the school portal (exeat2) database.
  *

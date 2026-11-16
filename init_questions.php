@@ -1,4 +1,5 @@
 <?php
+require __DIR__ . '/includes/cli_only.php';
 require 'db.php';
 
 $questions = [

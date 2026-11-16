@@ -14,8 +14,8 @@
  *                          (answers may contain "-" for a statement left blank)
  */
 
-const QE_SCHEMA_VERSION = 7;
-const QE_TICK_GAP = 45;          // seconds; a longer silence is treated as an interruption
+const QE_SCHEMA_VERSION = 8;
+const QE_TICK_GAP = 45;          // legacy; retained for older callers
 const QE_MTF_MIN = 2;
 const QE_MTF_MAX = 10;
 const QE_OPTION_KEYS = ['A', 'B', 'C', 'D'];
@@ -128,9 +128,32 @@ function qe_run_migrations(PDO $db): void
     if (!isset($c['last_tick_at'])) {
         $db->exec("ALTER TABLE objective_attempts ADD COLUMN last_tick_at DATETIME NULL AFTER time_used");
     }
+    if (!isset($c['excused_seconds'])) {
+        // Time explicitly not charged to the student (e.g. while locked).
+        $db->exec("ALTER TABLE objective_attempts ADD COLUMN excused_seconds INT NOT NULL DEFAULT 0 AFTER time_used");
+    }
+    if (!isset($c['locked_at'])) {
+        // When the current lock started, so the lock stretch is excused.
+        $db->exec("ALTER TABLE objective_attempts ADD COLUMN locked_at DATETIME NULL AFTER excused_seconds");
+    }
+    if (!isset($c['last_question_index'])) {
+        // Server-side resume position, so a different browser continues in
+        // the same place instead of restarting at question 1.
+        $db->exec("ALTER TABLE objective_attempts ADD COLUMN last_question_index INT NULL AFTER locked_at");
+    }
     if (!isset($c['remote_command'])) {
         $db->exec("ALTER TABLE objective_attempts ADD COLUMN remote_command VARCHAR(50) NULL");
     }
+    // Existing locked attempts have no lock start time yet; start excusing now.
+    $db->exec("UPDATE objective_attempts SET locked_at = NOW() WHERE is_locked = 1 AND locked_at IS NULL");
+    // Bring stale used-time counters up to the wall clock. GREATEST keeps this
+    // monotonic: an attempt can gain time here, never lose it.
+    $db->exec("UPDATE objective_attempts SET time_used = GREATEST(time_used, LEAST(GREATEST(
+            TIMESTAMPDIFF(SECOND, started_at, NOW())
+            - excused_seconds
+            - IF(locked_at IS NOT NULL, TIMESTAMPDIFF(SECOND, locked_at, NOW()), 0)
+        , 0), 86400))
+        WHERE finished_at IS NULL AND started_at IS NOT NULL");
     if ($fresh_timing) {
         // Carry existing attempts over: finished ones keep their recorded time,
         // open ones continue from wall-clock time so nobody gains minutes.
@@ -809,24 +832,54 @@ function qe_answer_label(array $q, ?string $answer): string
  * ------------------------------------------------------------------ */
 
 /**
- * Adds the time since the last heartbeat to the attempt's used time.
- * A silence longer than QE_TICK_GAP means the student was cut off (power,
- * network, closed browser), and only the time the browser itself counted
- * ($client_elapsed) is charged for that stretch.
+ * Seconds of exam time an attempt has genuinely used.
+ *
+ * Wall-clock based: the time between started_at and now, minus time that was
+ * explicitly excused (for example while the attempt was locked waiting for an
+ * invigilator). Because it is derived from the clock it can never go backwards,
+ * so a dropped heartbeat can no longer hand time back to the student.
  */
-function qe_tick_attempt(PDO $db, int $attempt_id, int $client_elapsed = 0): void
+function qe_attempt_elapsed_seconds(array $attempt, ?int $now = null): int
 {
-    $client_elapsed = max(0, min($client_elapsed, 3600));
+    $now = $now ?? time();
+    if (empty($attempt['started_at'])) {
+        return max(0, (int) ($attempt['time_used'] ?? 0));
+    }
+    $started = strtotime((string) $attempt['started_at']);
+    if ($started === false) {
+        return max(0, (int) ($attempt['time_used'] ?? 0));
+    }
+    $elapsed = max(0, $now - $started);
+    $excused = max(0, (int) ($attempt['excused_seconds'] ?? 0));
+    if (!empty($attempt['locked_at'])) {
+        $locked = strtotime((string) $attempt['locked_at']);
+        if ($locked !== false) {
+            $excused += max(0, $now - $locked);
+        }
+    }
+    return max(0, $elapsed - $excused);
+}
+
+/**
+ * Brings time_used up to the wall-clock value. It never decreases it, so a
+ * stale counter is corrected upward but a student never loses time.
+ */
+function qe_tick_attempt(PDO $db, int $attempt_id): void
+{
+    $st = $db->prepare("SELECT started_at, time_used, excused_seconds, locked_at, finished_at
+        FROM objective_attempts WHERE id = ?");
+    $st->execute([$attempt_id]);
+    $att = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$att || $att['finished_at']) {
+        return;
+    }
+    $used = qe_attempt_elapsed_seconds($att);
     $db->prepare("UPDATE objective_attempts SET
-            time_used = time_used + CASE
-                WHEN last_tick_at IS NULL THEN 0
-                WHEN TIMESTAMPDIFF(SECOND, last_tick_at, NOW()) <= ? THEN GREATEST(TIMESTAMPDIFF(SECOND, last_tick_at, NOW()), 0)
-                ELSE LEAST(?, TIMESTAMPDIFF(SECOND, last_tick_at, NOW()))
-            END,
+            time_used = GREATEST(time_used, ?),
             last_tick_at = NOW(),
             last_active = NOW()
         WHERE id = ? AND finished_at IS NULL")
-        ->execute([QE_TICK_GAP, $client_elapsed, $attempt_id]);
+        ->execute([$used, $attempt_id]);
 }
 
 /** Seconds left for an attempt, or null when the exam has neither a duration nor a closing time. */
@@ -835,7 +888,8 @@ function qe_remaining_seconds(array $exam, array $attempt): ?int
     $rem = null;
     $duration = (int) ($exam['duration_minutes'] ?? 0) * 60;
     if ($duration > 0) {
-        $rem = max(0, $duration - (int) ($attempt['time_used'] ?? 0));
+        $used = qe_attempt_elapsed_seconds($attempt);
+        $rem = max(0, $duration - $used);
     }
     if (!empty($exam['end_time'])) {
         $close = max(0, strtotime($exam['end_time']) - time());

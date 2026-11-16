@@ -20,8 +20,9 @@ function finalize_objective_attempt($db, $exam_id, $student_id, $attempt_no)
 /**
  * Closes attempts whose time is used up or whose exam window has closed.
  *
- * Time is measured from the attempt's own used-time counter, not from the
- * wall clock, so a student who was cut off keeps the minutes they had left.
+ * Time is measured from the wall clock (started_at), minus explicitly excused
+ * time, so a long disconnection is charged and cannot restore minutes. Locked
+ * attempts keep their clock still because the lock stretch is excused.
  */
 function auto_finalize_expired_attempts($db, $exam_id = null, $student_id = null)
 {
@@ -30,10 +31,14 @@ function auto_finalize_expired_attempts($db, $exam_id = null, $student_id = null
             JOIN exams e ON oa.exam_id = e.id
             WHERE oa.finished_at IS NULL
             AND (
-                (e.duration_minutes > 0 AND oa.time_used
-                    + IF(oa.last_tick_at IS NOT NULL AND TIMESTAMPDIFF(SECOND, oa.last_tick_at, NOW()) <= " . QE_TICK_GAP . ",
-                         TIMESTAMPDIFF(SECOND, oa.last_tick_at, NOW()), 0)
-                    >= e.duration_minutes * 60 + 30)
+                (e.duration_minutes > 0 AND (
+                    (oa.started_at IS NOT NULL AND GREATEST(
+                        TIMESTAMPDIFF(SECOND, oa.started_at, NOW())
+                        - oa.excused_seconds
+                        - IF(oa.locked_at IS NOT NULL, TIMESTAMPDIFF(SECOND, oa.locked_at, NOW()), 0)
+                    , 0) >= e.duration_minutes * 60 + 120)
+                    OR (oa.started_at IS NULL AND oa.time_used >= e.duration_minutes * 60 + 120)
+                ))
                 OR (e.end_time IS NOT NULL AND NOW() > DATE_ADD(e.end_time, INTERVAL 2 MINUTE))
             )";
     $params = [];

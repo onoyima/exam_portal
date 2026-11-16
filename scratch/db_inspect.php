@@ -1,4 +1,5 @@
 <?php
+require __DIR__ . '/../includes/cli_only.php';
 require 'db.php';
 echo "Database: " . $dbname . "\n";
 $stmt = $db->query("SHOW TABLES");

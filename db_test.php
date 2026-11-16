@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/includes/cli_only.php';
 // Force errors to display for debugging
 error_reporting(E_ALL);
 ini_set('display_errors', '1');

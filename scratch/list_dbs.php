@@ -1,4 +1,5 @@
 <?php
+require __DIR__ . '/../includes/cli_only.php';
 $db = new PDO('mysql:host=localhost', 'root', '');
 $stmt = $db->query('SHOW DATABASES');
 while ($row = $stmt->fetch()) {

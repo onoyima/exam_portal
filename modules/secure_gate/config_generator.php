@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../includes/cli_only.php';
 /**
  * Standalone SEB Config Generator
  * This module generates a .seb file that forces the browser to open the Portal

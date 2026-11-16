@@ -1,13 +1,38 @@
-RewriteEngine On
+# ---------------------------------------------------------------------------
+# Security: never serve secrets, logs, dumps, or development scripts.
+# All denials use mod_rewrite so they work with the same AllowOverride level
+# as the pretty-URL rules below (no Require/Options directives, which can
+# cause a 500 on a narrower AllowOverride).
+# ---------------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RewriteEngine On
 
-# Ensure we're in the right directory if needed
-# RewriteBase /exam_portal/
+    # Secrets and VCS metadata
+    RewriteRule (^|/)\.env(\..*)?$ - [F,L,NC]
+    RewriteRule (^|/)\.git(/|$) - [F,L,NC]
+    RewriteRule (^|/)\.(dockerignore|gitignore)$ - [F,L,NC]
+    RewriteRule (^|/)(Dockerfile|docker-compose)[^/]*$ - [F,L,NC]
 
-# Redirect /file.php to /file (External Redirect)
-RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /([^/]+)\.php\ HTTP/
-RewriteRule ^(.+)\.php$ /$1 [R=301,L,NC]
+    # Database dumps, logs, backups and scripts
+    RewriteRule \.(sql|log|bak|old|orig|ini|sh|md5|sha256)$ - [F,L,NC]
 
-# Serve /file as /file.php (Internal Rewrite)
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{REQUEST_FILENAME}\.php -f
-RewriteRule ^(.*?)/?$ $1.php [L,NC]
+    # Directories that are tooling only — never part of the public portal.
+    RewriteRule ^(?:logs|migrations|database|tests|tmp|scratch|tools|Models|modules|scripts)(?:/|$) - [F,L,NC]
+    RewriteRule ^seb-client/src(?:/|$) - [F,L,NC]
+
+    # Redirect /file.php to /file (External Redirect)
+    RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /([^/]+)\.php\ HTTP/
+    RewriteRule ^(.+)\.php$ /$1 [R=301,L,NC]
+
+    # Serve /file as /file.php (Internal Rewrite)
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME}\.php -f
+    RewriteRule ^(.*?)/?$ $1.php [L,NC]
+</IfModule>
+
+# Basic hardening headers (mod_headers is enabled in the image).
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

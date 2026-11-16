@@ -62,7 +62,9 @@
   Object.keys(pending).forEach(function (k) { answers[k] = pending[k]; });
   var flags = {};
   (saved.flags || []).forEach(function (id) { flags[id] = true; });
-  var index = Math.min(Math.max(parseInt(saved.index, 10) || 0, 0), N - 1);
+  var startIndex = (saved.index !== undefined && saved.index !== null) ? parseInt(saved.index, 10) : parseInt(C.startIndex, 10);
+  if (isNaN(startIndex)) startIndex = 0;
+  var index = Math.min(Math.max(startIndex, 0), N - 1);
 
   var ZOOM_STEPS = [0.85, 1, 1.15, 1.3, 1.5, 1.75];
   var zoom = 1;
@@ -337,6 +339,9 @@
     var el = $('xpSync');
     el.setAttribute('data-state', state);
     el.querySelector('span').textContent = state === 'saving' ? 'Saving…' : state === 'offline' ? 'Offline — answers kept on this computer' : 'All answers saved';
+    var banner = $('xpOffline');
+    if (banner) banner.hidden = state !== 'offline';
+    if (document.body) document.body.classList.toggle('xp-offline-mode', state === 'offline');
   }
 
   function post(url, data) {
@@ -358,6 +363,12 @@
               .then(function (r2) { return r2.json(); });
           }
           if (j && j.status === 'FORCED_LOGOUT') { handlePing(j); throw new Error('signed-out'); }
+          if (j && j.auth === false) {
+            // The session really is gone. The answers stay in localStorage, so
+            // signing in again resumes from the same place.
+            window.location.href = 'student_login';
+            throw new Error('signed-out');
+          }
           return j;
         });
       });
@@ -392,7 +403,14 @@
         if (Object.keys(pending).length) scheduleFlush(200); else setSync('ok');
         return;
       }
-      if (res.finished || res.time_up || res.closed) return endFromServer('Your exam has been submitted.');
+      if (res.finished) return endFromServer('Your exam has been submitted.');
+      if (res.time_up || res.closed) {
+        // The server will not accept more answer saves, but the attempt is
+        // still open. Push everything we hold through the final submit
+        // endpoint instead of pretending it was submitted.
+        if (!submitting) doSubmit('Time is up. Submitting your answers…');
+        return;
+      }
       if (res.locked) return showLocked(C.maxViolations);
       // anything else: keep the answers and try again a bit later
       setSync('offline');
@@ -408,6 +426,22 @@
 
   window.addEventListener('online', function () { retryDelay = 2000; scheduleFlush(100); });
   window.addEventListener('offline', function () { setSync('offline'); });
+
+  // Last-chance flush when the tab is closed, refreshed or the phone is put
+  // away. sendBeacon keeps running after the page starts unloading.
+  window.addEventListener('pagehide', function () {
+    if (REVIEW || submitting || window.__xpEnded) return;
+    var ids = Object.keys(pending);
+    if (!ids.length) return;
+    var batch = {};
+    ids.forEach(function (k) { batch[k] = pending[k]; });
+    var fd = new FormData();
+    fd.append('exam_id', C.examId);
+    fd.append('attempt_no', C.attemptNo);
+    fd.append('csrf_token', C.csrf);
+    fd.append('answers', JSON.stringify(batch));
+    try { navigator.sendBeacon('objective_exam_api?action=save_answers', fd); } catch (e) { /* ignore */ }
+  });
 
   /* ------------------------------------------------------------------ *
    *  timer
@@ -496,6 +530,7 @@
       exam_id: C.examId,
       attempt_no: C.attemptNo,
       status: status || 'active',
+      question_index: index,
       client_elapsed: Math.round((performance.now() - lastAckPerf) / 1000)
     };
     if (violation) { data.violation_type = violation; data.details = details || ''; }
@@ -508,8 +543,12 @@
     }
     return post('proctor_ping', data).then(function (res) {
       lastAckPerf = performance.now();
+      if (!inFlight && Object.keys(pending).length === 0) setSync('ok');
       handlePing(res);
-    }).catch(function () { /* next beat will try again */ });
+    }).catch(function () {
+      // Make a lost connection obvious immediately, not after 30 minutes.
+      setSync('offline');
+    });
   }
   window.sendPing = sendPing;
 
@@ -538,10 +577,8 @@
       if (Math.abs(res.remaining_seconds - remaining) > 2) remaining = res.remaining_seconds;
     }
     if (typeof res.violation_count === 'number') violations = Math.max(violations, res.violation_count);
-    if (policy.autoSubmitStrikes && violations >= policy.autoSubmitStrikes && !submitting) {
-      submit(true, 'Too many security warnings. Your exam is being submitted.');
-      return;
-    }
+    // Lock-only policy: the server locks the attempt at the strike limit and
+    // never auto-submits. The invigilator unlocks it; the student continues.
     if (res.is_live_requested) startSignaling();
     if (res.warning) showWarning(res.warning);
   }
@@ -562,14 +599,12 @@
     $('xpStrikeMax').textContent = C.maxViolations;
     var left = C.maxViolations - violations;
     var note = left > 0 ? left + ' more and the exam will be locked.' : 'The exam is being locked.';
-    if (policy.autoSubmitStrikes) {
-      var toSubmit = policy.autoSubmitStrikes - violations;
-      note = toSubmit > 0 ? toSubmit + ' more and your exam will be submitted automatically.' : 'Your exam is being submitted.';
-    }
     $('xpStrikeNote').textContent = note;
     $('xpViolation').hidden = false;
     alarm();
-    sendPing('blur', type, details);
+    // Save any pending answers before reporting the strike. The server rejects
+    // saves once the attempt is locked, so this keeps the student's last work.
+    flush().then(function () { sendPing('blur', type, details); });
   }
 
   function returnToExam() {
@@ -582,6 +617,9 @@
   function showLocked(count) {
     window.isLocked = true;
     $('xpViolation').hidden = true;
+    // A submission dialog may be open when the lock lands; it must not sit on
+    // top of the lock screen.
+    $('xpDialog').hidden = true;
     $('xpLockCount').textContent = count || C.maxViolations;
     $('xpLocked').hidden = false;
     flush();
@@ -796,30 +834,82 @@
     doSubmit(message || 'Submitting your answers…');
   }
 
+  function submitPayload() {
+    var all = {};
+    Q.forEach(function (q) { if (answers[q.id] !== undefined) all[q.id] = answers[q.id]; });
+    var fd = new FormData();
+    fd.append('exam_id', C.examId);
+    fd.append('attempt_no', C.attemptNo);
+    fd.append('csrf_token', C.csrf);
+    fd.append('answers_json', JSON.stringify(all));
+    return fd;
+  }
+
+  function submitOnce() {
+    return fetch('objective_exam_api?action=submit_exam', {
+      method: 'POST',
+      body: submitPayload(),
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { 'X-Requested-With': 'fetch', 'Accept': 'application/json' }
+    }).then(function (r) {
+      return r.text().then(function (t) {
+        var j;
+        try { j = JSON.parse(t); } catch (e) { throw new Error('The server did not answer. Retrying…'); }
+        if (r.status === 419 && j.csrf_token) {
+          C.csrf = j.csrf_token;
+          return submitOnce();
+        }
+        if (j && j.auth === false) {
+          window.location.href = 'student_login';
+          throw new Error('Your session has expired. Please sign in again.');
+        }
+        if (!r.ok) throw new Error(j.error || ('Server error ' + r.status));
+        return j;
+      });
+    });
+  }
+
   function doSubmit(message) {
     submitting = true;
     window.isLocked = true;
     $('xpViolation').hidden = true;
     stopRecording();
+    setSync('saving');
     dialog('Please wait', '<p>' + esc(message) + '</p>', { ok: false, cancel: false });
+    window.removeEventListener('beforeunload', beforeUnload);
 
+    // Send any unsaved answers first, then keep retrying the submission until
+    // the server confirms it. The page is deliberately never navigated away on
+    // failure, so the answers stay alive in this browser.
     var timeout = new Promise(function (r) { setTimeout(r, 6000); });
-    Promise.race([flush(), timeout]).then(function () {
-      var send = function () {
-        var form = $('xpSubmitForm');
-        var all = {};
-        Q.forEach(function (q) { if (answers[q.id] !== undefined) all[q.id] = answers[q.id]; });
-        form.elements.answers_json.value = JSON.stringify(all);
-        form.elements.csrf_token.value = C.csrf;
-        window.removeEventListener('beforeunload', beforeUnload);
-        form.submit();
-      };
-      if (navigator.onLine === false) {
-        $('xpDialogBody').innerHTML = '<p>The connection to the exam server is down. Your answers are safe on this computer and will be submitted as soon as it comes back. Do not close this window.</p>';
-        window.addEventListener('online', send, { once: true });
-      } else {
-        send();
+    Promise.race([flush(), timeout]).catch(function () {}).then(function () { attemptSubmit(0); });
+  }
+
+  function attemptSubmit(tryNo) {
+    if (window.__xpEnded) return;
+    submitOnce().then(function (j) {
+      if (j && j.locked) {
+        // The attempt was locked while we were submitting. Let the heartbeat
+        // run again so an invigilator's unlock is picked up without a reload.
+        submitting = false;
+        showLocked(j.count || C.maxViolations);
+        return;
       }
+      if (j && j.success) {
+        setSync('ok');
+        endFromServer(j.message || 'Your exam has been submitted.');
+        return;
+      }
+      throw new Error((j && j.error) || 'The submission was not accepted.');
+    }).catch(function (err) {
+      var wait = Math.min(1500 * Math.pow(1.5, tryNo), 15000);
+      $('xpDialogBody').innerHTML =
+        '<p>Your answers are saved. The exam server has not confirmed the submission yet.</p>' +
+        '<p>Retrying automatically in a moment. <strong>Do not close this window.</strong></p>' +
+        '<p class="xp-small">' + esc((err && err.message) || 'Connection problem') + '</p>';
+      setSync('offline');
+      setTimeout(function () { attemptSubmit(tryNo + 1); }, wait);
     });
   }
 

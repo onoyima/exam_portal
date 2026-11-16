@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/includes/cli_only.php';
 $host = 'localhost';
 $dbname = 'assessment_db';
 $user = 'root';      // Change to your DB username

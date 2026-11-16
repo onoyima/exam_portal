@@ -118,7 +118,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 $portal_title = $settings['portal_title'] ?? 'Veritas Exam Portal';
 $portal_logo = $settings['portal_logo'] ?? '';
 $portal_favicon = $settings['portal_favicon'] ?? 'assets/favicon.ico';
-$portal_image = $settings['portal_image'] ?? 'assets/img/login_bg.jpg';
+require_once __DIR__ . '/includes/portal_helpers.php';
+$portal_image = portal_image_path($settings['portal_image'] ?? '');
 $student_content = $settings['student_login_content'] ?? 'Welcome to the Secure Assessment Portal. Please enter your credentials to begin your session.';
 ?>
 <!DOCTYPE html>

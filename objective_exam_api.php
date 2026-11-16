@@ -29,7 +29,8 @@ $exam_id = (int) ($_REQUEST['exam_id'] ?? 0);
 $attempt_no = (int) ($_REQUEST['attempt_no'] ?? 1);
 
 try {
-    $st = $db->prepare("SELECT e.*, oa.id AS attempt_id, oa.finished_at, oa.is_locked, oa.question_order, oa.time_used, oa.started_at
+    $st = $db->prepare("SELECT e.*, oa.id AS attempt_id, oa.finished_at, oa.is_locked, oa.question_order,
+            oa.time_used, oa.started_at, oa.excused_seconds, oa.locked_at, oa.last_question_index
         FROM exams e
         LEFT JOIN objective_attempts oa ON oa.exam_id = e.id AND oa.student_id = ? AND oa.attempt_no = ?
         WHERE e.id = ? AND e.deleted_at IS NULL");
@@ -53,7 +54,7 @@ try {
             api_out(['success' => false, 'error' => 'Exam access period has ended.', 'closed' => true]);
         }
         $duration = (int) $ctx['duration_minutes'] * 60;
-        if ($duration > 0 && (int) $ctx['time_used'] > $duration + 60) {
+        if ($duration > 0 && qe_attempt_elapsed_seconds($ctx) > $duration + 60) {
             api_out(['success' => false, 'error' => 'Time is up for this attempt.', 'time_up' => true]);
         }
 
@@ -85,6 +86,43 @@ try {
         }
         $db->commit();
         api_out(['success' => true, 'saved' => $saved, 'rejected' => $rejected]);
+    }
+
+    if ($action === 'submit_exam') {
+        // Retryable, idempotent submission. The client keeps the page open and
+        // retries until it gets a success, so a dropped response no longer
+        // leaves the attempt open or loses the answers held in the browser.
+        if (!$ctx['attempt_id']) {
+            api_out(['success' => false, 'error' => 'Attempt not found']);
+        }
+        if ($ctx['finished_at']) {
+            api_out(['success' => true, 'submitted' => true, 'already' => true, 'message' => 'Your exam has already been submitted.']);
+        }
+        if ($ctx['is_locked']) {
+            api_out(['success' => false, 'error' => 'This attempt is locked. Please contact the invigilator.', 'locked' => true]);
+        }
+
+        $posted = json_decode((string) ($_POST['answers_json'] ?? ''), true);
+        if (is_array($posted) && $posted) {
+            $questions = qe_load_questions($db, $exam_id);
+            $allowed = array_flip(qe_attempt_question_ids(['question_order' => $ctx['question_order']], $questions));
+            $db->beginTransaction();
+            foreach ($posted as $qid => $raw) {
+                $qid = (int) $qid;
+                if (isset($allowed[$qid]) && is_scalar($raw)) {
+                    qe_save_answer($db, $questions[$qid], $exam_id, $student_id, $attempt_no, $raw);
+                }
+            }
+            $db->commit();
+        }
+
+        $closed = qe_finalize_attempt($db, (int) $ctx['attempt_id']);
+        api_out([
+            'success' => true,
+            'submitted' => true,
+            'closed' => $closed,
+            'message' => 'Your exam has been submitted.',
+        ]);
     }
 
     if ($action === 'get_remaining_time') {

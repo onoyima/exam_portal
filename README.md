@@ -13,7 +13,7 @@ A professional-grade, web-based examination system designed for high-stakes asse
     *   **Tab-Lock**: Detects when a student switches tabs or leaves the browser.
     *   **Fullscreen Enforcement**: Forces the browser into fullscreen mode to prevent external tool usage.
     *   **Keyboard Lock**: Restricts shortcut keys (Alt+Tab, Windows Key, etc.).
-*   **Violation Management**: Automatic tagging of violations with a "3-strike" rule before auto-submission.
+*   **Violation Management**: Automatic tagging of violations with a "5-strike" rule. At 5 strikes the exam locks (it is not auto-submitted); an invigilator unlocks it and the student resumes where they stopped.
 
 ### 📅 Exam Administration & Scheduling
 *   **Precise Scheduling**: Set specific Start and End dates/times for every assessment.

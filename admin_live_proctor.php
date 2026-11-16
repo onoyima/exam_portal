@@ -161,6 +161,7 @@ if (isset($_GET['action'])) {
         }
         $st = $db->prepare("SELECT oa.id, oa.exam_id, oa.student_id, oa.attempt_no, oa.started_at, oa.finished_at, oa.violation_count,
                 oa.is_locked, oa.is_live_requested, oa.proctor_status, oa.snapshot_path, oa.question_order, oa.time_used,
+                oa.excused_seconds, oa.locked_at,
                 TIMESTAMPDIFF(SECOND, oa.last_active, NOW()) AS idle, s.name, s.matric_no, e.name AS exam_name,
                 e.duration_minutes, e.end_time,
                 (SELECT MAX(v.created_at) FROM exam_violations v WHERE v.attempt_id = oa.id) AS last_violation_at,
@@ -264,7 +265,18 @@ if (isset($_GET['action'])) {
 
     if ($action === 'unlock') {
         lp_attempt($db, $id);
-        $db->prepare("UPDATE objective_attempts SET is_locked = 0, violation_count = 0 WHERE id = ?")->execute([$id]);
+        // Excuse the time spent locked, then release the lock and strikes. The
+        // next heartbeat recomputes time_used from the wall clock, so the
+        // student resumes with exactly the time they had before the lock.
+        $db->prepare("UPDATE objective_attempts SET
+                excused_seconds = excused_seconds + IF(locked_at IS NOT NULL,
+                    GREATEST(TIMESTAMPDIFF(SECOND, locked_at, NOW()), 0), 0),
+                locked_at = NULL,
+                is_locked = 0,
+                violation_count = 0,
+                last_tick_at = NOW(),
+                last_active = NOW()
+            WHERE id = ?")->execute([$id]);
         echo json_encode(['success' => true]);
         exit;
     }

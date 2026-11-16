@@ -76,7 +76,7 @@ $open_now = array_filter($sd_cards, fn($c) => in_array($c['state'], ['open', 'pr
         .exam-card.is-locked { opacity: 0.7; }
 
         .exam-card-header {
-            padding: 1.25rem 1.25rem 0.75rem;
+            padding: 0.85rem 1rem 0.55rem;
         }
         .exam-card-badge {
             display: inline-flex;
@@ -88,7 +88,7 @@ $open_now = array_filter($sd_cards, fn($c) => in_array($c['state'], ['open', 'pr
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            margin-bottom: 0.75rem;
+            margin-bottom: 0.45rem;
         }
         .exam-card.is-progress .exam-card-badge { background: #dcfce7; color: #166534; }
         .exam-card.is-locked .exam-card-badge { background: #fef3c7; color: #92400e; }
@@ -98,37 +98,41 @@ $open_now = array_filter($sd_cards, fn($c) => in_array($c['state'], ['open', 'pr
         .exam-card.is-closed .exam-card-badge { background: #fef2f2; color: #991b1b; }
 
         .exam-card-title {
-            font-size: 1.1rem;
+            font-size: 1rem;
             font-weight: 600;
             color: #0f172a;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.35rem;
             line-height: 1.3;
         }
         .exam-meta {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.75rem;
-            font-size: 0.85rem;
+            gap: 0.4rem;
+            font-size: 0.8rem;
             color: #64748b;
         }
         .exam-meta-item {
             display: inline-flex;
             align-items: center;
-            gap: 0.35rem;
-            padding: 0.25rem 0.6rem;
+            gap: 0.3rem;
+            padding: 0.18rem 0.5rem;
             background: #f8fafc;
             border-radius: 6px;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
         }
-        .exam-meta-item i { font-size: 0.85rem; }
+        .exam-meta-item i { font-size: 0.8rem; }
         .exam-desc {
             color: #64748b;
-            font-size: 0.875rem;
-            line-height: 1.5;
-            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            margin-top: 0.35rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
         .exam-card-footer {
-            padding: 1rem 1.25rem;
+            padding: 0.7rem 1rem;
             border-top: 1px solid #e2e8f0;
             background: #fafafa;
             display: flex;
@@ -166,25 +170,26 @@ $open_now = array_filter($sd_cards, fn($c) => in_array($c['state'], ['open', 'pr
         /* Exam image */
         .exam-image {
             width: 100%;
-            height: 160px;
+            height: 96px;
             object-fit: cover;
             background: #f1f5f9;
         }
         .exam-image-placeholder {
             width: 100%;
-            height: 160px;
+            height: 96px;
             background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
             display: flex;
             align-items: center;
             justify-content: center;
             color: #94a3b8;
         }
+        .exam-image-placeholder i { font-size: 1.75rem !important; }
 
         /* Responsive grid */
         .exams-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 1.25rem;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
         }
         @media (max-width: 640px) {
             .exams-grid { grid-template-columns: 1fr; }
@@ -310,7 +315,6 @@ $open_now = array_filter($sd_cards, fn($c) => in_array($c['state'], ['open', 'pr
                                         <?php if (!empty($e['end_time'])): ?><span class="exam-meta-item"><i class="bi bi-calendar-x"></i> Closes <b><?= date('j M, g:i A', strtotime($e['end_time'])) ?></b></span><?php endif; ?>
                                         <?php if ($c['state'] === 'progress' && $c['remaining'] !== null): ?><span class="time-remaining <?= $c['remaining'] < 300 ? 'critical' : '' ?>"><i class="bi bi-hourglass-split"></i> <?= sd_fmt_minutes($c['remaining']) ?> left</span><?php endif; ?>
                                     </div>
-                                    <?php if (!empty($e['description'])): ?><p class="exam-desc"><?= htmlspecialchars($e['description']) ?></p><?php endif; ?>
                                 </div>
                                 <div class="exam-card-footer">
                                     <?php if ($c['score']): ?>

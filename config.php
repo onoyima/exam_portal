@@ -10,6 +10,13 @@
 // ============================================================
 // Only set session ini values if session hasn't started yet
 if (session_status() === PHP_SESSION_NONE) {
+    // Persist sessions on a mounted directory when available. This keeps
+    // students logged in across a container recreate during exam day.
+    $session_dir = '/var/lib/php/sessions';
+    if (is_dir($session_dir) && is_writable($session_dir)) {
+        ini_set('session.save_path', $session_dir);
+    }
+
     // Session handler: prefer memcached (available on your server), fallback to files
     if (extension_loaded('memcached') && !ini_get('session.save_handler')) {
         ini_set('session.save_handler', 'memcached');
@@ -23,7 +30,10 @@ if (session_status() === PHP_SESSION_NONE) {
     // Session GC tuning for high concurrency / offline safety
     ini_set('session.gc_probability', 1);
     ini_set('session.gc_divisor', 1000);
-    ini_set('session.gc_maxlifetime', 7200);
+    // Outlive the longest exam plus any reasonable interruption. The old
+    // 7200 s value (and a 30-minute inactivity timeout) signed students out
+    // mid-exam when the network dropped.
+    ini_set('session.gc_maxlifetime', 28800);
     ini_set('session.cookie_httponly', 1);
     ini_set('session.cookie_secure', 0);          // 0 = works on HTTP (localhost/offline), 1 = HTTPS only
     ini_set('session.cookie_samesite', 'Lax');
@@ -68,14 +78,51 @@ function loadEnvConfig(string $path): void
     }
 }
 
+/**
+ * Locate the environment file.
+ *
+ * Priority:
+ *   1. VERITAS_ENV_FILE (explicit override, useful for CLI tools)
+ *   2. /etc/veritas-cbt/.env (production location, outside the web root)
+ *   3. ../.env and ./.env (legacy local development)
+ */
+function veritas_env_path(): string
+{
+    static $resolved = null;
+    if ($resolved !== null) {
+        return $resolved;
+    }
+
+    $candidates = [];
+    $override = getenv('VERITAS_ENV_FILE');
+    if ($override !== false && $override !== '') {
+        $candidates[] = $override;
+    }
+    $candidates[] = '/etc/veritas-cbt/.env';
+    $candidates[] = dirname(__DIR__) . '/.env';
+    $candidates[] = __DIR__ . '/.env';
+
+    foreach ($candidates as $candidate) {
+        if ($candidate !== '' && is_file($candidate) && is_readable($candidate)) {
+            $resolved = $candidate;
+            return $resolved;
+        }
+    }
+
+    $resolved = '';
+    return $resolved;
+}
+
 // Load env configurations
-$env_path = __DIR__ . '/.env';
-$env_loaded = file_exists($env_path);
+$env_path = veritas_env_path();
+$env_loaded = $env_path !== '';
 if ($env_loaded) {
     loadEnvConfig($env_path);
 } else {
-    error_log("config.php: .env not found at $env_path — using fallback defaults");
+    error_log('config.php: no .env file found (checked VERITAS_ENV_FILE, /etc/veritas-cbt/.env, project root) — using fallback defaults');
 }
+if (!defined('VERITAS_ENV_PATH'))  define('VERITAS_ENV_PATH', $env_path);
+if (!defined('VERITAS_ENV_LOADED')) define('VERITAS_ENV_LOADED', $env_loaded);
 
 // Set fallback defaults if not defined in .env
 if (!defined('DB_HOST'))    define('DB_HOST',    'localhost');
@@ -83,8 +130,20 @@ if (!defined('DB_NAME'))    define('DB_NAME',    'backup_db_pre_implementation')
 if (!defined('DB_USER'))    define('DB_USER',    'root');
 if (!defined('DB_PASS'))    define('DB_PASS',    '');
 if (!defined('DB_CHARSET')) define('DB_CHARSET', 'utf8mb4');
-if (!defined('SESSION_LIFETIME')) define('SESSION_LIFETIME', 1800);
+// Sessions must survive the whole exam, not just 30 minutes. Override in .env.
+if (!defined('SESSION_LIFETIME')) define('SESSION_LIFETIME', 14400);
 if (!defined('APP_TIMEZONE')) define('APP_TIMEZONE', 'Africa/Lagos');
+
+/**
+ * Effective inactivity window for a signed-in session.
+ *
+ * A stale .env that still says 1800 must never be able to sign a student out
+ * in the middle of an exam, so the floor is four hours.
+ */
+function veritas_session_lifetime(): int
+{
+    return max(14400, defined('SESSION_LIFETIME') ? (int) SESSION_LIFETIME : 14400);
+}
 
 // exeat2 school portal DB fallbacks — only used when .env is missing
 if (!defined('EXEAT2_DB_HOST')) define('EXEAT2_DB_HOST', $env_loaded ? '' : 'localhost');

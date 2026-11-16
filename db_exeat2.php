@@ -5,7 +5,7 @@ $exeat2_db = null;
 $exeat2_error = '';
 
 // Determine if .env was loaded (vs fallback defaults)
-$env_loaded = file_exists(__DIR__ . '/.env');
+$env_loaded = defined('VERITAS_ENV_LOADED') ? VERITAS_ENV_LOADED : file_exists(__DIR__ . '/.env');
 
 // Check if exeat2 constants came from .env (vs config.php fallbacks)
 $exeat2_configured = $env_loaded && defined('EXEAT2_DB_HOST') && EXEAT2_DB_HOST !== '';

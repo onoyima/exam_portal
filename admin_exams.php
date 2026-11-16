@@ -405,7 +405,7 @@ foreach ($exams as $exam) {
                     <label class="admin-checkbox"><input type="checkbox" name="proctor_fullscreen" checked> Fullscreen</label>
                     <label class="admin-checkbox"><input type="checkbox" name="proctor_tab_lock" checked> Tab/Focus</label>
                     <label class="admin-checkbox"><input type="checkbox" name="proctor_kb_lock" checked> Keyboard/Copy</label>
-                    <label class="admin-checkbox"><input type="checkbox" name="proctor_auto_submit" checked> 3-Strike Auto</label>
+                    <label class="admin-checkbox"><input type="checkbox" name="proctor_auto_submit" checked> 5-Strike Lock</label>
                     <label class="admin-checkbox"><input type="checkbox" name="proctor_browser_check" checked> Browser Check</label>
                     <label class="admin-checkbox"><input type="checkbox" name="proctor_webcam" checked> Webcam Monitor</label>
                     <label class="admin-checkbox text-danger fw-semibold"><input type="checkbox" name="proctor_live_video"> Live Video Stream</label>
@@ -928,7 +928,7 @@ foreach ($exams as $exam) {
                 <label class="admin-checkbox"><input type="checkbox" name="proctor_fullscreen" id="edit_pfs"> Fullscreen</label>
                 <label class="admin-checkbox"><input type="checkbox" name="proctor_tab_lock" id="edit_ptab"> Tab/Focus Lock</label>
                 <label class="admin-checkbox"><input type="checkbox" name="proctor_kb_lock" id="edit_pkb"> Keyboard Lock</label>
-                <label class="admin-checkbox"><input type="checkbox" name="proctor_auto_submit" id="edit_pauto"> Auto Submit</label>
+                <label class="admin-checkbox"><input type="checkbox" name="proctor_auto_submit" id="edit_pauto"> Lock at 5 Strikes</label>
                 <label class="admin-checkbox"><input type="checkbox" name="proctor_browser_check" id="edit_pbc"> Browser Check</label>
                 <label class="admin-checkbox"><input type="checkbox" name="proctor_webcam" id="edit_pwc"> Webcam Monitor</label>
                 <label class="admin-checkbox text-danger fw-semibold"><input type="checkbox" name="proctor_live_video" id="edit_plive"> Live Video Stream</label>

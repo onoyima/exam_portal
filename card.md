@@ -27,7 +27,7 @@
                                         </div>
                                         <div class="text-end">
                                                                                         <span class="admin-badge admin-badge-success rounded-pill mb-1 px-2 py-1">
-                                                0/3 Strikes
+                                                0/5 Strikes
                                             </span>
                                             <div class="admin-badge-primary px-2 py-1 mt-1">Attempt
                                                 #3</div>

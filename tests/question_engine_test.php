@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../includes/cli_only.php';
 /**
  * Unit checks for includes/question_engine.php (no database needed).
  * Run from the project folder:  php tests/question_engine_test.php

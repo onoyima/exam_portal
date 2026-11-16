@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/includes/cli_only.php';
 $file = 'C:/xampp/htdocs/CBT/admin_dashboard.php';
 $content = file_get_contents($file);
 if ($content === false) {

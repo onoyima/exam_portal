@@ -403,7 +403,7 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
                     </label>
                     <label class="admin-checkbox">
                       <input type="checkbox" name="proctor_auto_submit" <?= ($exam['proctor_auto_submit'] ?? 0) ? 'checked' : '' ?>>
-                      <i class="bi bi-send"></i> 3-Strike Auto-Submit
+                      <i class="bi bi-lock"></i> 5-Strike Lock (invigilator reset)
                     </label>
                     <label class="admin-checkbox">
                       <input type="checkbox" name="proctor_browser_check" <?= ($exam['proctor_browser_check'] ?? 0) ? 'checked' : '' ?>>
@@ -597,7 +597,7 @@ $admin_name = $_SESSION['user'] ?? 'Admin';
                   </label>
                   <label class="admin-checkbox">
                     <input type="checkbox" name="proctor_auto_submit" id="pautoCreate" checked>
-                    <i class="bi bi-send"></i> 3-Strike Auto-Submit
+                    <i class="bi bi-lock"></i> 5-Strike Lock (invigilator reset)
                   </label>
                   <label class="admin-checkbox">
                     <input type="checkbox" name="proctor_browser_check" id="pbcCreate" checked>

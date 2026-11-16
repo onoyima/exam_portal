@@ -11,13 +11,14 @@ if (isset($_SESSION['role'])) {
     }
 }
 require 'db.php';
+require_once __DIR__ . '/includes/portal_helpers.php';
 
 // Fetch dynamic settings
 $settings = $db->query("SELECT setting_key, setting_value FROM system_settings")->fetchAll(PDO::FETCH_KEY_PAIR);
 $portal_title = $settings['portal_title'] ?? 'Veritas Exam Portal';
 $portal_logo = $settings['portal_logo'] ?? '';
 $portal_favicon = $settings['portal_favicon'] ?? 'assets/favicon.ico';
-$portal_image = $settings['portal_image'] ?? 'assets/img/login_bg.jpg';
+$portal_image = portal_image_path($settings['portal_image'] ?? '');
 $staff_content = $settings['staff_login_content'] ?? 'Authorized Staff only. Enter your administrative credentials to manage sessions and grades.';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

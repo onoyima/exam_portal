@@ -319,9 +319,9 @@ $attempt_id = (int) $attempt['id'];
 $attempt_no = (int) $attempt['attempt_no'];
 
 if (!$is_review_mode) {
-  // Count the time since the last heartbeat. If the page is being opened
-  // after a power cut or crash, the gap is not charged to the student.
-  qe_tick_attempt($db, $attempt_id, 0);
+  // Bring the used-time counter up to the wall clock. This charges a long
+  // disconnection instead of forgiving it, so time can never jump backwards.
+  qe_tick_attempt($db, $attempt_id);
   $st = $db->prepare("SELECT * FROM objective_attempts WHERE id = ?");
   $st->execute([$attempt_id]);
   $attempt = $st->fetch(PDO::FETCH_ASSOC);
@@ -350,11 +350,11 @@ if (!$order) {
 }
 
 $remaining = $is_review_mode ? null : qe_remaining_seconds($exam, $attempt);
-if (!$is_review_mode && $remaining === 0) {
-  qe_finalize_attempt($db, $attempt_id);
-  header("Location: $self&view_result=1");
-  exit;
-}
+// If time is already up (for example the student reconnects after a long
+// outage) we deliberately do NOT close the attempt here: the browser still
+// holds the answers it had, and the player submits them immediately on load.
+// Closing server-side first would throw those answers away. The result and
+// dashboard pages still auto-finalize abandoned attempts.
 
 $shuffle_opts = (int) ($exam['shuffle_options'] ?? 0) === 1;
 $public = [];
@@ -396,6 +396,7 @@ $config = [
   'review' => $is_review_mode,
   'remaining' => $remaining,
   'duration' => (int) $exam['duration_minutes'] * 60,
+  'startIndex' => isset($attempt['last_question_index']) ? (int) $attempt['last_question_index'] : 0,
   'afterSubmitUrl' => (int) $exam['student_can_view_score'] === 1 ? $self . '&view_result=1&just_submitted=1' : 'student_logout',
   'studentKey' => 'xpz:' . $student_id,
   'questions' => $public,
@@ -406,7 +407,10 @@ $config = [
   'csrf' => generate_csrf_token(),
   'policy' => [
     'fullscreen' => $strict || (int) $exam['proctor_fullscreen'] === 1,
-    'autoSubmitStrikes' => ((int) $exam['proctor_auto_submit'] === 1) ? 3 : 0,
+    // Lock-only policy: at the strike limit the server locks the attempt (it is
+    // never auto-submitted). An invigilator unlocks it and the student resumes
+    // from the same answers and remaining time.
+    'autoSubmitStrikes' => 0,
     'webcam' => $strict || (int) $exam['proctor_webcam'] === 1,
     'live' => $strict || (int) $exam['proctor_live_video'] === 1,
     'webcamMaxStudents' => defined('WEBCAM_MAX_STUDENTS') ? WEBCAM_MAX_STUDENTS : 500,
@@ -427,11 +431,17 @@ $student_name = $_SESSION['user'] ?? ($_SESSION['student_name'] ?? 'Student');
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex">
   <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
-  <link href="assets/css/exam_player.css?v=6" rel="stylesheet">
+  <link href="assets/css/exam_player.css?v=7" rel="stylesheet">
   <?= qe_mathjax_head($exam, 'xp-mathjax') ?>
 </head>
 
 <body class="xp<?= $is_review_mode ? ' xp-is-review' : '' ?>">
+  <?php if (!$is_review_mode): ?>
+    <div class="xp-offline-banner" id="xpOffline" role="alert" hidden>
+      <strong>Not connected to the exam server.</strong>
+      <span>Your answers are kept on this computer. Do not close this window &mdash; it reconnects automatically.</span>
+    </div>
+  <?php endif; ?>
   <div class="xp-shell" id="xpShell">
     <header class="xp-top">
       <div class="xp-brand">
@@ -569,7 +579,7 @@ $student_name = $_SESSION['user'] ?? ($_SESSION['student_name'] ?? 'Student');
   </form>
 
   <script>window.EXAM_CONFIG = <?= json_encode($config, JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;</script>
-  <script src="assets/js/exam_player.js?v=6"></script>
+  <script src="assets/js/exam_player.js?v=7"></script>
   <?php if (!$is_review_mode && $config['policy']['webcam']): ?>
     <script src="assets/vendor/tfjs/tf.min.js" defer></script>
     <script src="assets/js/face_detector.js" defer></script>

@@ -1,9 +1,15 @@
 <?php
+require_once __DIR__ . '/includes/cli_only.php';
 /**
  * Direct migration runner for production DB - loads creds from .env
  * Run: php run_migration.php
  */
-$envPath = __DIR__ . '/.env';
+require_once __DIR__ . '/config.php';
+$envPath = VERITAS_ENV_PATH;
+if ($envPath === '' || !is_file($envPath)) {
+    fwrite(STDERR, "No .env file found (checked /etc/veritas-cbt/.env and the project root).\n");
+    exit(1);
+}
 
 function loadGroups(string $envPath): array {
     $groups = [];

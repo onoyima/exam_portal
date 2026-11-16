@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/includes/cli_only.php';
 /**
  * Simulate a single student taking an exam
  * Called by load_test.php
@@ -126,8 +127,8 @@ foreach ($students as $student) {
                 $results['failed']++;
             }
             $results['requests']++;
-            
-        } catch (Exception $e) {
+        }
+    } catch (Exception $e) {
             $results['errors'][] = "Student {$student['matric_no']}: " . $e->getMessage();
             $results['failed']++;
         }
@@ -139,7 +140,6 @@ foreach ($students as $student) {
     } catch (Exception $e) {
         // Ignore
     }
-}
 
 // Output results as JSON
 $output = [

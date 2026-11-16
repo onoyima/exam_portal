@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/includes/cli_only.php';
 /**
  * CBT Portal Load Testing Script
  * Simulates concurrent student exam sessions to test performance under load

@@ -6,6 +6,18 @@ require 'db.php';
 $name = $_SESSION['user'] ?? 'Admin';
 $back_url = 'admin_dashboard';
 
+// Open (paused) mode is the default. Missing row/table means paused.
+$device_approval_paused = true;
+try {
+    $setting = $db->query("SELECT setting_value FROM system_settings
+        WHERE setting_key = 'device_approval_paused' LIMIT 1")->fetchColumn();
+    if ($setting !== false && $setting !== null && $setting !== '') {
+        $device_approval_paused = in_array(strtolower((string) $setting), ['1', 'true', 'yes', 'on'], true);
+    }
+} catch (Exception $e) {
+    $device_approval_paused = true;
+}
+
 // ── CSV downloads: the current list, or one archived reset ──
 if (isset($_GET['export'])) {
     header('Content-Type: text/csv; charset=utf-8');
@@ -31,10 +43,18 @@ if (isset($_GET['export'])) {
 // ── AJAX Actions ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
     header('Content-Type: application/json');
+    validate_csrf();
     $ip  = $_POST['ip_address'] ?? '';
     $action = $_GET['action'];
 
-    if ($action === 'approve') {
+    if ($action === 'set_approval') {
+        $paused = (($_POST['paused'] ?? '') === '1') ? '1' : '0';
+        $db->prepare("INSERT INTO system_settings (setting_key, setting_value)
+            VALUES ('device_approval_paused', ?)
+            ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)")
+            ->execute([$paused]);
+        echo json_encode(['success' => true, 'paused' => $paused === '1']);
+    } elseif ($action === 'approve') {
         $db->prepare("UPDATE approved_devices SET status='approved' WHERE ip_address=?")->execute([$ip]);
         echo json_encode(['success' => true]);
     } elseif ($action === 'reject') {
@@ -109,6 +129,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
     <div class="admin-page-header">
       <h2 class="admin-page-title">Device Authorization</h2>
       <div class="admin-page-actions">
+        <button class="admin-btn <?= $device_approval_paused ? 'admin-btn-outline' : 'admin-btn-success' ?>" onclick="toggleApproval(<?= $device_approval_paused ? 'false' : 'true' ?>)">
+          <i class="bi bi-<?= $device_approval_paused ? 'shield-check' : 'pause-circle' ?> me-1"></i>
+          <?= $device_approval_paused ? 'Require approval' : 'Pause approval' ?>
+        </button>
         <button class="admin-btn admin-btn-primary" onclick="approveAll()">
           <i class="bi bi-check-all me-1"></i> Approve All Pending
         </button>
@@ -123,6 +147,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
     </div>
 
   <div class="container-xl">
+    <div class="alert alert-<?= $device_approval_paused ? 'warning' : 'success' ?> d-flex align-items-start gap-2 mb-4" role="status">
+      <i class="bi bi-<?= $device_approval_paused ? 'pause-circle-fill' : 'shield-check' ?> fs-5"></i>
+      <div>
+        <strong>Device approval is <?= $device_approval_paused ? 'PAUSED' : 'ON' ?>.</strong>
+        <?php if ($device_approval_paused): ?>
+          Any new device is accepted automatically and recorded as approved. Rejected devices stay blocked.
+        <?php else: ?>
+          New devices wait in the pending queue until you approve them.
+        <?php endif; ?>
+      </div>
+    </div>
+
     <div class="row g-3 mb-4">
       <?php
         $stats = $db->query("SELECT status, COUNT(*) as cnt FROM approved_devices GROUP BY status")->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -242,9 +278,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
       <div class="admin-card-header"><h3 class="admin-card-title"><i class="bi bi-shield-exclamation me-2"></i>How Device Authorization Works</h3></div>
       <div class="admin-card-body">
         <p class="mb-0 small text-muted">
-          When a student accesses the exam portal from a new device, it is automatically logged here as <strong>Pending</strong>.
-          Only <strong>Approved</strong> devices can access exams. <strong>Rejected</strong> devices are blocked with an access-denied screen.
-          You can approve all pending devices at once using the button above, or approve/reject individually.
+          When device approval is <strong>ON</strong>, a student accessing the portal from a new device is logged here as
+          <strong>Pending</strong> and must be approved. When approval is <strong>PAUSED</strong>, new devices are accepted
+          automatically and recorded as approved. <strong>Rejected</strong> devices are always blocked with an access-denied
+          screen. You can approve all pending devices at once, or approve/reject individually.
         </p>
       </div>
     </div>
@@ -290,6 +327,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
 <script src="assets/js/admin-swal.js"></script>
 <script src="assets/js/admin-common.js"></script>
 <script>
+  const CSRF_TOKEN = <?= json_encode(generate_csrf_token()) ?>;
+
+  function postAction(action, fields) {
+    const fd = new FormData();
+    Object.entries(fields || {}).forEach(([k, v]) => fd.append(k, v));
+    fd.append('csrf_token', CSRF_TOKEN);
+    return fetch(`admin_devices?action=${action}`, {
+      method: 'POST',
+      body: fd,
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+    });
+  }
+
+  async function toggleApproval(pause) {
+    const result = await Swal.fire({
+      title: pause ? 'Pause device approval?' : 'Require approval again?',
+      text: pause
+        ? 'Any new device will be accepted automatically. Rejected devices stay blocked.'
+        : 'New devices will wait in the pending queue until you approve them.',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: pause ? '#b45309' : '#15803d',
+      confirmButtonText: pause ? 'Yes, pause' : 'Yes, require approval'
+    });
+    if (!result.isConfirmed) return;
+    const res = await postAction('set_approval', { paused: pause ? '1' : '0' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      await Swal.fire({ title: 'Could not update', text: data.error || 'Please reload and try again.', icon: 'error' });
+      return;
+    }
+    location.reload();
+  }
+
   async function deviceAction(action, ip, btn) {
     if (action === 'delete') {
       const result = await Swal.fire({
@@ -305,9 +376,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
     const orig = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-    const fd = new FormData();
-    fd.append('ip_address', ip);
-    await fetch(`admin_devices?action=${action}`, { method: 'POST', body: fd });
+    await postAction(action, { ip_address: ip });
     location.reload();
   }
 
@@ -321,8 +390,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
       confirmButtonText: 'Yes, Approve All'
     });
     if (result.isConfirmed) {
-      const fd = new FormData();
-      await fetch('admin_devices?action=approve_all', { method: 'POST', body: fd });
+      await postAction('approve_all');
       location.reload();
     }
   }
@@ -337,7 +405,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
       confirmButtonText: 'Yes, reset'
     });
     if (!result.isConfirmed) return;
-    const res = await fetch('admin_devices?action=reset', { method: 'POST', body: new FormData() });
+    const res = await postAction('reset');
     const data = await res.json().catch(() => ({}));
     await Swal.fire({ title: 'Approvals cleared', text: (data.cleared || 0) + ' computer(s) removed. Their record has been saved.', icon: 'success' });
     location.reload();

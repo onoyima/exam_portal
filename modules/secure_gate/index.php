@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../includes/cli_only.php';
 require '../../db.php';
 $settings = $db->query("SELECT * FROM seb_settings LIMIT 1")->fetch(PDO::FETCH_ASSOC);
 ?>

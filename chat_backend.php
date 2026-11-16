@@ -1,4 +1,6 @@
 <?php
+// Load config before the session so the mounted session path is used.
+require_once __DIR__ . '/config.php';
 session_start();
 require 'db.php';
 header('Content-Type: application/json');
@@ -13,6 +15,11 @@ if (!isset($_SESSION['user'])) {
 $stmt = $db->prepare("SELECT id, role FROM examiners WHERE username=? AND deleted_at IS NULL");
 $stmt->execute([$_SESSION['user']]);
 $row = $stmt->fetch(PDO::FETCH_ASSOC);
+if (!$row) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Not authorized']);
+    exit;
+}
 $sender_id = $row['id'];
 $sender_role = $row['role'];
 

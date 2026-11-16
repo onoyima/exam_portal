@@ -1,5 +1,22 @@
 <?php
-$pdo = new PDO('mysql:host=c67239.sgvps.net;port=3306;dbname=dbipfkhop9oqna;charset=utf8mb4', 'uwee0g3bir9pr', '4&e21%61sh11', [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+/**
+ * Diagnostic: inspect the school portal (exeat2) database.
+ * Run from the CLI. Credentials come from EXEAT2_DB_* in /etc/veritas-cbt/.env.
+ */
+require_once __DIR__ . '/includes/cli_only.php';
+require_once __DIR__ . '/config.php';
+
+if (!defined('EXEAT2_DB_HOST') || EXEAT2_DB_HOST === '') {
+    fwrite(STDERR, "EXEAT2_DB_* values are not configured in " . (VERITAS_ENV_PATH ?: '.env') . ".\n");
+    exit(1);
+}
+
+$pdo = new PDO(
+    'mysql:host=' . EXEAT2_DB_HOST . ';port=' . EXEAT2_DB_PORT . ';dbname=' . EXEAT2_DB_NAME . ';charset=' . EXEAT2_DB_CHARSET,
+    EXEAT2_DB_USER,
+    defined('EXEAT2_DB_PASS') ? EXEAT2_DB_PASS : '',
+    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+);
 echo "Tables:\n";
 $r = $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
 print_r($r);
@@ -18,7 +35,8 @@ foreach (['departments', 'levels', 'programmes', 'courses', 'faculties', 'academ
         $r = $pdo->query("DESCRIBE $t")->fetchAll(PDO::FETCH_ASSOC);
         echo "\n--- $t ---\n";
         print_r($r);
-    } catch (Exception $e) {}
+    } catch (Exception $e) {
+    }
 }
 
 echo "\n--- Sample academic data ---\n";
